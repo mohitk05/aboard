@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
 const Message = mongoose.model('Message', {
-    id: String,
-    from: String,
-    to: String,
+    from: mongoose.Types.ObjectId,
+    to: mongoose.Types.ObjectId,
     content: {
         title: String,
         body: String

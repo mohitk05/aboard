@@ -1,5 +1,5 @@
-module.exports = {
-    WORLD_INTERVAL: 30 * 60 * 1000,
+const constants = {
+    WORLD_INTERVAL: 15, // in minutes
     VEHICLE_STATES: {
         MOVING: 'MOVING',
         STATIONARY: 'STATIONARY',
@@ -9,5 +9,11 @@ module.exports = {
         ATSTATION: 'ATSTATION',
         READYTOGO: 'READYTOGO',
         ONBOARD: 'ONBOARD'
+    },
+    USER_ROLES: {
+        ADMIN: 1,
+        PLAYER: 2
     }
 }
+
+module.exports = { ...constants, ALL_USER_ROLES: Object.values(constants.USER_ROLES) };

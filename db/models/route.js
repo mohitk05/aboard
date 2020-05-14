@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
 const Route = mongoose.model('Route', {
-    id: String,
     name: String,
-    stops: [String],
+    stops: [mongoose.Types.ObjectId],
     possibleSpeeds: [Number]
 });
 

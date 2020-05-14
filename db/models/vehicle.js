@@ -2,9 +2,8 @@ const mongoose = require('mongoose');
 const { VEHICLE_STATES } = require('./../../utils/constants');
 
 const Vehicle = mongoose.model('Vehicle', {
-    id: String,
     name: String,
-    route: String, // route id
+    route: mongoose.Types.ObjectId, // route id
     speed: Number, // units per world_interval
     state: {
         type: String,

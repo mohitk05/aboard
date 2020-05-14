@@ -7,17 +7,18 @@ const { VEHICLE_STATES: { MOVING, STATIONARY, IDLE }, USER_STATES: { ATSTATION, 
 const cronController = {
     updateWorld: async () => {
         /*
-            ** Runs every 1 WORLD_INTERVAL (default = 30 mins) **
+            ** Runs every 1 WORLD_INTERVAL (default = 15 mins) **
             1. Update vehicle positions
             2. Onboard/alight users
             3. Exchange messages
         */
-        return await vehicleController.get([]).then(async vehicles => {
+        console.log('Updating world.')
+        return await vehicleController.getMany([]).then(async vehicles => {
             // Vehicle updation
             let vehiclePromises = [];
             for (let i = 0; i < vehicles.length; i++) {
                 let vehicle = vehicles[i];
-                const vehicleRoute = await routeController.get([vehicle.route]);
+                const vehicleRoute = await routeController.getOne(vehicle.route);
                 if (vehicle.state === MOVING) {
                     const dist = await routeController.getDistanceToNextStop(vehicle.route, vehicle.currentStopIndex);
                     if (vehicle.currentStateProgress + vehicle.speed >= dist) {
@@ -49,16 +50,17 @@ const cronController = {
         })
             .then(async () => {
                 // User updation
-                const users = await userController.get([]);
+                const users = await userController.getMany([]);
                 let userPromises = [];
                 for (let i = 0; i < users.length; i++) {
                     let user = users[i];
-                    const userVehicle = user.vehicle && await vehicleController.get([user.vehicle]);
+                    const userVehicle = user.vehicle && await vehicleController.getOne(user.vehicle);
 
                     let vehicleRoute;
                     const getRoute = async () => {
-                        if (vehicleRoute) return Promise.resolve(vehicleRoute);
-                        return await routeController.get([userVehicle.route]);
+                        if (vehicleRoute) return vehicleRoute;
+                        vehicleRoute = await routeController.getOne(userVehicle.route);
+                        return vehicleRoute;
                     }
 
                     if (user.state === READYTOGO) {

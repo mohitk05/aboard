@@ -1,3 +1,5 @@
+const chalk = require('chalk');
+
 const createResponse = async (req, res, response) => {
     try {
         const resp = await response;
@@ -6,7 +8,7 @@ const createResponse = async (req, res, response) => {
             data: resp || {}
         });
     } catch (e) {
-        console.error(e.message);
+        console.log(chalk.bgRed.white(e));
         res.status(500).send({
             success: false,
             error: 'Something went wrong 😟'

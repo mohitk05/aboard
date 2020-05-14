@@ -1,31 +1,34 @@
 const Route = require('./../db/models/route');
 const stopController = require('./stop');
-const { v4: uuidv4 } = require('uuid');
 const mathHelper = require('./../utils/math');
 
 const routeController = {
     create: async (name, stopIds) => {
         const possibleSpeeds = mathHelper.commonFactors(await stopController.getSequentialDistances(stopIds));
         return await Route.create({
-            id: uuidv4(),
             name,
             stops: stopIds,
             possibleSpeeds
         });
     },
-    get: async (ids, options = { stops: 0 }) => {
+    getOne: async (id, options = { populate: 0 }) => {
+        return await Route.findById(id).then(async route => {
+            if (!options.populate) return route;
+            route._doc.stops = await stopController.getMany(route._doc.stops);
+            return route;
+        });
+    },
+    getMany: async (ids, options = { populate: 0 }) => {
         let routes;
-        if (ids.length === 1) {
-            routes = await Route.find({ id: ids[0] });
-        } else if (ids.length === 0) {
+        if (ids.length === 0) {
             routes = await Route.find();
         } else {
             routes = await Route.find({
-                id: { $in: ids }
+                _id: { $in: ids }
             });
         }
 
-        if (!options.stops) {
+        if (!options.populate) {
             return routes;
         } else {
             for (let i = 0; i < routes.length; i++) {
@@ -36,12 +39,12 @@ const routeController = {
         }
     },
     getAllStopDistances: async (routeId) => {
-        return await routeController.get([routeId]).then(async route => {
+        return await routeController.getOne(routeId).then(async route => {
             return await stopController.getSequentialDistances(route.stops);
         });
     },
     getDistanceToNextStop: async (routeId, currentIndex) => {
-        return await Route.findById(routeId).then(async route => {
+        return await routeController.getOne(routeId).then(async route => {
             let stop = route.stops[currentIndex],
                 nextStop = route.stops[currentIndex + 1];
             return await stopController.getDistanceBetweenStops(stop, nextStop);
@@ -68,7 +71,7 @@ const routeController = {
 
             let routes = [], stopRouteCount = {};
             sortedStops.forEach(s => {
-                stopRouteCount[s.id] = 0;
+                stopRouteCount[s._id] = 0;
             })
             const minOffset = 5, maxOffset = 15;
             while (routes.length < count) {
@@ -87,12 +90,12 @@ const routeController = {
 
                     probableSlice.sort((a, b) => b.coordinates.lat - a.coordinates.lng);
                     let tempIdx = Math.floor(Math.random() * probableSlice.length);
-                    if (!route.find(stop => stop.id === probableSlice[tempIdx].id) && stopRouteCount[probableSlice[tempIdx].id] < 5) {
+                    if (!route.find(stop => stop._id === probableSlice[tempIdx]._id) && stopRouteCount[probableSlice[tempIdx]._id] < 5) {
                         route.push(
                             probableSlice[tempIdx]
                         )
-                        idx = sortedStops.findIndex(s => s.id === probableSlice[tempIdx].id);
-                        stopRouteCount[probableSlice[tempIdx].id] += 1;
+                        idx = sortedStops.findIndex(s => s._id === probableSlice[tempIdx]._id);
+                        stopRouteCount[probableSlice[tempIdx]._id] += 1;
                     } else {
                         idx = (idx + 1) % sortedStops.length;
                     }
@@ -108,7 +111,7 @@ const routeController = {
             let promises = [];
             routes.forEach((r, i) => {
                 promises.push(
-                    routeController.create(`Route ${i}`, r.map(stop => stop.id))
+                    routeController.create(`Route ${i}`, r.map(stop => stop._id))
                 )
             });
 
