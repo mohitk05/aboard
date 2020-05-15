@@ -63,7 +63,8 @@ const userController = {
                 user: {
                     _id: user._id,
                     username: user.name,
-                    email: user.email
+                    email: user.email,
+                    role: user.role
                 }
             }, process.env.JWT_KEY)
             return {

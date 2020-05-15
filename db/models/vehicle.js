@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { VEHICLE_STATES } = require('./../../utils/constants');
 
-const Vehicle = mongoose.model('Vehicle', {
+const Vehicle = mongoose.model('Vehicle', new mongoose.Schema({
     name: String,
     route: mongoose.Types.ObjectId, // route id
     speed: Number, // units per world_interval
@@ -11,6 +11,6 @@ const Vehicle = mongoose.model('Vehicle', {
     },
     currentStopIndex: Number, // current stop index (denotes the last visited stop if considered for every world cycle)
     currentStateProgress: Number // denotes intermediate units travelled in case of MOVING, and intervals waited in case of STATIONARY
-});
+}, { timestamps: true }));
 
 module.exports = Vehicle;

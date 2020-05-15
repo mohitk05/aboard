@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { USER_STATES } = require('./../../utils/constants');
 
-const User = mongoose.model('User', {
+const User = mongoose.model('User', new mongoose.Schema({
     username: String,
     email: String,
     password: String,
@@ -13,6 +13,6 @@ const User = mongoose.model('User', {
     },
     currentStop: mongoose.Types.ObjectId,
     activeTicket: mongoose.Types.ObjectId // ticket id
-});
+}, { timestamps: true }));
 
 module.exports = User;
