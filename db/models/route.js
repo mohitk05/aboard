@@ -2,7 +2,10 @@ const mongoose = require('mongoose');
 
 const Route = mongoose.model('Route', new mongoose.Schema({
     name: String,
-    stops: [mongoose.Types.ObjectId],
+    stops: [{
+        type: mongoose.Types.ObjectId,
+        ref: 'Stop'
+    }],
     possibleSpeeds: [Number]
 }, { timestamps: true }));
 

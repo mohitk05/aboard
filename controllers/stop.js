@@ -1,5 +1,6 @@
 const Stop = require('./../db/models/stop');
 const mathHelper = require('./../utils/math');
+const { VEHICLE_STATES: { MOVING, STATIONARY }, WORLD_INTERVAL } = require('./../utils/constants');
 
 const stopController = {
     create: async (stop) => {
@@ -12,23 +13,23 @@ const stopController = {
             }
         });
     },
-    getOne: async (id, options = { populate: 0 }) => {
-        return await Stop.findById(id).then(async stop => {
-            if (!options.populate) return stop;
-            return stop;
-        })
+    getOne: async (id) => {
+        return await Stop.findById(id);
     },
-    getMany: async (ids) => {
-        if (ids.length === 0) {
-            return await Stop.find();
+    getMany: async (ids, query = {}) => {
+        if (!ids.length) {
+            return await Stop.find(query);
         } else {
             return await Stop.find({
+                ...query,
                 _id: { $in: ids }
             });
         }
     },
     getDistanceBetweenStops: async (fromId, toId) => {
-        const [from, to] = await stopController.getMany([fromId, toId]);
+        if (fromId === toId) return 0;
+        const from = await stopController.getOne(fromId);
+        const to = await stopController.getOne(toId);
         let lngDist = to.coordinates.lng < 0 && from.coordinates.lng > 0
             ? 180 - from.coordinates.lng + 180 + to.coordinates.lng
             : from.coordinates.lng - to.coordinates.lng;
@@ -42,7 +43,33 @@ const stopController = {
             )
         }
         return distances;
+    },
+    getIncomingVehicles: async (stop, limit = 5) => {
+        return await vehicleController.getMany([], {
+            state: { $in: [MOVING, STATIONARY] },
+        }, { populate: 1 }).then(async vehicles => {
+            let vehicleWithStops = vehicles.filter(v => {
+                return v.route.stops.includes(stop)
+                    && (v.currentStopIndex < v.route.stops.indexOf(stop)
+                        || (v.currentStopIndex === v.route.stops.indexOf(stop) && v.state === STATIONARY));
+            });
+            for (let i = 0; i < vehicleWithStops.length; i++) {
+                let v = vehicleWithStops[i];
+                let indexOfStop = v.route.stops.indexOf(stop);
+                let seqDist = await stopController.getSequentialDistances(v.route.stops.slice(0, indexOfStop + 1));
+                let dist = seqDist.reduce((acc, curr) => acc + curr, 0);
+                let lastTimeStamp = v.currentStopTimestamp.getTime();
+                vehicleWithStops[i] = {
+                    vehicle: v,
+                    distance: dist - v.currentStateProgress,
+                    arrivalTime: lastTimeStamp + (dist / v.speed) * WORLD_INTERVAL * (1000 * 60)
+                }
+            }
+            return vehicleWithStops;
+        })
     }
 }
 
 module.exports = stopController;
+
+const vehicleController = require('./vehicle');

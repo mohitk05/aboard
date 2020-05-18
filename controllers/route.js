@@ -1,5 +1,4 @@
 const Route = require('./../db/models/route');
-const stopController = require('./stop');
 const mathHelper = require('./../utils/math');
 
 const routeController = {
@@ -11,19 +10,22 @@ const routeController = {
             possibleSpeeds
         });
     },
-    getOne: async (id, options = { populate: 0 }) => {
-        return await Route.findById(id).then(async route => {
-            if (!options.populate) return route;
-            route._doc.stops = await stopController.getMany(route._doc.stops);
-            return route;
-        });
+    delete: async (id) => {
+        return await Route.deleteOne({ _id: id });
     },
-    getMany: async (ids, options = { populate: 0 }) => {
+    getOne: async (id, options = { populate: 0 }) => {
+        if (!options.populate)
+            return await Route.findById(id);
+        else
+            return await Route.findById(id).populate('stops');
+    },
+    getMany: async (ids, query = {}, options = { populate: 0 }) => {
         let routes;
         if (ids.length === 0) {
-            routes = await Route.find();
+            routes = await Route.find(...query);
         } else {
             routes = await Route.find({
+                ...query,
                 _id: { $in: ids }
             });
         }
@@ -121,3 +123,5 @@ const routeController = {
 }
 
 module.exports = routeController;
+
+const stopController = require('./stop');

@@ -4,7 +4,6 @@ const models = [
 ]
 module.exports = {
     connect: async () => {
-        console.log(process.env.DB_URI)
         await mongoose.connect(process.env.DB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
         for (let m of models) {
             require('./models/' + m + '.js');

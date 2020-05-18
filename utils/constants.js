@@ -1,5 +1,5 @@
 const constants = {
-    WORLD_INTERVAL: 15, // in minutes
+    WORLD_INTERVAL: 5, // in minutes
     VEHICLE_STATES: {
         MOVING: 'MOVING',
         STATIONARY: 'STATIONARY',

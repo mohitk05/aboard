@@ -1,7 +1,3 @@
-const routeController = require('./route');
-const vehicleController = require('./vehicle');
-const userController = require('./user');
-
 const { VEHICLE_STATES: { MOVING, STATIONARY, IDLE }, USER_STATES: { ATSTATION, READYTOGO, ONBOARD } } = require('./../utils/constants');
 
 const cronController = {
@@ -25,6 +21,7 @@ const cronController = {
                         vehicle.state = STATIONARY;
                         vehicle.currentStateProgress = 0;
                         vehicle.currentStopIndex += 1;
+                        vehicle.currentStopTimestamp = new Date();
                     } else {
                         vehicle.currentStateProgress += vehicle.speed;
                     }
@@ -34,10 +31,12 @@ const cronController = {
                         if (vehicle.currentStopIndex < vehicleRoute.stops.length) {
                             vehicle.state = MOVING;
                             vehicle.currentStateProgress = 0;
+                            vehicle.currentStopTimestamp = new Date();
                         } else {
                             vehicle.state = IDLE;
                             vehicle.currentStateProgress = 0;
                             vehicle.currentStopIndex = 0;
+                            vehicle.currentStopTimestamp = null;
                         }
                     }
                 } else if (vehicle.state === IDLE) {
@@ -96,3 +95,7 @@ const cronController = {
 }
 
 module.exports = cronController;
+
+const routeController = require('./route');
+const vehicleController = require('./vehicle');
+const userController = require('./user');

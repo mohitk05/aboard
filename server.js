@@ -18,6 +18,7 @@
     app.use('/', routes);
 
     app.use((err, req, res, next) => {
+        console.log(err)
         res.status(res.statusCode || 500).send({
             success: false,
             error: err.message

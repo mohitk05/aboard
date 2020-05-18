@@ -1,17 +1,18 @@
 const User = require('./../db/models/user');
 const jwt = require('jsonwebtoken');
 const { USER_STATES: { ATSTATION, READYTOGO, ONBOARD }, USER_ROLES: { PLAYER } } = require('./../utils/constants');
-const stopController = require('./stop');
 
 const userController = {
     create: async (user) => {
         return await User.create({
             username: user.username,
             email: user.email,
+            age: user.age,
             password: user.password,
             state: ATSTATION,
             currentStop: user.currentStop,
-            role: PLAYER
+            role: PLAYER,
+            interests: user.interests
         });
     },
     getOne: async (id, options = { populate: 0 }) => {
@@ -21,28 +22,25 @@ const userController = {
             return user;
         })
     },
-    getMany: async (ids, options = { populate: 0 }) => {
+    getMany: async (ids, query = {}, options = { populate: 0 }) => {
         let users = [];
         if (!ids) ids = [];
         if (typeof ids === 'string') {
             ids = ids.split(',');
         }
         if (ids.length === 0) {
-            users = await User.find();
+            users = User.find(...query);
         } else {
-            users = await User.find({
+            users = User.find({
+                ...query,
                 _id: { $in: ids }
             });
         }
 
         if (!options.populate) {
-            return users;
+            return await users;
         } else {
-            for (let i = 0; i < users.length; i++) {
-                let user = users[i]._doc;
-                user.stops = await stopController.get(user.stops);
-            }
-            return users;
+            return await users.populate('vehicle').populate('currentStop').populate('interests');
         }
     },
     getByEmail: async (email, options = { populate: 0 }) => {
@@ -77,7 +75,59 @@ const userController = {
         return await userController.create(user).then(async user => {
             return await userController.login(user);
         })
+    },
+    getFellowUsers: async (userId) => {
+        return await User.findById(userId).populate('interests').then(async user => {
+            let fellowUsers;
+            if (user.state === ONBOARD) {
+                fellowUsers = await User.find({
+                    state: ONBOARD,
+                    vehicle: user.vehicle,
+                    _id: { $ne: userId }
+                }).populate('interests');
+            } else if (user.state === READYTOGO) {
+                fellowUsers = await User.find({
+                    state: { $in: [READYTOGO, ATSTATION] },
+                    currentStop: user.currentStop,
+                    _id: { $ne: userId }
+                }).populate('interests');
+            } else if (user.state === ATSTATION) {
+                fellowUsers = await User.find({
+                    state: { $in: [READYTOGO, ATSTATION] },
+                    currentStop: user.currentStop,
+                    _id: { $ne: userId }
+                }).populate('interests');
+            }
+
+            const interestFilter = (testUser) => {
+                // logic to fuzzy filter users according to interest
+                // very simple logic, refine later
+                return new Set([...testUser.interests.map(i => i._id.toString()), ...user.interests.map(i => i._id.toString())]).size !== (testUser.interests.length + user.interests.length);
+            }
+
+            const ageFilter = (testUser) => {
+                // 18 and above to only other 18 and above. 18 below to only 18 below.
+                if (user.age < 18) {
+                    return testUser.age < 18;
+                } else return testUser.age >= 18;
+            }
+
+            const score = (testUser) => {
+                let score = (((testUser.interests.length + user.interests.length) - new Set([...testUser.interests.map(i => i._id.toString()), ...user.interests.map(i => i._id.toString())]).size) * 200) / (testUser.interests.length + user.interests.length);
+                let o = {
+                    user: testUser,
+                    score
+                }
+                return o;
+            }
+
+            fellowUsers = fellowUsers.filter(ageFilter).filter(interestFilter).map(score);
+
+            return fellowUsers;
+        })
     }
 }
 
 module.exports = userController;
+
+const stopController = require('./stop');
