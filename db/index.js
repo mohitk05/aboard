@@ -8,5 +8,8 @@ module.exports = {
         for (let m of models) {
             require('./models/' + m + '.js');
         }
+    },
+    disconnect: async () => {
+        await mongoose.disconnect();
     }
 }

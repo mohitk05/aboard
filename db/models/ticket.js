@@ -13,6 +13,10 @@ const Ticket = mongoose.model('Ticket', new mongoose.Schema({
         type: mongoose.Types.ObjectId,
         ref: 'User'
     },
+    trip: {
+        type: mongoose.Types.ObjectId,
+        ref: 'Trip'
+    },
     price: Number
 }, { timestamps: true }));
 

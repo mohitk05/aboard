@@ -2,6 +2,8 @@
 
 The frontend would be a SPA built in React. Choosing React is the best decision for now given its large number of open source libraries and integrations, majorly with three.js (react-three-fiber), since I plan to use three.js for 3d graphics in the game.
 
+UPDATE: Choosing `expo` for unifies development. It uses `react-native-web` which would mean one codebase for all clients.
+
 Marketing site would be separate and can be planned independently post dev.
 
 On the SPA, there would be these major pieces according to the player's current state:

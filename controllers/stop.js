@@ -1,6 +1,6 @@
 const Stop = require('./../db/models/stop');
 const mathHelper = require('./../utils/math');
-const { VEHICLE_STATES: { MOVING, STATIONARY }, WORLD_INTERVAL } = require('./../utils/constants');
+const { TRIP_STATES: { MOVING, STATIONARY }, WORLD_INTERVAL } = require('./../utils/constants');
 
 const stopController = {
     create: async (stop) => {
@@ -12,6 +12,9 @@ const stopController = {
                 lng: mathHelper.makeEven(stop.coordinates.lng)
             }
         });
+    },
+    delete: async (id) => {
+        return await Stop.deleteOne({ _id: id });
     },
     getOne: async (id) => {
         return await Stop.findById(id);
@@ -45,31 +48,30 @@ const stopController = {
         return distances;
     },
     getIncomingVehicles: async (stop, limit = 5) => {
-        return await vehicleController.getMany([], {
-            state: { $in: [MOVING, STATIONARY] },
-        }, { populate: 1 }).then(async vehicles => {
-            let vehicleWithStops = vehicles.filter(v => {
-                return v.route.stops.includes(stop)
-                    && (v.currentStopIndex < v.route.stops.indexOf(stop)
-                        || (v.currentStopIndex === v.route.stops.indexOf(stop) && v.state === STATIONARY));
+        // TODO: Rewrite with $lookup
+        return await tripController.getMany([], { active: true }, { populate: 1 }).then(async trips => {
+            let tripWithStops = trips.filter(trip => {
+                return trip.route.stops.includes(stop)
+                    && (trip.currentStopIndex < trip.route.stops.indexOf(stop)
+                        || (trip.currentStopIndex === trip.route.stops.indexOf(stop) && trip.state === STATIONARY));
             });
-            for (let i = 0; i < vehicleWithStops.length; i++) {
-                let v = vehicleWithStops[i];
-                let indexOfStop = v.route.stops.indexOf(stop);
-                let seqDist = await stopController.getSequentialDistances(v.route.stops.slice(0, indexOfStop + 1));
+            for (let i = 0; i < tripWithStops.length; i++) {
+                let trip = tripWithStops[i];
+                let indexOfStop = trip.route.stops.indexOf(stop);
+                let seqDist = await stopController.getSequentialDistances(trip.route.stops.slice(0, indexOfStop + 1));
                 let dist = seqDist.reduce((acc, curr) => acc + curr, 0);
-                let lastTimeStamp = v.currentStopTimestamp.getTime();
-                vehicleWithStops[i] = {
-                    vehicle: v,
-                    distance: dist - v.currentStateProgress,
-                    arrivalTime: lastTimeStamp + (dist / v.speed) * WORLD_INTERVAL * (1000 * 60)
+                let lastTimeStamp = trip.currentStopTimestamp.getTime();
+                tripWithStops[i] = {
+                    trip: trip,
+                    distance: dist - trip.currentStateProgress,
+                    arrivalTime: lastTimeStamp + (dist / trip.speed) * WORLD_INTERVAL * (1000 * 60)
                 }
             }
-            return vehicleWithStops;
+            return tripWithStops.slice(0, limit);
         })
     }
 }
 
 module.exports = stopController;
 
-const vehicleController = require('./vehicle');
+const tripController = require('./trip');

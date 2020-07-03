@@ -22,22 +22,18 @@ const routeController = {
     getMany: async (ids, query = {}, options = { populate: 0 }) => {
         let routes;
         if (ids.length === 0) {
-            routes = await Route.find(...query);
+            routes = Route.find(query);
         } else {
-            routes = await Route.find({
+            routes = Route.find({
                 ...query,
                 _id: { $in: ids }
             });
         }
 
         if (!options.populate) {
-            return routes;
+            return await routes;
         } else {
-            for (let i = 0; i < routes.length; i++) {
-                let route = routes[i]._doc;
-                route.stops = await stopController.get(route.stops);
-            }
-            return routes;
+            return await routes.populate('stops');
         }
     },
     getAllStopDistances: async (routeId) => {
@@ -47,13 +43,14 @@ const routeController = {
     },
     getDistanceToNextStop: async (routeId, currentIndex) => {
         return await routeController.getOne(routeId).then(async route => {
+            if (currentIndex === route.stops.length - 1) return 0;
             let stop = route.stops[currentIndex],
                 nextStop = route.stops[currentIndex + 1];
             return await stopController.getDistanceBetweenStops(stop, nextStop);
         })
     },
     autogenerateFromStops: async (config = {}) => {
-        return await stopController.get([]).then(async stops => {
+        return await stopController.getMany([]).then(async stops => {
             const count = config.count || stops.length,
                 maxLength = config.maxLength || 10,
                 minLength = config.minLength || 5;

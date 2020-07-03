@@ -2,6 +2,7 @@ const expect = require('chai').expect;
 const stopController = require('./../controllers/stop');
 const Stop = require('./../db/models/stop');
 const db = require('./../db');
+const tripController = require('./../controllers/trip');
 const vehicleController = require('./../controllers/vehicle');
 const routeController = require('./../controllers/route');
 
@@ -60,6 +61,33 @@ describe('Stop tests', function () {
         })
     })
 
+    describe('stopController.delete()', function () {
+        let stopId;
+        before(function (done) {
+            stopController.create({
+                name: 'Test Stop 3',
+                country: 'Test Country 3',
+                coordinates: {
+                    lat: -40,
+                    lng: 100
+                }
+            }).then(stop => {
+                stopId = stop._id;
+                done();
+            });
+        })
+
+        it('should delete a stop', async function () {
+            await stopController.delete(stopId);
+            const stop = await Stop.findById(stopId);
+            expect(stop).to.be.equal(null);
+        })
+
+        after(function (done) {
+            Stop.deleteOne({ _id: stopId }).then(() => done());
+        })
+    })
+
     describe('stopController.getMany()', function () {
         it('should return all stops', async function () {
             const stops = await stopController.getMany([]);
@@ -96,17 +124,22 @@ describe('Stop tests', function () {
     })
 
     describe('stopController.getIncomingVehicles(stop)', function () {
-        let routeId, vehicleId;
+        let routeId, vehicleId, tripId;
         before(function (done) {
             routeController.create('Test Route', [testStopId1, testStopId2]).then(route => {
                 routeId = route._id;
                 return vehicleController.create({
-                    name: "The Test Vehicle",
-                    route: route._id
+                    name: "The Test Vehicle"
                 })
             }).then(vehicle => {
                 vehicleId = vehicle._id;
-                vehicleController.idleToStationary(vehicleId).then(() => {
+                return tripController.create({
+                    vehicle: vehicleId,
+                    route: routeId
+                })
+            }).then(trip => {
+                tripId = trip._id;
+                tripController.startTrip(tripId).then(() => {
                     done();
                 });
             })
@@ -115,19 +148,24 @@ describe('Stop tests', function () {
         it('should return incoming vehicles at a stop', async function () {
             const incoming = await stopController.getIncomingVehicles(testStopId1);
             expect(incoming).to.have.length(1);
-            let vId = incoming[0].vehicle._id.toString();
-            expect(vId).to.be.equal(vehicleId.toString());
+            let tId = incoming[0].trip._id.toString();
+            expect(tId).to.be.equal(tripId.toString());
         })
 
         after(function (done) {
-            vehicleController.delete(vehicleId).then(() => {
+            tripController.delete(tripId).then(() => {
+                vehicleController.delete(vehicleId)
+            }).then(() => {
                 routeController.delete(routeId);
             }).then(() => done());
         })
     })
 
     after(function (done) {
-        Stop.deleteMany({ _id: { $in: [testStopId1, testStopId2] } }).then(() => done());
-    });
-
+        Stop.deleteMany({ _id: { $in: [testStopId1, testStopId2] } }).then(() => {
+            db.disconnect().then(() => {
+                done();
+            })
+        })
+    })
 })

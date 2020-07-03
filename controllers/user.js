@@ -7,7 +7,9 @@ const userController = {
         return await User.create({
             username: user.username,
             email: user.email,
-            age: user.age,
+            profile: {
+                age: user.profile.age
+            },
             password: user.password,
             state: ATSTATION,
             currentStop: user.currentStop,
@@ -40,19 +42,13 @@ const userController = {
         if (!options.populate) {
             return await users;
         } else {
-            return await users.populate('vehicle').populate('currentStop').populate('interests');
+            return await users.populate('ticket').populate('currentStop').populate('interests');
         }
     },
-    getByEmail: async (email, options = { populate: 0 }) => {
-        return await User.findOne({ email }).then(async user => {
-            if (!options.populate) return user;
-            return await userController.populate(user);
-        })
-    },
-    populate: async (user) => {
-        return await stopController.getOne(user.currentStop).then(stop => {
-            user.currentStop = stop;
-            return user;
+    assignTicket: async (user, ticket) => {
+        return await User.updateOne({ _id: user }, {
+            ticket,
+            state: READYTOGO
         });
     },
     login: async (user) => {
@@ -107,9 +103,9 @@ const userController = {
 
             const ageFilter = (testUser) => {
                 // 18 and above to only other 18 and above. 18 below to only 18 below.
-                if (user.age < 18) {
-                    return testUser.age < 18;
-                } else return testUser.age >= 18;
+                if (user.profile.age < 18) {
+                    return testUser.profile.age < 18;
+                } else return testUser.profile.age >= 18;
             }
 
             const score = (testUser) => {
@@ -125,6 +121,9 @@ const userController = {
 
             return fellowUsers;
         })
+    },
+    userStateTransitionPermitted: () => {
+        return true;
     }
 }
 
