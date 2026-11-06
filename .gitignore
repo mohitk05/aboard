@@ -1,4 +1,4 @@
-node_modules
-scripts
-.env
-.nyc_output
+node_modules/
+.wrangler/
+.dev.vars
+coverage/

@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aboard",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "WORLD", "class_name": "World" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["World"] }]
+  // Secrets (not in this file): JWT_KEY, ADMIN_SECRET
+  //   local: put them in .dev.vars (see .dev.vars.example)
+  //   production: wrangler secret put JWT_KEY && wrangler secret put ADMIN_SECRET
+}
