@@ -47,11 +47,24 @@ Admins don't need a `currentStop`. Then create stops, routes and trips with the 
 
 ### Deploy
 
-```sh
-npx wrangler secret put JWT_KEY
-npx wrangler secret put ADMIN_SECRET
-npm run deploy
-```
+Deploys happen automatically through [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/): every push to `master` builds, tests and deploys the Worker.
+
+One-time setup in the Cloudflare dashboard (**Workers & Pages → Create → Import a repository**, or on an existing Worker, **Settings → Build → Connect**):
+
+| Setting | Value |
+| --- | --- |
+| Repository | `mohitk05/aboard` |
+| Worker name | `aboard` (must match `name` in `wrangler.jsonc`) |
+| Production branch | `master` |
+| Build command | `npm run build` (typecheck + tests; a failure stops the deploy) |
+| Deploy command | `npx wrangler deploy` |
+| Root directory | `/` |
+
+Then, under **Settings → Variables and Secrets**, add two secrets: `JWT_KEY` (a long random string) and `ADMIN_SECRET`. The build doesn't set them, and they persist across deploys. Without `JWT_KEY`, signup and login return 500.
+
+The Durable Object and its migrations are created by `wrangler deploy` from `wrangler.jsonc`, so no other setup is needed. Pushes to other branches upload a preview version without changing production, if non-production branch builds are turned on (they are by default).
+
+To deploy by hand instead: `npx wrangler secret put JWT_KEY`, `npx wrangler secret put ADMIN_SECRET`, `npm run deploy`.
 
 ## API
 
