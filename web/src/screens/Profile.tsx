@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api, type Interest, type Me } from "../api";
 import { meKey, useLogout, useMe } from "../auth";
 import { Field, FormError } from "../ui";
+import { NotificationSettings } from "./Notify";
 import { Shell } from "./Shell";
 
 export function Profile() {
@@ -15,6 +16,7 @@ export function Profile() {
         <div className="board-sub">{me.email}</div>
       </section>
       <ProfileForm me={me} />
+      <NotificationSettings />
       <PasswordForm />
       <LogOut />
     </Shell>

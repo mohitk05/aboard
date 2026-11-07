@@ -123,6 +123,23 @@ export const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+
+  /* 3: web push */ `
+  CREATE TABLE push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX push_subscriptions_by_user ON push_subscriptions(user_id);
+
+  -- Notifications that must only go out once (e.g. "your train is near").
+  CREATE TABLE push_log (
+    key TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

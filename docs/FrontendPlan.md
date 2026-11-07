@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: F0–F4 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
+Status: F0–F5 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 
@@ -129,7 +129,7 @@ Each milestone ends with something you can deploy and use. Backend changes ship 
 - Fellow travellers at the station and in the carriage. Inbox and chat (polling at first). Profile editing.
 - *Done when:* two players at the same stop find each other by interests and talk.
 
-**F5 Install and notifications**
+**F5 Install and notifications (done)**
 - PWA manifest and service worker.
 - Push subscriptions and sending (VAPID keys as Worker secrets).
 - Notifications: train approaching your stop (one tick ahead), boarded, arrived, new message.

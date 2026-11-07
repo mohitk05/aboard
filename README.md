@@ -66,7 +66,9 @@ One-time setup in the Cloudflare dashboard (**Workers & Pages → Create → Imp
 | Deploy command | `npx wrangler deploy` |
 | Root directory | `/` |
 
-Then, under **Settings → Variables and Secrets**, add two secrets: `JWT_KEY` (a long random string) and `ADMIN_SECRET`. The build doesn't set them, and they persist across deploys. Without `JWT_KEY`, signup and login return 500.
+Then, under **Settings → Variables and Secrets**, add two secrets: `JWT_KEY` (a long random string) and `ADMIN_SECRET`.
+
+For push notifications, also add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address push services can contact). Generate the key pair with `npm run vapid`. Without them the app works, and the notifications switch says they aren't set up. Keep the same keys once people subscribe: changing them invalidates every subscription. The build doesn't set them, and they persist across deploys. Without `JWT_KEY`, signup and login return 500.
 
 The Durable Object and its migrations are created by `wrangler deploy` from `wrangler.jsonc`, so no other setup is needed. Pushes to other branches upload a preview version without changing production, if non-production branch builds are turned on (they are by default).
 
@@ -113,6 +115,10 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/conversation` | player | `{ conversation: { members: [userId, …] } }` (one-to-one chats are reused) |
 | GET | `/conversation/:id/messages` | member | |
 | POST | `/conversation/:id/messages` | member | `{ message: { title?, body } }` |
+| GET | `/push/key` | anyone | the VAPID public key, or 404 if push isn't set up |
+| GET | `/push/subscription` | player | how many devices you've turned notifications on for |
+| POST | `/push/subscription` | player | `{ subscription }` from `PushManager.subscribe().toJSON()` |
+| DELETE | `/push/subscription` | player | `{ subscription: { endpoint } }` |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
 | POST | `/admin/seed` | admin | builds the Lisbon → Vladivostok line and starts a train (safe to repeat) |

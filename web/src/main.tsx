@@ -15,3 +15,11 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// Offline shell and push notifications. Only for real builds: the dev server's hot reload
+// and a caching service worker don't mix.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((e) => console.warn("service worker failed", e));
+  });
+}

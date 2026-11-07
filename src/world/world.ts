@@ -12,6 +12,7 @@ import {
   type UserState,
 } from "../lib/constants";
 import { railKm } from "../lib/geo";
+import { sendPush, type PushMessage, type PushSubscription, type VapidKeys } from "../lib/webpush";
 import { badRequest, conflict, forbidden, guard, notFound, type Result } from "../lib/result";
 import { migrate } from "./schema";
 import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
@@ -151,6 +152,10 @@ const newId = () => crypto.randomUUID();
  */
 export class World extends DurableObject<Env> {
   private sql: SqlStorage;
+  /** Notifications waiting to be sent after the current change commits. */
+  private outbox: { user: string; msg: PushMessage }[] = [];
+  /** Swappable in tests so no real push service is called. */
+  pushFetch: typeof fetch = (input, init) => fetch(input, init);
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -163,6 +168,7 @@ export class World extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     try {
       this.tick(Date.now());
+      await this.flushNotifications();
     } finally {
       await this.scheduleNextTick();
     }
@@ -187,6 +193,7 @@ export class World extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       this.tickPassengers(summary);
       this.tickTrips(now, summary);
+      this.noticeApproaching(now);
       this.sql.exec(
         "INSERT INTO world_meta (key, value) VALUES ('last_tick_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         String(now),
@@ -215,19 +222,21 @@ export class World extends DurableObject<Env> {
       )
       .toArray();
 
-    const tripCache = new Map<string, { trip: TripRow; stops: string[] }>();
+    const tripCache = new Map<string, { trip: TripRow; stops: string[]; rows: RouteStopRow[] }>();
     const load = (tripId: string) => {
       let v = tripCache.get(tripId);
       if (!v) {
         const trip = this.tripRow(tripId);
-        v = { trip, stops: this.routeStops(trip.route_id).map((s) => s.id) };
+        const rows = this.routeStops(trip.route_id);
+        v = { trip, stops: rows.map((s) => s.id), rows };
         tripCache.set(tripId, v);
       }
       return v;
     };
 
     for (const u of rows) {
-      const { trip, stops } = load(u.t_trip);
+      const { trip, stops, rows: stopRows } = load(u.t_trip);
+      const name = (i: number) => stopRows[i]?.name ?? "the next station";
       const fromIdx = stops.indexOf(u.t_from);
       const destIdx = stops.indexOf(u.t_dest);
       const here = stops[trip.stop_index]!;
@@ -236,10 +245,22 @@ export class World extends DurableObject<Env> {
         if (trip.active && trip.state === "STATIONARY" && trip.stop_index === fromIdx) {
           this.sql.exec("UPDATE users SET state = 'ONBOARD', current_stop_id = ? WHERE id = ?", here, u.id);
           summary.boarded++;
+          this.notify(u.id, {
+            title: "You're on board",
+            body: `Next stop: ${name(fromIdx + 1)}. We'll tell you when ${name(destIdx)} is near.`,
+            url: "/",
+            tag: `trip-${u.ticket_id}`,
+          });
         } else if (trip.stop_index > fromIdx || (trip.stop_index === fromIdx && trip.state === "MOVING")) {
           // The train left without them.
           this.sql.exec("UPDATE users SET state = 'ATSTATION', ticket_id = NULL WHERE id = ?", u.id);
           summary.missed++;
+          this.notify(u.id, {
+            title: "Your train left without you",
+            body: `It has gone from ${name(fromIdx)}. Check the departures board for the next one.`,
+            url: "/",
+            tag: `trip-${u.ticket_id}`,
+          });
         }
       } else if (u.state === "ONBOARD") {
         const arrived = trip.state === "STATIONARY" && trip.stop_index === destIdx;
@@ -251,6 +272,13 @@ export class World extends DurableObject<Env> {
             u.id,
           );
           summary.alighted++;
+          const at = name(trip.stop_index);
+          this.notify(u.id, {
+            title: arrived ? `Welcome to ${at}` : "End of the line",
+            body: arrived ? "You've arrived. The departures board is open." : `This train stops at ${at}. Find your next train here.`,
+            url: "/",
+            tag: `trip-${u.ticket_id}`,
+          });
         } else {
           this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", here, u.id);
         }
@@ -291,6 +319,118 @@ export class World extends DurableObject<Env> {
         }
       }
     }
+  }
+
+  // ======================= notifications =======================
+
+  private notify(user: string, msg: PushMessage) {
+    this.outbox.push({ user, msg });
+  }
+
+  /** How close (ms) a train must be to your stop before we say it's near. */
+  private static readonly NEAR_MS = 15 * 60_000;
+
+  /**
+   * "Your train reaches Berlin in about 10 minutes": once per ticket per stop, to people
+   * waiting for a train (their boarding stop) or on one (their destination).
+   */
+  private noticeApproaching(now: number) {
+    const rows = this.sql
+      .exec<{ user_id: string; state: UserState; ticket_id: string; trip_id: string; from_id: string; dest_id: string }>(
+        `SELECT u.id AS user_id, u.state, u.ticket_id, t.trip_id, t.from_stop_id AS from_id,
+                COALESCE(t.desired_to_stop_id, t.to_stop_id) AS dest_id
+         FROM users u JOIN tickets t ON t.id = u.ticket_id
+         WHERE u.state IN ('READYTOGO', 'ONBOARD')`,
+      )
+      .toArray();
+    for (const r of rows) {
+      const trip = this.tripRow(r.trip_id);
+      if (!trip.active || trip.state !== "MOVING") continue;
+      const stops = this.routeStops(trip.route_id);
+      const targetId = r.state === "READYTOGO" ? r.from_id : r.dest_id;
+      const target = stops.findIndex((s) => s.id === targetId);
+      if (target !== trip.stop_index + 1) continue;
+      const { ms } = this.remainingTo(trip, stops, target);
+      if (ms > World.NEAR_MS) continue;
+      const key = `near:${r.ticket_id}:${targetId}`;
+      const fresh = this.sql
+        .exec("INSERT INTO push_log (key, created_at) VALUES (?, ?) ON CONFLICT(key) DO NOTHING RETURNING key", key, now)
+        .toArray().length;
+      if (!fresh) continue;
+      const mins = Math.max(1, Math.round(ms / 60_000));
+      const stop = stops[target]!.name;
+      this.notify(
+        r.user_id,
+        r.state === "READYTOGO"
+          ? { title: `Your train is ${mins} min from ${stop}`, body: "Head to the platform. You'll board when it pulls in.", url: "/", tag: `trip-${r.ticket_id}` }
+          : { title: `${stop} in about ${mins} min`, body: "That's your stop. Gather your things.", url: "/", tag: `trip-${r.ticket_id}` },
+      );
+    }
+  }
+
+  private vapid(): VapidKeys | null {
+    const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = this.env;
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return null;
+    return { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY, subject: VAPID_SUBJECT || "mailto:admin@example.com" };
+  }
+
+  /** Send everything in the outbox. Subscriptions the push service says are gone get deleted. */
+  async flushNotifications(): Promise<number> {
+    const pending = this.outbox;
+    this.outbox = [];
+    const keys = this.vapid();
+    if (!keys || !pending.length) return 0;
+    let sent = 0;
+    await Promise.all(
+      pending.map(async ({ user, msg }) => {
+        const subs = this.sql
+          .exec<PushSubscription & Record<string, SqlStorageValue>>(
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
+            user,
+          )
+          .toArray();
+        for (const sub of subs) {
+          try {
+            const status = await sendPush(sub, msg, keys, this.pushFetch);
+            if (status === 404 || status === 410) this.sql.exec("DELETE FROM push_subscriptions WHERE endpoint = ?", sub.endpoint);
+            else if (status < 300) sent++;
+            else console.warn(`push to ${new URL(sub.endpoint).host} failed: ${status}`);
+          } catch (e) {
+            console.warn("push failed", e);
+          }
+        }
+      }),
+    );
+    return sent;
+  }
+
+  pushPublicKey(): string | null {
+    return this.vapid()?.publicKey ?? null;
+  }
+
+  savePushSubscription(userId: string, sub: PushSubscription) {
+    return guard(() => {
+      this.userRow(userId);
+      this.sql.exec(
+        `INSERT INTO push_subscriptions (endpoint, user_id, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`,
+        sub.endpoint,
+        userId,
+        sub.p256dh,
+        sub.auth,
+        Date.now(),
+      );
+      return { subscribed: true };
+    });
+  }
+
+  deletePushSubscription(userId: string, endpoint: string) {
+    this.sql.exec("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?", endpoint, userId);
+    return { subscribed: false };
+  }
+
+  countPushSubscriptions(userId: string): number {
+    return this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?", userId).one().n;
   }
 
   // ======================= stops =======================
@@ -892,8 +1032,8 @@ export class World extends DurableObject<Env> {
     });
   }
 
-  postMessage(userId: string, conversationId: string, content: { title?: string; body: string }) {
-    return guard(() => {
+  async postMessage(userId: string, conversationId: string, content: { title?: string; body: string }) {
+    const res = guard(() => {
       this.assertMember(userId, conversationId);
       const msg = {
         id: newId(),
@@ -911,8 +1051,18 @@ export class World extends DurableObject<Env> {
         msg.content.body,
         msg.createdAt,
       );
+      const sender = this.userRow(userId).username;
+      const others = this.sql
+        .exec<{ user_id: string }>("SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?", conversationId, userId)
+        .toArray();
+      const preview = msg.content.body.length > 120 ? `${msg.content.body.slice(0, 117)}…` : msg.content.body;
+      for (const o of others)
+        this.notify(o.user_id, { title: sender, body: preview, url: `/messages/${conversationId}`, tag: `chat-${conversationId}` });
       return msg;
     });
+    if (res.ok) await this.flushNotifications();
+    else this.outbox = [];
+    return res;
   }
 
   listMessages(userId: string, conversationId: string, limit = 50) {

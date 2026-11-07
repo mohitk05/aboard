@@ -5,6 +5,7 @@ import { useNow } from "../lib/useNow";
 import { Map } from "../map/LazyMap";
 import { Board } from "../ui";
 import { useWorld } from "../world";
+import { NotifyNudge } from "./Notify";
 
 /** How far the train still has to go to `journey.to`, extrapolated between ticks. */
 export function kmLeft(j: JourneyData, now: number): number {
@@ -33,6 +34,7 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
   return (
     <>
       <Board label={`On board · ${j.line}`} title={title} sub={sub} />
+      <NotifyNudge about={`Get a notification before ${j.to.name}.`} />
 
       <Map
         stops={world.stops}

@@ -91,6 +91,12 @@ const schemas = {
     }),
   }),
   password: z.object({ current: z.string().min(1).max(256), next: z.string().min(8).max(256) }),
+  pushSubscription: z.object({
+    subscription: z.object({
+      endpoint: z.string().url().max(2048).startsWith("https://"),
+      keys: z.object({ p256dh: z.string().min(80).max(100), auth: z.string().min(16).max(32) }),
+    }),
+  }),
   conversation: z.object({ conversation: z.object({ members: z.array(id).min(1).max(50) }) }),
   message: z.object({ message: z.object({ title: z.string().max(200).optional(), body: z.string().min(1).max(5000) }) }),
 };
@@ -255,6 +261,21 @@ app.post("/conversation/:id/messages", anyone, async (c) =>
   send(c, world(c.env).postMessage(c.var.user.id, param(c, "id"), (await body(c, schemas.message)).message), 201),
 );
 
+// Push notifications
+app.get("/push/key", async (c) => {
+  const key = await world(c.env).pushPublicKey();
+  return key ? ok(c, { publicKey: key }) : fail(c, 404, "Notifications aren't set up on this server.");
+});
+app.get("/push/subscription", anyone, async (c) => ok(c, { count: await world(c.env).countPushSubscriptions(c.var.user.id) }));
+app.post("/push/subscription", anyone, async (c) => {
+  const { subscription: s } = await body(c, schemas.pushSubscription);
+  return send(c, world(c.env).savePushSubscription(c.var.user.id, { endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth }), 201);
+});
+app.delete("/push/subscription", anyone, async (c) => {
+  const { subscription: s } = await body(c, z.object({ subscription: z.object({ endpoint: z.string().url() }) }));
+  return ok(c, await world(c.env).deletePushSubscription(c.var.user.id, s.endpoint));
+});
+
 // Admin
 /** Create the first admin. Needs the ADMIN_SECRET header, and only works while there are no admins. */
 app.post("/admin/bootstrap", async (c) => {
@@ -272,7 +293,12 @@ app.post("/admin/bootstrap", async (c) => {
   return ok(c, { authToken: await startSession(c, { ...res.data, role: USER_ROLES.ADMIN }), user: res.data }, 201);
 });
 /** Advance the world one tick right now, without waiting for the alarm. Useful in development. */
-app.post("/admin/tick", admin, async (c) => ok(c, await world(c.env).tick(Date.now())));
+app.post("/admin/tick", admin, async (c) => {
+  const w = world(c.env);
+  const summary = await w.tick(Date.now());
+  await w.flushNotifications();
+  return ok(c, summary);
+});
 /** Build the demo Lisbon → Vladivostok line and start a train on it. Safe to repeat. */
 app.post("/admin/seed", admin, (c) => send(c, world(c.env).seedDemo(), 201));
 

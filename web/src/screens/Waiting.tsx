@@ -7,6 +7,7 @@ import { useNow } from "../lib/useNow";
 import { Map } from "../map/LazyMap";
 import { Board, FormError } from "../ui";
 import { useWorld } from "../world";
+import { NotifyNudge } from "./Notify";
 
 /** Ticket in hand, waiting on the platform for the train. */
 export function Waiting({ journey }: { journey: Journey }) {
@@ -29,6 +30,7 @@ export function Waiting({ journey }: { journey: Journey }) {
   return (
     <>
       <Board label="Your ticket" title={`${journey.from.name} → ${journey.to.name}`} sub={status} />
+      <NotifyNudge about="Get a notification when your train is near." />
 
       <section className="card ticket" aria-label="Ticket details">
         <dl className="facts">

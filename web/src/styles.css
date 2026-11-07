@@ -785,3 +785,15 @@ ol.list {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 }
+
+.nudge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
