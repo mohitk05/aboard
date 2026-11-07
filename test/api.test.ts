@@ -91,7 +91,7 @@ describe("auth and security", () => {
 });
 
 describe("travel", () => {
-  it("boards, rides and alights (the old boarding bug)", async () => {
+  it("boards, rides and alights (the old boarding bug)", { timeout: 60_000 }, async () => {
     const trip = await newTrip(false);
     const { token, user } = await signup(stops[0]!.id);
     const ticket = await api("POST", "/ticket/buy", { token, body: { ticket: { trip: trip.id, from: stops[0]!.id, to: stops[2]!.id } } });

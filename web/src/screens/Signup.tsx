@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { haversineKm } from "../../../src/lib/geo";
 import { api, type Interest, type Stop } from "../api";
+import { askCoords, fetchNearest, useNearestStation } from "../lib/location";
 import { useSignup } from "../auth";
 import { Button, Card, Check, FormError, Notice, Page, SelectField, TagPicker, TextField } from "../ui";
 
@@ -19,20 +19,30 @@ export function Signup() {
   const [picked, setPicked] = useState<string[]>([]);
   const [isPrivate, setPrivate] = useState(false);
   const [locating, setLocating] = useState<"idle" | "busy" | "denied">("idle");
+  const [changing, setChanging] = useState(false);
 
-  const findNearest = () => {
-    if (!stops.data?.length || !navigator.geolocation) return setLocating("denied");
+  // You start at the station nearest to you, worked out without a permission prompt.
+  const nearest = useNearestStation();
+  const [auto, setAuto] = useState<string | null>(null);
+  if (nearest.data && auto === null) {
+    setAuto(nearest.data.stop.id);
+    if (!stop) setStop(nearest.data.stop.id);
+  }
+  const chosen = stops.data?.find((s) => s.id === stop);
+
+  // "Use my exact location": asks the browser, then picks the nearest station to that.
+  const findNearest = async () => {
     setLocating("busy");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const here = { lat: coords.latitude, lng: coords.longitude };
-        const nearest = [...stops.data].sort((a, b) => haversineKm(here, a.coordinates) - haversineKm(here, b.coordinates))[0];
-        if (nearest) setStop(nearest.id);
-        setLocating("idle");
-      },
-      () => setLocating("denied"),
-      { timeout: 10_000, maximumAge: 600_000 },
-    );
+    const at = await askCoords();
+    if (!at) return setLocating("denied");
+    try {
+      const n = await fetchNearest(at);
+      setStop(n.stop.id);
+      setAuto(n.stop.id);
+      setLocating("idle");
+    } catch {
+      setLocating("denied");
+    }
   };
 
   const submit = (e: FormEvent) => {
@@ -65,29 +75,49 @@ export function Signup() {
         <form className="form" onSubmit={submit}>
           <h1>Get a ticket</h1>
 
-          <div className="row row-end">
-            <SelectField
-              label="Where are you starting?"
-              hint="You can travel anywhere from here."
-              required
-              value={stop}
-              onValue={setStop}
-              disabled={!stops.data}
-            >
-              <option value="" disabled>
-                {stops.isPending ? "Loading stations…" : "Choose a station"}
-              </option>
-              {stops.data?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}, {s.country}
+          {!changing && chosen ? (
+            <div className="start-station" role="group" aria-label="Starting station">
+              <span className="field-label">You'll start at</span>
+              <strong className="start-name">
+                {chosen.name}, {chosen.country}
+              </strong>
+              <span className="field-hint">
+                {stop === auto ? "The station nearest to you." : "Your choice."} You can travel anywhere from here.
+              </span>
+              <div className="row">
+                <Button small onClick={() => setChanging(true)}>
+                  Change
+                </Button>
+                <Button small kind="quiet" onClick={findNearest} disabled={locating === "busy"}>
+                  {locating === "busy" ? "Locating…" : "Use my exact location"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="row row-end">
+              <SelectField
+                label="Where are you starting?"
+                hint="You can travel anywhere from here."
+                required
+                value={stop}
+                onValue={setStop}
+                disabled={!stops.data}
+              >
+                <option value="" disabled>
+                  {stops.isPending || nearest.isPending ? "Finding stations near you…" : "Choose a station"}
                 </option>
-              ))}
-            </SelectField>
-            <Button onClick={findNearest} disabled={locating === "busy"}>
-              {locating === "busy" ? "Locating…" : "Nearest to me"}
-            </Button>
-          </div>
-          {locating === "denied" && <Notice tone="warning">Couldn't get your location. Pick a station instead.</Notice>}
+                {stops.data?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}, {s.country}
+                  </option>
+                ))}
+              </SelectField>
+              <Button onClick={findNearest} disabled={locating === "busy"}>
+                {locating === "busy" ? "Locating…" : "Nearest to me"}
+              </Button>
+            </div>
+          )}
+          {locating === "denied" && <Notice tone="warning">Couldn't get your exact location. Pick a station instead.</Notice>}
 
           <TextField
             label="Username"

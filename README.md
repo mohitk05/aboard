@@ -100,16 +100,18 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | Method | Path | Who | Body |
 | --- | --- | --- | --- |
 | GET | `/` | anyone | |
-| POST | `/user/signup` | anyone | `{ user: { username, email, password, age, currentStop, interests?, image?, profileMode? } }` |
+| POST | `/user/signup` | anyone | `{ user: { username, email, password, age, currentStop?, near?, interests?, image?, profileMode? } }`: without `currentStop` you start at the station nearest to `near` (browser coordinates) or to your network location |
 | POST | `/user/login` | anyone | `{ user: { email, password } }` (sets the session cookie) |
 | POST | `/user/logout` | anyone | clears the session cookie |
 | GET | `/user/me` | player | includes `journey` (ticket, train, stop-by-stop arrival times) when you have a ticket |
 | GET | `/user/:id` | player | (email etc. only for yourself or admin) |
 | GET | `/user/fellow-users` | player | |
-| PATCH | `/user/me` | player | `{ user: { interests?, image?, profileMode? } }` |
+| PATCH | `/user/me` | player | `{ user: { interests?, image?, profileMode?, currentStop? } }` (`currentStop` only if you have none yet, or you're an admin) |
+| POST | `/user/me/locate` | player | `{ near? }`: put me at the nearest station (same rule as `currentStop`) |
 | POST | `/user/password` | player | `{ current, next }` |
 | POST | `/user` | admin | same as signup |
 | GET | `/stop` | anyone | all stops |
+| GET | `/stop/nearest?lat=&lng=` | anyone | the station nearest to those coordinates, or to your network location |
 | GET | `/stop/:id` | player | |
 | GET | `/stop/:id/departures` | player | trains still calling here, with destinations, fares and arrival times |
 | GET | `/stop/:id/incoming-vehicles?limit=5` | player | |

@@ -109,6 +109,17 @@ a {
 .row-end {
   align-items: flex-end;
 }
+.start-station {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.start-name {
+  font-size: 1.25rem;
+}
 .form-card {
   max-width: 520px;
   width: 100%;

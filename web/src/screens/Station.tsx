@@ -1,15 +1,81 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Departure, type Me, type Stop } from "../api";
 import { meKey } from "../auth";
 import { clockParts, formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
+import { grantedCoords } from "../lib/location";
 import { useNow } from "../lib/useNow";
 import { Map } from "../map/LazyMap";
-import { Board, Button, Card, FormError } from "../ui";
+import { Board, Button, Card, FormError, SelectField } from "../ui";
 import { useWorld } from "../world";
 
 /** At a station with no ticket: what's coming, and where you could go. */
 export function Station({ me, stop }: { me: Me; stop: Stop | undefined }) {
+  if (!me.currentStop) return <ChooseStation me={me} />;
+  return <AtStation me={me} stop={stop} />;
+}
+
+/**
+ * Not at any station yet (e.g. a new admin account): we place you at the station nearest to
+ * you straight away. If that isn't possible, you pick one.
+ */
+function ChooseStation({ me }: { me: Me }) {
+  const world = useWorld();
+  const qc = useQueryClient();
+  const [stop, setStop] = useState("");
+  const choose = useMutation({
+    mutationFn: () => api<Me>("PATCH", "/user/me", { user: { currentStop: stop } }),
+    onSuccess: (m) => qc.setQueryData(meKey, m),
+  });
+  const locate = useMutation({
+    mutationFn: async () => api<Me>("POST", "/user/me/locate", { near: (await grantedCoords()) ?? undefined }),
+    onSuccess: (m) => qc.setQueryData(meKey, m),
+  });
+  const tried = useRef(false);
+  useEffect(() => {
+    if (tried.current) return;
+    tried.current = true;
+    locate.mutate();
+  }, [locate]);
+
+  if (!locate.isError) {
+    return <Board label="Not at a station yet" title="Finding the station nearest to you…" sub={`Traveller ${me.username}`} />;
+  }
+  return (
+    <>
+      <Board label="Not at a station yet" title="Where do you start?" sub={`Traveller ${me.username}`} />
+      <Card>
+        <form
+          className="form-wide"
+          onSubmit={(e) => {
+            e.preventDefault();
+            choose.mutate();
+          }}
+        >
+          <div className="row row-end">
+            <SelectField label="Starting station" required value={stop} onValue={setStop}>
+              <option value="" disabled>
+                {world.stops.length ? "Choose a station" : "No stations yet"}
+              </option>
+              {world.stops.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}, {s.country}
+                </option>
+              ))}
+            </SelectField>
+            <Button kind="primary" type="submit" disabled={!stop || choose.isPending}>
+              Start here
+            </Button>
+          </div>
+          <FormError message={choose.error?.message} />
+        </form>
+      </Card>
+      <Map stops={world.stops} routes={world.routes} trips={world.trips} onStopClick={setStop} highlightStops={stop ? [stop] : []} />
+    </>
+  );
+}
+
+function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
   const world = useWorld();
   const departures = useQuery({
     queryKey: ["departures", me.currentStop],
@@ -29,7 +95,7 @@ export function Station({ me, stop }: { me: Me; stop: Stop | undefined }) {
 
       <Card aria-labelledby="departures-title" role="region">
         <h2 id="departures-title">Departures</h2>
-        {departures.isPending && <p className="muted">Reading the board…</p>}
+        {departures.isLoading && <p className="muted">Reading the board…</p>}
         <FormError message={departures.error?.message} />
         {departures.data && !departures.data.length && (
           <p className="muted">

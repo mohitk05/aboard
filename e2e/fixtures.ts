@@ -41,6 +41,8 @@ export async function tick(request: APIRequestContext, adminToken: string, n = 1
 export async function signUp(page: Page, station: string, interests: string[] = []) {
   const username = unique("t");
   await page.goto("/signup");
+  // You start at the station nearest to you; tests choose one explicitly.
+  await page.getByRole("group", { name: "Starting station" }).getByRole("button", { name: "Change" }).click();
   await page.getByLabel("Where are you starting?").selectOption({ label: station });
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Email", { exact: true }).fill(`${username}@e2e.test`);

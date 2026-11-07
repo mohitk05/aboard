@@ -49,3 +49,20 @@ describe("profile", () => {
     expect((await api("POST", "/user/login", { body: { user: { email: a.user.email, password: "new-password-1" } } })).status).toBe(200);
   });
 });
+
+describe("choosing a starting station", () => {
+  it("lets someone with no station pick one, and admins move, but not players", async () => {
+    // The bootstrapped admin has no station.
+    const me = (await api("GET", "/user/me", { token: admin })).data;
+    expect(me.currentStop).toBeNull();
+    const set = await api("PATCH", "/user/me", { token: admin, body: { user: { currentStop: stops[2]!.id } } });
+    expect(set.status).toBe(200);
+    expect(set.data.currentStop).toBe(stops[2]!.id);
+    // Admins can move again.
+    expect((await api("PATCH", "/user/me", { token: admin, body: { user: { currentStop: stops[3]!.id } } })).status).toBe(200);
+
+    const player = await signup(stops[0]!.id);
+    const r = await api("PATCH", "/user/me", { token: player.token, body: { user: { currentStop: stops[1]!.id } } });
+    expect(r.status).toBe(403);
+  });
+});

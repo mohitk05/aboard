@@ -11,7 +11,7 @@ import {
   type UserRole,
   type UserState,
 } from "../lib/constants";
-import { railKm } from "../lib/geo";
+import { haversineKm, railKm, type LatLng } from "../lib/geo";
 import { sendPush, type PushMessage, type PushSubscription, type VapidKeys } from "../lib/webpush";
 import { badRequest, conflict, forbidden, guard, notFound, type Result } from "../lib/result";
 import { migrate } from "./schema";
@@ -505,6 +505,32 @@ export class World extends DurableObject<Env> {
     return this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray().map(stopOut);
   }
 
+  /**
+   * The station closest to `at` (great-circle distance). Without a location, the first station
+   * ever built, so people still start somewhere. Null only if there are no stations at all.
+   */
+  nearestStop(at: LatLng | null): (Stop & { km: number | null }) | null {
+    const stops = this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY created_at").toArray();
+    if (!stops.length) return null;
+    if (!at) return { ...stopOut(stops[0]!), km: null };
+    let best = stops[0]!;
+    let bestKm = Infinity;
+    for (const s of stops) {
+      const km = haversineKm(at, s);
+      if (km < bestKm) [best, bestKm] = [s, km];
+    }
+    return { ...stopOut(best), km: Math.round(bestKm) };
+  }
+
+  /** Put someone who isn't anywhere yet (or an admin) at the station nearest to `at`. */
+  placeNearest(userId: string, at: LatLng | null) {
+    const near = this.nearestStop(at);
+    if (!near) return guard(() => {
+      throw conflict("There are no stations yet.");
+    });
+    return this.updateProfile(userId, { currentStop: near.id });
+  }
+
   getStop(id: string): Result<Stop> {
     return guard(() => stopOut(this.stopRow(id)));
   }
@@ -948,11 +974,22 @@ export class World extends DurableObject<Env> {
   }
 
   /** Change what other travellers see about you, and who you're matched with. */
-  updateProfile(userId: string, input: { interests?: string[]; image?: string | null; profileMode?: ProfileMode }) {
+  updateProfile(
+    userId: string,
+    input: { interests?: string[]; image?: string | null; profileMode?: ProfileMode; currentStop?: string },
+  ) {
     return guard(() => {
       const u = this.userRow(userId);
       if (input.interests) for (const i of input.interests) this.interestRow(i);
+      if (input.currentStop) {
+        // Choosing where to start is for people who aren't anywhere yet (e.g. a new admin).
+        // Admins may also move themselves to any station. Players travel by train.
+        if (u.current_stop_id && u.role !== USER_ROLES.ADMIN) throw forbidden("You can only change station by taking a train.");
+        if (u.state !== "ATSTATION") throw conflict("You can't change station while you have a ticket.");
+        this.stopRow(input.currentStop);
+      }
       this.ctx.storage.transactionSync(() => {
+        if (input.currentStop) this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", input.currentStop, userId);
         if (input.image !== undefined) this.sql.exec("UPDATE users SET image = ? WHERE id = ?", input.image, userId);
         if (input.profileMode) this.sql.exec("UPDATE users SET profile_mode = ? WHERE id = ?", input.profileMode, userId);
         if (input.interests) {

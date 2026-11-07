@@ -83,3 +83,26 @@ test("F1: players can't open the control room", async ({ page }) => {
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/$/);
 });
+
+test("an admin with no station is placed at the one nearest to them", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByText("Reading the board…")).toHaveCount(0);
+  // Placed automatically: the departures board for some station appears.
+  await expect(page.getByRole("region", { name: "Departures" })).toBeVisible();
+  await expect(page.getByText("At the station")).toBeVisible();
+});
+
+test("signup suggests the nearest station, and you can still change it", async ({ page, context }) => {
+  // The browser shares its location (Moscow); the app picks the nearest station without asking.
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 55.75, longitude: 37.6 });
+  await page.goto("/signup");
+  const start = page.getByRole("group", { name: "Starting station" });
+  await expect(start.getByText("Moscow, Russia")).toBeVisible();
+  await expect(start.getByText("The station nearest to you.")).toBeVisible();
+  await start.getByRole("button", { name: "Change" }).click();
+  await expect(page.getByLabel("Where are you starting?")).toHaveValue(/.+/);
+});

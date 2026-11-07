@@ -38,6 +38,7 @@ const changed = async <T>(env: Env, result: Promise<Result<T>> | Result<T>): Pro
 // ---------- validation ----------
 
 const id = z.string().uuid();
+const latLng = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 const schemas = {
   stop: z.object({
     stop: z.object({
@@ -72,7 +73,10 @@ const schemas = {
       email: z.string().email().max(254),
       password: z.string().min(8).max(256),
       age: z.number().int().min(13).max(120),
-      currentStop: id,
+      /** Optional: without it you start at the station nearest to you. */
+      currentStop: id.optional(),
+      /** The browser's coordinates, if the person shared them. */
+      near: latLng.optional(),
       interests: z.array(id).max(50).optional(),
       image: z.string().url().max(2048).optional(),
       profileMode: z.enum(PROFILE_MODES).optional(),
@@ -95,6 +99,7 @@ const schemas = {
       interests: z.array(id).max(50).optional(),
       image: z.string().url().max(2048).nullable().optional(),
       profileMode: z.enum(PROFILE_MODES).optional(),
+      currentStop: id.optional(),
     }),
   }),
   password: z.object({ current: z.string().min(1).max(256), next: z.string().min(8).max(256) }),
@@ -118,6 +123,19 @@ async function body<S extends z.ZodType>(c: Context, schema: S): Promise<z.infer
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new HTTPException(400, { message: z.prettifyError(parsed.error) });
   return parsed.data;
+}
+
+/**
+ * Where is this person? The browser's own coordinates if it sent them (precise, but needs the
+ * user's permission), otherwise Cloudflare's approximate location for the request's IP address.
+ */
+function whereIs(c: Context, browser?: { lat: number; lng: number }): { at: { lat: number; lng: number } | null; source: "browser" | "network" | "none" } {
+  if (browser) return { at: browser, source: "browser" };
+  const cf = c.req.raw.cf as { latitude?: string; longitude?: string } | undefined;
+  const lat = Number(cf?.latitude);
+  const lng = Number(cf?.longitude);
+  if (cf?.latitude && cf?.longitude && Number.isFinite(lat) && Number.isFinite(lng)) return { at: { lat, lng }, source: "network" };
+  return { at: null, source: "none" };
 }
 
 const param = (c: Context, name: string) => {
@@ -191,6 +209,13 @@ app.post("/vehicle", admin, async (c) => send(c, world(c.env).createVehicle((awa
 
 // Stop
 app.get("/stop", (c) => world(c.env).listStops().then((list) => ok(c, list))); // public: signup picks a stop
+/** The station nearest to you: ?lat=&lng= from the browser, or your approximate network location. */
+app.get("/stop/nearest", async (c) => {
+  const q = latLng.safeParse({ lat: Number(c.req.query("lat")), lng: Number(c.req.query("lng")) });
+  const { at, source } = whereIs(c, q.success ? q.data : undefined);
+  const stop = await world(c.env).nearestStop(at);
+  return stop ? ok(c, { stop, source }) : fail(c, 404, "There are no stations yet.");
+});
 app.get("/stop/:id", anyone, (c) => send(c, world(c.env).getStop(param(c, "id"))));
 app.post("/stop", admin, async (c) => send(c, changed(c.env, world(c.env).createStop((await body(c, schemas.stop)).stop)), 201));
 app.get("/stop/:id/departures", anyone, (c) => send(c, world(c.env).getDepartures(param(c, "id"))));
@@ -210,8 +235,11 @@ app.post("/route/autogenerate", admin, async (c) =>
 // User
 app.post("/user/signup", async (c) => {
   const { user } = await body(c, schemas.signup);
-  const { password, ...rest } = user;
-  const res = await world(c.env).createUser({ ...rest, passwordHash: await hashPassword(password) });
+  const { password, near, ...rest } = user;
+  const w = world(c.env);
+  const currentStop = rest.currentStop ?? (await w.nearestStop(whereIs(c, near).at))?.id;
+  if (!currentStop) return fail(c, 409, "There are no stations yet.");
+  const res = await w.createUser({ ...rest, currentStop, passwordHash: await hashPassword(password) });
   if (!res.ok) return fail(c, res.status, res.error);
   return ok(c, { authToken: await startSession(c, { ...res.data, role: USER_ROLES.PLAYER }), user: res.data }, 201);
 });
@@ -231,11 +259,16 @@ app.post("/user/logout", (c) => {
 });
 app.post("/user", admin, async (c) => {
   const { user } = await body(c, schemas.signup);
-  const { password, ...rest } = user;
+  const { password, near: _near, ...rest } = user;
   return send(c, world(c.env).createUser({ ...rest, passwordHash: await hashPassword(password) }), 201);
 });
 app.get("/user/me", anyone, (c) => send(c, world(c.env).getUser(c.var.user.id, c.var.user)));
 app.patch("/user/me", anyone, async (c) => send(c, world(c.env).updateProfile(c.var.user.id, (await body(c, schemas.profile)).user)));
+/** Put me at the station nearest to where I am (only if I'm not at one yet, or I'm an admin). */
+app.post("/user/me/locate", anyone, async (c) => {
+  const { near } = await body(c, z.object({ near: latLng.optional() }).default({}));
+  return send(c, world(c.env).placeNearest(c.var.user.id, whereIs(c, near).at));
+});
 app.post("/user/password", anyone, async (c) => {
   const { current, next } = await body(c, schemas.password);
   const w = world(c.env);
@@ -298,7 +331,7 @@ app.post("/admin/bootstrap", async (c) => {
   if (!match) return fail(c, 401, "Unauthorized.");
   if ((await world(c.env).countAdmins()) > 0) return fail(c, 409, "An admin already exists.");
   const { user } = await body(c, schemas.bootstrap);
-  const { password, ...rest } = user;
+  const { password, near: _near, ...rest } = user;
   const res = await world(c.env).createUser({ ...rest, role: USER_ROLES.ADMIN, passwordHash: await hashPassword(password) });
   if (!res.ok) return fail(c, res.status, res.error);
   return ok(c, { authToken: await startSession(c, { ...res.data, role: USER_ROLES.ADMIN }), user: res.data }, 201);
