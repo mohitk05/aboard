@@ -4,17 +4,21 @@ import { api, type Journey } from "../api";
 import { meKey } from "../auth";
 import { formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
 import { useNow } from "../lib/useNow";
-import { Map } from "../map/LazyMap";
 import { Board, Button, Card, FormError } from "../ui";
-import { useWorld } from "../world";
+import { useWorldFocus } from "../world3d/focus";
 import { NotifyNudge } from "./Notify";
 
 /** Ticket in hand, waiting on the platform for the train. */
 export function Waiting({ journey }: { journey: Journey }) {
   const now = useNow();
-  const world = useWorld();
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
+  useWorldFocus({
+    label: `Map of your trip from ${journey.from.name} to ${journey.to.name}`,
+    highlight: [journey.from.id, journey.to.id],
+    center: journey.from.coordinates,
+    distance: 2.4,
+  });
   const cancel = useMutation({
     mutationFn: () => api("DELETE", "/ticket"),
     onSuccess: () => qc.invalidateQueries({ queryKey: meKey }),
@@ -75,15 +79,6 @@ export function Waiting({ journey }: { journey: Journey }) {
         )}
         <FormError message={cancel.error?.message} />
       </Card>
-
-      <Map
-        stops={world.stops}
-        routes={world.routes}
-        trips={world.trips}
-        highlightStops={[journey.from.id, journey.to.id]}
-        followTrip={null}
-        label={`Map of your trip from ${journey.from.name} to ${journey.to.name}`}
-      />
     </>
   );
 }

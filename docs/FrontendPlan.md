@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: F0–F6 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
+Status: F0–F6 done (2026-11-07). Since then the map became a three.js globe behind floating panels, and colours follow Apple's guidelines (see the README's Interface section). This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 

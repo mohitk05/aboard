@@ -1,21 +1,10 @@
-import {
-  DBBadge,
-  DBButton,
-  DBCard,
-  DBCheckbox,
-  DBInput,
-  DBNotification,
-  DBSelect,
-  DBTag,
-  DBTextarea,
-} from "@db-ux/react-core-components";
-import type { ChangeEvent, ComponentProps, ReactNode } from "react";
+import { useId, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { Link } from "react-router";
 
-// Aboard's UI kit: thin wrappers over DB UX Design System components, so screens share one
-// vocabulary (and one place to adjust if the design system changes).
+// Aboard's UI kit: native HTML elements with Aboard's own styling (web/src/styles.css), coloured
+// by role following Apple's Human Interface Guidelines. Screens use only these.
 
-/** Page frame: brand bar, then content in a readable column. */
+/** Page frame: brand bar, then panels floating over the 3D world. */
 export function Page({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
   return (
     <div className="page">
@@ -42,97 +31,132 @@ export function Board({ label, title, sub }: { label: string; title: string; sub
   );
 }
 
-export function Card({ children, className, ...rest }: ComponentProps<typeof DBCard>) {
+export function Card({ children, className, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
-    <DBCard spacing="medium" className={`card ${className ?? ""}`} {...rest}>
+    <section className={`card ${className ?? ""}`} {...rest}>
       {children}
-    </DBCard>
+    </section>
   );
 }
 
 type ButtonKind = "primary" | "secondary" | "quiet" | "danger";
-const VARIANT: Record<ButtonKind, "brand" | "outlined" | "ghost" | "filled"> = {
-  primary: "brand",
-  secondary: "outlined",
-  quiet: "ghost",
-  danger: "filled",
-};
 
 export function Button({
   kind = "secondary",
   small,
+  className,
+  type,
   ...rest
-}: Omit<ComponentProps<typeof DBButton>, "variant" | "size"> & { kind?: ButtonKind; small?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { kind?: ButtonKind; small?: boolean }) {
   return (
-    <DBButton
-      variant={VARIANT[kind]}
-      size={small ? "small" : "medium"}
-      data-kind={kind}
-      type={rest.type ?? (rest.onClick ? "button" : "submit")}
+    <button
+      type={type ?? (rest.onClick ? "button" : "submit")}
+      className={`btn btn-${kind} ${small ? "btn-small" : ""} ${className ?? ""}`}
       {...rest}
     />
   );
 }
 
-/** A router link that looks like a DB button. */
+/** A router link that looks like a button. */
 export function ButtonLink({ to, kind = "secondary", children }: { to: string; kind?: ButtonKind; children: ReactNode }) {
   return (
-    <Link to={to} className="db-button" data-variant={VARIANT[kind]} data-size="medium">
+    <Link to={to} className={`btn btn-${kind}`}>
       {children}
     </Link>
   );
 }
 
+function FieldFrame({ id, label, hint, showLabel = true, children }: { id: string; label: string; hint?: string; showLabel?: boolean; children: ReactNode }) {
+  return (
+    <div className="field">
+      <label htmlFor={id} className={showLabel ? "field-label" : "sr-only"}>
+        {label}
+      </label>
+      {children}
+      {hint && (
+        <span className="field-hint" id={`${id}-hint`}>
+          {hint}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type InputExtras = {
+  label: string;
+  hint?: string;
+  onValue: (v: string) => void;
+  /** Lower-case aliases kept for call sites written against the old kit. */
+  autocomplete?: string;
+  inputmode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
+};
+
 /** Text input with a visible label and an optional hint. `onValue` gets the new string. */
 export function TextField({
+  label,
   hint,
   onValue,
+  autocomplete,
+  inputmode,
   ...rest
-}: Omit<ComponentProps<typeof DBInput>, "message" | "onChange"> & { label: string; hint?: string; onValue: (v: string) => void }) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "onChange"> & InputExtras) {
+  const id = useId();
   return (
-    <DBInput
-      {...rest}
-      message={hint}
-      showMessage={!!hint}
-      onChange={(e: ChangeEvent<HTMLInputElement>) => onValue(e.target.value)}
-    />
+    <FieldFrame id={id} label={label} hint={hint}>
+      <input
+        id={id}
+        className="input"
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        autoComplete={autocomplete ?? rest.autoComplete}
+        inputMode={inputmode ?? rest.inputMode}
+        onChange={(e) => onValue(e.target.value)}
+        {...rest}
+      />
+    </FieldFrame>
   );
 }
 
 export function SelectField({
+  label,
   hint,
   onValue,
   children,
   ...rest
-}: Omit<ComponentProps<typeof DBSelect>, "message" | "onChange"> & {
-  label: string;
-  hint?: string;
-  onValue: (v: string) => void;
-  children: ReactNode;
-}) {
+}: { label: string; hint?: string; onValue: (v: string) => void; children: ReactNode; value: string; required?: boolean; disabled?: boolean }) {
+  const id = useId();
   return (
-    <DBSelect {...rest} message={hint} showMessage={!!hint} onChange={(e: ChangeEvent<HTMLSelectElement>) => onValue(e.target.value)}>
-      {children}
-    </DBSelect>
+    <FieldFrame id={id} label={label} hint={hint}>
+      <select id={id} className="input select" aria-describedby={hint ? `${id}-hint` : undefined} onChange={(e) => onValue(e.target.value)} {...rest}>
+        {children}
+      </select>
+    </FieldFrame>
   );
 }
 
 export function TextArea({
+  label,
+  showLabel = true,
   onValue,
   ...rest
-}: Omit<ComponentProps<typeof DBTextarea>, "onChange"> & { label: string; onValue: (v: string) => void }) {
-  return <DBTextarea {...rest} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onValue(e.target.value)} />;
+}: { label: string; showLabel?: boolean; onValue: (v: string) => void; value: string; rows?: number; maxLength?: number; placeholder?: string }) {
+  const id = useId();
+  return (
+    <FieldFrame id={id} label={label} showLabel={showLabel}>
+      <textarea id={id} className="input textarea" onChange={(e) => onValue(e.target.value)} {...rest} />
+    </FieldFrame>
+  );
 }
 
 export function Check({ checked, onValue, children }: { checked: boolean; onValue: (v: boolean) => void; children: ReactNode }) {
   return (
-    <DBCheckbox checked={checked} onChange={(e: ChangeEvent<HTMLInputElement>) => onValue(e.target.checked)}>
-      {children}
-    </DBCheckbox>
+    <label className="check">
+      <input type="checkbox" checked={checked} onChange={(e) => onValue(e.target.checked)} />
+      <span>{children}</span>
+    </label>
   );
 }
 
-/** A set of toggleable tags (e.g. interests), each a checkbox inside a DB tag. */
+/** A set of toggleable tags (e.g. interests), each a real checkbox styled as a pill. */
 export function TagPicker({
   legend,
   hint,
@@ -152,12 +176,12 @@ export function TagPicker({
       <legend className="field-label">{legend}</legend>
       <div className="chips">
         {options.map((o) => (
-          <DBTag key={o.id}>
-            <label>
-              <input type="checkbox" checked={picked.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} />
-              {o.name}
-            </label>
-          </DBTag>
+          <label key={o.id} className="tag tag-toggle">
+            <input type="checkbox" checked={picked.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} />
+            {/* The tick is decoration: the checkbox already announces its state. */}
+            {picked.includes(o.id) && <span aria-hidden>✓&nbsp;</span>}
+            <span>{o.name}</span>
+          </label>
         ))}
       </div>
       {hint && <span className="field-hint">{hint}</span>}
@@ -165,25 +189,26 @@ export function TagPicker({
   );
 }
 
-/** Read-only tags, e.g. someone's interests. Shared ones are emphasised. */
+/** Read-only tags, e.g. someone's interests. Shared ones are filled (and say so to screen readers). */
 export function Tags({ items, strong = [], label }: { items: { id: string; name: string }[]; strong?: string[]; label?: string }) {
   return (
-    <div className="chips" aria-label={label}>
-      {items.map((i) => (
-        <DBTag key={i.id} semantic="neutral" emphasis={strong.includes(i.id) ? "strong" : "weak"}>
-          {i.name}
-        </DBTag>
-      ))}
-    </div>
+    <ul className="chips" aria-label={label}>
+      {items.map((i) => {
+        const shared = strong.includes(i.id);
+        return (
+          <li key={i.id} className={`tag ${shared ? "tag-shared" : ""}`}>
+            {shared && <span aria-hidden>✓ </span>}
+            {i.name}
+            {shared && <span className="sr-only"> (shared)</span>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 export function Badge({ children }: { children: ReactNode }) {
-  return (
-    <DBBadge semantic="neutral" emphasis="strong" size="small" className="badge">
-      {children}
-    </DBBadge>
-  );
+  return <span className="badge">{children}</span>;
 }
 
 /** An inline message: errors are announced (role=alert), everything else is a polite status. */
@@ -195,19 +220,15 @@ export function Notice({
   children: ReactNode;
 }) {
   return (
-    <DBNotification semantic={tone} variant="standalone" role={tone === "critical" ? "alert" : "status"} showIcon={false}>
+    <div className={`notice notice-${tone}`} role={tone === "critical" ? "alert" : "status"}>
       {children}
-    </DBNotification>
+    </div>
   );
 }
 
 export function FormError({ message }: { message?: string | null }) {
   if (!message) return null;
-  return (
-    <div className="form-error">
-      <Notice tone="critical">{message}</Notice>
-    </div>
-  );
+  return <Notice tone="critical">{message}</Notice>;
 }
 
 export function Splash({ error, onRetry }: { error?: string; onRetry?: () => void }) {

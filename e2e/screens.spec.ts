@@ -4,19 +4,33 @@ import { ensureWorld, signUp, test, tick, logOut } from "./fixtures";
 //   SHOTS=/some/dir npm run e2e -- screens
 const dir = process.env.SHOTS;
 test.skip(!dir, "set SHOTS=<dir> to capture screenshots");
+test.setTimeout(180_000);
+
+test("capture desktop", async ({ browser, request }) => {
+  await ensureWorld(request);
+  for (const scheme of ["light", "dark"] as const) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: scheme, deviceScaleFactor: 1 });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto("/");
+    await page.waitForTimeout(3500);
+    await page.screenshot({ path: `${dir}/desktop-${scheme}.png` });
+    await ctx.close();
+  }
+});
 
 test("capture screens", async ({ page, request }) => {
   const { adminToken, seed } = await ensureWorld(request);
   await tick(request, adminToken, 8); // leave Lisbon so a train is moving
 
   await page.goto("/");
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${dir}/landing.png`, fullPage: true });
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: `${dir}/landing.png` });
 
   await signUp(page, "Moscow, Russia", ["Trains", "Books"]);
   await page.getByRole("button", { name: /Vladivostok/ }).first().click();
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${dir}/station.png`, fullPage: true });
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: `${dir}/station.png` });
 
   await page.getByRole("button", { name: /Buy a ticket to Irkutsk/ }).click();
   await page.getByText("Moscow → Irkutsk").waitFor();
@@ -36,8 +50,8 @@ test("capture screens", async ({ page, request }) => {
   await tick(request, adminToken, 60);
   await page.reload();
   await page.getByText(/On board/).waitFor();
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${dir}/journey.png`, fullPage: true });
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: `${dir}/journey.png` });
 
   await page.getByRole("link", { name: "People" }).click();
   await page.waitForTimeout(500);

@@ -15,7 +15,13 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: "off",
   },
-  projects: [{ name: "phone", use: { ...devices["Pixel 7"] } }],
+  // Software WebGL (SwiftShader) so the three.js world renders in headless Chromium.
+  projects: [
+    {
+      name: "phone",
+      use: { ...devices["Pixel 7"], launchOptions: { args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"] } },
+    },
+  ],
   webServer: {
     command: `rm -rf .wrangler/e2e && npm run build:web && npx wrangler dev --port ${PORT} --persist-to .wrangler/e2e`,
     url: `http://localhost:${PORT}/api`,

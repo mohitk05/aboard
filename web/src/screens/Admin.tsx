@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, type Stop } from "../api";
-import { Map } from "../map/LazyMap";
 import { formatKm } from "../lib/format";
 import { Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
 import { useWorld, type Route, type Trip, type Vehicle } from "../world";
+import { useWorldFocus } from "../world3d/focus";
 import { Shell } from "./Shell";
 
 /** Refresh everything world-shaped after an admin change. */
@@ -21,6 +21,7 @@ function useWorldMutation<I, O>(fn: (input: I) => Promise<O>) {
 export function Admin() {
   const world = useWorld();
   const [clicked, setClicked] = useState<{ lat: number; lng: number } | null>(null);
+  useWorldFocus({ label: "Map of the network. Click the globe to place a new station.", onMapClick: setClicked, distance: 3 });
 
   return (
     <Shell>
@@ -35,15 +36,7 @@ export function Admin() {
 
       <Card>
         <h2>Network</h2>
-        <p className="muted small">Click the map to place a new station there.</p>
-        <Map
-          stops={world.stops}
-          routes={world.routes}
-          trips={world.trips}
-          highlightStops={[]}
-          onMapClick={setClicked}
-          className="map-tall"
-        />
+        <p className="muted small">Click the globe to place a new station there{clicked ? ` (picked ${clicked.lat.toFixed(2)}, ${clicked.lng.toFixed(2)})` : ""}.</p>
       </Card>
 
       <StopForm at={clicked} />

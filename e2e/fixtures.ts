@@ -56,7 +56,7 @@ export async function signUp(page: Page, station: string, interests: string[] = 
 
 /** Tick an interest tag the way a person does: by tapping its label. */
 export async function checkTag(page: Page, name: string) {
-  await page.locator(".db-tag label", { hasText: new RegExp(`^${name}$`) }).click();
+  await page.locator("label.tag-toggle", { hasText: new RegExp(`^(✓\\s)?${name}$`) }).click();
   await expect(page.getByRole("checkbox", { name, exact: true })).toBeChecked();
 }
 

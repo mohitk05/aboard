@@ -7,7 +7,7 @@ A slow, real-time train travel world. Trains run real routes at real-world pace 
 It runs on **Cloudflare Workers** and **Durable Objects**:
 
 ```
-browser ──▶ web app (web/, static assets)        Vite + React, served by the same Worker
+browser ──▶ web app (web/, static assets)        Vite + React + three.js, served by the same Worker
 client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, input validation
                    │  RPC
                    ▼
@@ -21,11 +21,11 @@ client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, in
 - **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto). Sessions are HS256 JWTs signed with `JWT_KEY`, sent as an `HttpOnly; Secure; SameSite=Lax` cookie for the web app, or as `Authorization: Bearer` for scripts.
 - **Scaling:** one object is plenty for now. When it isn't, split by region (one World per network of connected lines) and give each player their own object for inventory and messages.
 
-## Design system
+## Interface
 
-The web app uses the [DB UX Design System](https://design-system.deutschebahn.com/) components (`@db-ux/react-core-components`, `@db-ux/core-foundations`, Apache-2.0) with their **white-label theme** and Aboard's own amber brand colour (`web/src/db.css`). Screens use them through a small kit in `web/src/ui.tsx`.
+The whole app is a **three.js world** (`web/src/world3d/`): a lit globe with real coastlines (Natural Earth via `world-atlas`), the sun where it actually is, rail lines, stations and trains moving smoothly between ticks. Every screen is a set of panels floating over it, and steers the camera with `useWorldFocus()`: your station, your trip, the train you're on. Built following the `threejs-scene-setup` and `threejs-materials-lighting` skills in `.claude/skills/`.
 
-Deutsche Bahn's own brand assets (the `@db-ux/db-theme` package, DB fonts, icons, logo and colours) are licensed only to DB and its contractors, so Aboard doesn't include them. Don't add them unless the project is built for DB under contract.
+Panels are plain HTML (`web/src/ui.tsx`), so text, forms and screen readers work as usual. Colour follows Apple's [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/color): role-based tokens (label, background, separator, tint) with light, dark and increased-contrast values; amber only for interactive things; status colours always alongside text.
 
 ## Development
 

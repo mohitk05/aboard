@@ -2,9 +2,8 @@ import type { Journey as JourneyData } from "../api";
 import { formatClock, formatIn, formatKm } from "../lib/format";
 import { kmAlong } from "../lib/motion";
 import { useNow } from "../lib/useNow";
-import { Map } from "../map/LazyMap";
 import { Badge, Board, Card } from "../ui";
-import { useWorld } from "../world";
+import { useWorldFocus } from "../world3d/focus";
 import { NotifyNudge } from "./Notify";
 
 /** How far the train still has to go to `journey.to`, extrapolated between ticks. */
@@ -16,7 +15,12 @@ export function kmLeft(j: JourneyData, now: number): number {
 /** On the train: where you are, what's next, and when you'll arrive. */
 export function Journey({ journey: j }: { journey: JourneyData }) {
   const now = useNow(15_000);
-  const world = useWorld();
+  useWorldFocus({
+    label: "Map following your train",
+    highlight: [j.from.id, j.to.id],
+    follow: j.trip.id,
+    distance: 2.1,
+  });
   const atStation = j.trip.state === "STATIONARY";
   const here = j.stops[j.trip.currentStopIndex];
   const next = j.stops.find((s, i) => i > j.trip.currentStopIndex && s.eta !== null);
@@ -35,17 +39,6 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
     <>
       <Board label={`On board · ${j.line}`} title={title} sub={sub} />
       <NotifyNudge about={`Get a notification before ${j.to.name}.`} />
-
-      <Map
-        stops={world.stops}
-        routes={world.routes}
-        trips={world.trips.length ? world.trips : [j.trip]}
-        highlightStops={[j.from.id, j.to.id]}
-        followTrip={j.trip.id}
-        center={j.trip.position}
-        zoom={6}
-        label="Map following your train"
-      />
 
       <Card aria-label="Your trip" role="region">
         <div className="trip-progress">

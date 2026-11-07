@@ -1,10 +1,11 @@
-import { Map } from "../map/LazyMap";
-import { Board, ButtonLink, Page } from "../ui";
+import { Board, ButtonLink, Card, Page } from "../ui";
 import { useWorld } from "../world";
+import { useWorldFocus } from "../world3d/focus";
 
 export function Landing() {
   const world = useWorld();
   const running = world.trips.length;
+  useWorldFocus({ label: "Trains running right now", distance: 3.2 });
   return (
     <Page
       actions={
@@ -18,8 +19,7 @@ export function Landing() {
         title="Lisbon → Vladivostok"
         sub="13,900 km · about 10 days"
       />
-      <Map stops={world.stops} routes={world.routes} trips={world.trips} label="Trains running right now" />
-      <section className="hero">
+      <Card className="hero">
         <h1>A slow journey across the world, in real time.</h1>
         <p className="lede">
           Trains on Aboard run at the pace of real trains. Buy a ticket, board when your train pulls in, and
@@ -31,7 +31,7 @@ export function Landing() {
           </ButtonLink>
           <ButtonLink to="/login">I already travel with Aboard</ButtonLink>
         </div>
-      </section>
+      </Card>
     </Page>
   );
 }

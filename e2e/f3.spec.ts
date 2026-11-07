@@ -22,7 +22,7 @@ test("F3: board at Lisbon, ride to Madrid, and get welcomed on arrival", async (
   await expect(trip.getByRole("progressbar", { name: "Progress to Madrid" })).toBeVisible();
   await expect(trip.locator(".timeline li", { hasText: "Madrid" }).getByText("Your stop")).toBeVisible();
   await expect(trip.locator(".timeline li", { hasText: "Lisbon" }).getByText("Here now")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Map following your train" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Map following your train" })).toBeVisible();
 
   // Leave Lisbon (30 min dwell) and get partway along.
   await tick(request, adminToken, 20);

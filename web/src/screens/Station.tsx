@@ -5,9 +5,9 @@ import { meKey } from "../auth";
 import { clockParts, formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
 import { grantedCoords } from "../lib/location";
 import { useNow } from "../lib/useNow";
-import { Map } from "../map/LazyMap";
 import { Board, Button, Card, FormError, SelectField } from "../ui";
 import { useWorld } from "../world";
+import { useWorldFocus } from "../world3d/focus";
 
 /** At a station with no ticket: what's coming, and where you could go. */
 export function Station({ me, stop }: { me: Me; stop: Stop | undefined }) {
@@ -23,6 +23,13 @@ function ChooseStation({ me }: { me: Me }) {
   const world = useWorld();
   const qc = useQueryClient();
   const [stop, setStop] = useState("");
+  const picked = world.stops.find((s) => s.id === stop);
+  useWorldFocus({
+    label: "Map of stations. Click one to start there.",
+    highlight: stop ? [stop] : [],
+    center: picked?.coordinates ?? null,
+    onStopClick: setStop,
+  });
   const choose = useMutation({
     mutationFn: () => api<Me>("PATCH", "/user/me", { user: { currentStop: stop } }),
     onSuccess: (m) => qc.setQueryData(meKey, m),
@@ -70,13 +77,17 @@ function ChooseStation({ me }: { me: Me }) {
           <FormError message={choose.error?.message} />
         </form>
       </Card>
-      <Map stops={world.stops} routes={world.routes} trips={world.trips} onStopClick={setStop} highlightStops={stop ? [stop] : []} />
     </>
   );
 }
 
 function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
-  const world = useWorld();
+  useWorldFocus({
+    label: `Map around ${stop?.name ?? "your station"}`,
+    highlight: me.currentStop ? [me.currentStop] : [],
+    center: stop?.coordinates ?? null,
+    distance: 2.2,
+  });
   const departures = useQuery({
     queryKey: ["departures", me.currentStop],
     queryFn: () => api<Departure[]>("GET", `/stop/${me.currentStop}/departures`),
@@ -115,16 +126,6 @@ function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
           ))}
         </ul>
       </Card>
-
-      <Map
-        stops={world.stops}
-        routes={world.routes}
-        trips={world.trips}
-        highlightStops={me.currentStop ? [me.currentStop] : []}
-        center={stop?.coordinates}
-        zoom={stop ? 4 : undefined}
-        label={`Map around ${stop?.name ?? "your station"}`}
-      />
     </>
   );
 }
