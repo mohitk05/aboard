@@ -28,6 +28,13 @@ const send = async <T>(c: Context, result: Promise<Result<T>> | Result<T>, statu
   return r.ok ? ok(c, r.data, status) : fail(c, r.status, r.error);
 };
 
+/** After an admin changes stations, lines or trains, tell connected clients to refetch. */
+const changed = async <T>(env: Env, result: Promise<Result<T>> | Result<T>): Promise<Result<T>> => {
+  const r = await result;
+  if (r.ok) await world(env).worldChanged();
+  return r;
+};
+
 // ---------- validation ----------
 
 const id = z.string().uuid();
@@ -170,8 +177,8 @@ app.get("/", (c) => ok(c, "hello"));
 // The world itself (stops, lines, trains) is public, so the landing page can show it.
 app.get("/trip", (c) => world(c.env).listTrips(c.req.query("active") === "1").then((list) => ok(c, list)));
 app.get("/trip/:id", anyone, (c) => send(c, world(c.env).getTrip(param(c, "id"))));
-app.post("/trip", admin, async (c) => send(c, world(c.env).createTrip((await body(c, schemas.trip)).trip), 201));
-app.post("/trip/:id/start", admin, (c) => send(c, world(c.env).startTrip(param(c, "id"))));
+app.post("/trip", admin, async (c) => send(c, changed(c.env, world(c.env).createTrip((await body(c, schemas.trip)).trip)), 201));
+app.post("/trip/:id/start", admin, (c) => send(c, changed(c.env, world(c.env).startTrip(param(c, "id")))));
 
 // Vehicle
 app.get("/vehicle", admin, (c) => world(c.env).listVehicles().then((list) => ok(c, list)));
@@ -181,7 +188,7 @@ app.post("/vehicle", admin, async (c) => send(c, world(c.env).createVehicle((awa
 // Stop
 app.get("/stop", (c) => world(c.env).listStops().then((list) => ok(c, list))); // public: signup picks a stop
 app.get("/stop/:id", anyone, (c) => send(c, world(c.env).getStop(param(c, "id"))));
-app.post("/stop", admin, async (c) => send(c, world(c.env).createStop((await body(c, schemas.stop)).stop), 201));
+app.post("/stop", admin, async (c) => send(c, changed(c.env, world(c.env).createStop((await body(c, schemas.stop)).stop)), 201));
 app.get("/stop/:id/departures", anyone, (c) => send(c, world(c.env).getDepartures(param(c, "id"))));
 app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 5) || 5, 1), 50);
@@ -191,9 +198,9 @@ app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
 // Route
 app.get("/route", (c) => world(c.env).listRoutes().then((list) => ok(c, list)));
 app.get("/route/:id", anyone, (c) => send(c, world(c.env).getRoute(param(c, "id"))));
-app.post("/route", admin, async (c) => send(c, world(c.env).createRoute((await body(c, schemas.route)).route), 201));
+app.post("/route", admin, async (c) => send(c, changed(c.env, world(c.env).createRoute((await body(c, schemas.route)).route)), 201));
 app.post("/route/autogenerate", admin, async (c) =>
-  send(c, world(c.env).autogenerateRoutes((await body(c, schemas.autogenerate)).config), 201),
+  send(c, changed(c.env, world(c.env).autogenerateRoutes((await body(c, schemas.autogenerate)).config)), 201),
 );
 
 // User
@@ -300,7 +307,30 @@ app.post("/admin/tick", admin, async (c) => {
   return ok(c, summary);
 });
 /** Build the demo Lisbon → Vladivostok line and start a train on it. Safe to repeat. */
-app.post("/admin/seed", admin, (c) => send(c, world(c.env).seedDemo(), 201));
+app.post("/admin/seed", admin, (c) => send(c, changed(c.env, world(c.env).seedDemo()), 201));
+
+/**
+ * Live updates over a WebSocket: world ticks, world changes, and new messages for you.
+ * Signed-in or not (the landing page map uses it too); the World only needs to know who you are.
+ */
+app.get("/live", async (c) => {
+  if (c.req.header("Upgrade") !== "websocket") return fail(c, 400, "Expected a WebSocket upgrade.");
+  let userId: string | null = null;
+  const header = c.req.header("Authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : getCookie(c, SESSION_COOKIE);
+  if (token) {
+    try {
+      const payload = await verify(token, c.env.JWT_KEY, "HS256");
+      if (typeof payload.sub === "string") userId = payload.sub;
+    } catch {
+      /* treat as signed out */
+    }
+  }
+  const headers = new Headers(c.req.raw.headers);
+  headers.delete("X-User-Id");
+  if (userId) headers.set("X-User-Id", userId);
+  return world(c.env).fetch(new Request(c.req.raw.url, { headers }));
+});
 
 app.notFound((c) => fail(c, 404, "Not found."));
 app.onError((err, c) => {

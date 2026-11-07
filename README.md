@@ -16,6 +16,7 @@ client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, in
 ```
 
 - **One `World` object** holds stops, routes, trips, users, tickets and messages in SQLite (`src/world/schema.ts`). A Durable Object handles one request at a time, so ticket purchases (and, later, trades) are atomic without locks.
+- **Live updates:** clients keep a WebSocket to the World (`/api/live`, hibernation API, so idle connections are free). It sends an event on every tick, when an admin changes the world, and to conversation members when a message arrives; the app refetches just what changed. Polling remains as a fallback.
 - **The world clock** is a Durable Object alarm. It is set when a trip starts and runs `World.tick()` every `WORLD_INTERVAL_MINUTES` while any trip is active.
 - **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto). Sessions are HS256 JWTs signed with `JWT_KEY`, sent as an `HttpOnly; Secure; SameSite=Lax` cookie for the web app, or as `Authorization: Bearer` for scripts.
 - **Scaling:** one object is plenty for now. When it isn't, split by region (one World per network of connected lines) and give each player their own object for inventory and messages.
@@ -66,9 +67,9 @@ One-time setup in the Cloudflare dashboard (**Workers & Pages → Create → Imp
 | Deploy command | `npx wrangler deploy` |
 | Root directory | `/` |
 
-Then, under **Settings → Variables and Secrets**, add two secrets: `JWT_KEY` (a long random string) and `ADMIN_SECRET`.
+Then, under **Settings → Variables and Secrets**, add two secrets: `JWT_KEY` (a long random string) and `ADMIN_SECRET`. The build doesn't set them, and they persist across deploys. Without `JWT_KEY`, signup and login return 500.
 
-For push notifications, also add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address push services can contact). Generate the key pair with `npm run vapid`. Without them the app works, and the notifications switch says they aren't set up. Keep the same keys once people subscribe: changing them invalidates every subscription. The build doesn't set them, and they persist across deploys. Without `JWT_KEY`, signup and login return 500.
+For push notifications, also add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address push services can contact). Generate the key pair with `npm run vapid`. Without them the app works, and the notifications switch says they aren't set up. Keep the same keys once people subscribe: changing them invalidates every subscription.
 
 The Durable Object and its migrations are created by `wrangler deploy` from `wrangler.jsonc`, so no other setup is needed. Pushes to other branches upload a preview version without changing production, if non-production branch builds are turned on (they are by default).
 
@@ -119,6 +120,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/push/subscription` | player | how many devices you've turned notifications on for |
 | POST | `/push/subscription` | player | `{ subscription }` from `PushManager.subscribe().toJSON()` |
 | DELETE | `/push/subscription` | player | `{ subscription: { endpoint } }` |
+| GET | `/live` | anyone | WebSocket: `tick`, `world` and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
 | POST | `/admin/seed` | admin | builds the Lisbon → Vladivostok line and starts a train (safe to repeat) |

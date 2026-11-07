@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { ADMIN_ROLE } from "./api";
 import { useMe } from "./auth";
+import { useLiveUpdates } from "./live";
 import { Admin } from "./screens/Admin";
 import { Conversation, Inbox } from "./screens/Messages";
 import { People } from "./screens/People";
@@ -45,6 +46,16 @@ const routes = [
 
 const router = createBrowserRouter(routes.map((r) => ({ ...r, errorElement: <RouteError /> })));
 
+function Live() {
+  useLiveUpdates();
+  return null;
+}
+
 export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <Live />
+      <RouterProvider router={router} />
+    </>
+  );
 }

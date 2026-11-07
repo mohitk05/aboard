@@ -199,6 +199,7 @@ export class World extends DurableObject<Env> {
         String(now),
       );
     });
+    this.broadcast({ type: "tick", at: now, summary });
     return summary;
   }
 
@@ -319,6 +320,52 @@ export class World extends DurableObject<Env> {
         }
       }
     }
+  }
+
+  // ======================= live updates (WebSockets) =======================
+
+  /**
+   * Accept a WebSocket for live updates. The Worker has already checked the session and
+   * passes the user id (or nothing, for the public landing page) in X-User-Id.
+   * Uses the hibernation API, so idle connections cost nothing while the World sleeps.
+   */
+  override async fetch(request: Request): Promise<Response> {
+    if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected a WebSocket", { status: 426 });
+    const user = request.headers.get("X-User-Id");
+    const { 0: client, 1: server } = new WebSocketPair();
+    this.ctx.acceptWebSocket(server, user ? [`user:${user}`] : ["anon"]);
+    server.send(JSON.stringify({ type: "hello", at: Date.now() }));
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    if (message === "ping") ws.send("pong");
+  }
+
+  override async webSocketClose(ws: WebSocket, code: number) {
+    try {
+      ws.close(code === 1005 ? 1000 : code, "bye");
+    } catch {
+      /* already closed */
+    }
+  }
+
+  /** Send an event to every connected client, or only to some users. */
+  private broadcast(event: Record<string, unknown>, users?: string[]) {
+    const data = JSON.stringify(event);
+    const sockets = users ? users.flatMap((u) => this.ctx.getWebSockets(`user:${u}`)) : this.ctx.getWebSockets();
+    for (const ws of sockets) {
+      try {
+        ws.send(data);
+      } catch {
+        /* closing; the runtime will tidy it up */
+      }
+    }
+  }
+
+  /** Clients refetch stops, lines and trains when the world's shape changes. */
+  worldChanged() {
+    this.broadcast({ type: "world", at: Date.now() });
   }
 
   // ======================= notifications =======================
@@ -1058,6 +1105,7 @@ export class World extends DurableObject<Env> {
       const preview = msg.content.body.length > 120 ? `${msg.content.body.slice(0, 117)}…` : msg.content.body;
       for (const o of others)
         this.notify(o.user_id, { title: sender, body: preview, url: `/messages/${conversationId}`, tag: `chat-${conversationId}` });
+      this.broadcast({ type: "message", conversation: conversationId, from: userId }, [userId, ...others.map((o) => o.user_id)]);
       return msg;
     });
     if (res.ok) await this.flushNotifications();

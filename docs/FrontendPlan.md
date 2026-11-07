@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: F0–F5 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
+Status: F0–F6 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 
@@ -135,7 +135,7 @@ Each milestone ends with something you can deploy and use. Backend changes ship 
 - Notifications: train approaching your stop (one tick ahead), boarded, arrived, new message.
 - *Done when:* a player installs the app on a phone, closes it, and is woken by "Your train reaches Berlin in 10 minutes".
 
-**F6 Realtime**
+**F6 Realtime (done)**
 - WebSockets on the World Durable Object for ticks and messages. Polling remains as a fallback.
 
 **Then:** carrier-game screens follow the backend build order in `CarrierGame.md`:
