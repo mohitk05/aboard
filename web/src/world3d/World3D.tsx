@@ -9,6 +9,7 @@ import type { Stop } from "../api";
 import { greatCircle, trainPosition } from "../lib/motion";
 import type { Route, Trip } from "../world";
 import { createEarth, loadStarfield } from "./earth";
+import { createTileLayer } from "./tiles";
 import type { WorldFocus } from "./focus";
 import { subsolarPoint, toLatLng, toVec3, type LatLng } from "./geo";
 import { select, type Selection } from "./selection";
@@ -83,7 +84,7 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.enablePan = false;
-    controls.minDistance = 1.08;
+    controls.minDistance = 1.045; // as close as the most detailed imagery tiles stay sharp
     controls.maxDistance = 4.5;
     controls.rotateSpeed = 0.5;
     controls.zoomSpeed = 0.8;
@@ -94,12 +95,14 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
     scene.add(sun, fill);
 
     const earth = createEarth(renderer, R);
-    scene.add(earth.globe, earth.atmosphere);
+    const tiles = createTileLayer(renderer, R);
+    scene.add(earth.globe, tiles.group, earth.atmosphere);
     const sunDir = new THREE.Vector3();
     const placeSun = () => {
       sunDir.set(...toVec3(subsolarPoint(new Date()), 1));
       sun.position.copy(sunDir).multiplyScalar(10);
       earth.setSun(sunDir);
+      tiles.setSun(sunDir);
     };
     placeSun();
 
@@ -398,6 +401,7 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
         placeSun();
       }
       syncTrains(Date.now());
+      tiles.update(camera);
 
       // Station dots keep a steady on-screen size.
       const k = THREE.MathUtils.clamp((camera.position.length() - R) / 2.2, 0.25, 1);
@@ -437,6 +441,7 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
       stationGeometry.dispose();
       for (const m of [lineMat, hotMat, stationMat, stationHi]) m.dispose();
       earth.dispose();
+      tiles.dispose();
       stars.dispose();
       youDiv.remove();
       renderer.dispose();

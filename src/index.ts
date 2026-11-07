@@ -380,4 +380,57 @@ app.onError((err, c) => {
   return fail(c, 500, "Something went wrong 😟");
 });
 
-export default app satisfies ExportedHandler<Env>;
+// ---------- satellite tiles ----------
+
+/**
+ * NASA GIBS imagery for the globe, via our own origin: GIBS sends `no-store`, so we cache tiles at
+ * Cloudflare's edge and hand them out as cacheable. Only these two layers, zoom 0–8, so this
+ * isn't an open proxy. Imagery: NASA EOSDIS GIBS (public domain).
+ */
+const TILE_LAYERS = {
+  day: { path: "BlueMarble_NextGeneration/default", ext: "jpeg", type: "image/jpeg" },
+  night: { path: "VIIRS_Black_Marble/default/2016-01-01", ext: "png", type: "image/png" },
+} as const;
+
+async function serveTile(request: Request, ctx: ExecutionContext): Promise<Response | null> {
+  const m = new URL(request.url).pathname.match(/^\/tiles\/(day|night)\/(\d)\/(\d{1,3})\/(\d{1,3})\.(jpg|png)$/);
+  if (!m) return null;
+  const layer = TILE_LAYERS[m[1] as keyof typeof TILE_LAYERS];
+  const [z, x, y] = [Number(m[2]), Number(m[3]), Number(m[4])];
+  if (z > 8 || x >= 2 ** z || y >= 2 ** z) return new Response("Not found", { status: 404 });
+
+  const cache = caches.default;
+  const key = new Request(new URL(request.url).toString());
+  const hit = await cache.match(key);
+  if (hit) return hit;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer.path}/GoogleMapsCompatible_Level8/${z}/${y}/${x}.${layer.ext}`,
+      { cf: { cacheTtl: 2592000, cacheEverything: true } },
+    );
+  } catch {
+    return new Response("Tile unavailable", { status: 502 }); // the globe falls back to its own texture
+  }
+  if (!upstream.ok) return new Response("Tile unavailable", { status: upstream.status === 404 ? 404 : 502 });
+  const res = new Response(upstream.body, {
+    headers: {
+      "Content-Type": layer.type,
+      // The imagery is fixed (Blue Marble 2004, Black Marble 2016), so cache it for a long time.
+      "Cache-Control": "public, max-age=2592000, immutable",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+  ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    if (new URL(request.url).pathname.startsWith("/tiles/")) {
+      return (await serveTile(request, ctx)) ?? new Response("Not found", { status: 404 });
+    }
+    return app.fetch(request, env, ctx);
+  },
+} satisfies ExportedHandler<Env>;
