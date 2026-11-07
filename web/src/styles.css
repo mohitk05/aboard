@@ -508,3 +508,109 @@ ol.list {
   letter-spacing: 0.08em;
   color: var(--muted);
 }
+
+/* ---------- journey ---------- */
+.trip-progress {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.trip-ends {
+  display: flex;
+  justify-content: space-between;
+  font: 600 0.95rem var(--font-mono);
+}
+.bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 1s linear;
+}
+.timeline {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0 0 0 22px;
+  position: relative;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--line);
+}
+.timeline li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 13px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--muted);
+}
+.timeline .is-passed {
+  color: var(--muted);
+}
+.timeline .is-passed::before {
+  background: var(--muted);
+}
+.timeline .is-current::before {
+  background: var(--board-ink);
+  border-color: var(--board-bg);
+  box-shadow: 0 0 0 3px var(--accent);
+}
+.timeline .is-destination {
+  font-weight: 600;
+}
+.timeline .is-destination::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.timeline .is-outside {
+  opacity: 0.5;
+}
+.tl-time {
+  font: 0.95rem var(--font-mono);
+  white-space: nowrap;
+}
+.tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: 2px;
+}
+.notice {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar > span {
+    transition: none;
+  }
+}
