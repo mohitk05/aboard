@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { formatClock, formatDuration, formatIn, formatKm } from "../lib/format";
+import { clockParts, formatClock, formatDuration, formatIn, formatKm } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Button } from "../ui";
 import { DEFAULT_SPEED_KMH, lineHours, useStationBoard, useStopPhoto, useWorld, type Route, type Trip } from "../world";
@@ -199,7 +199,7 @@ function StationDetails({ id, headingRef }: { id: string; headingRef: React.RefO
             <ul className="station-board">
               {arrivals.map((a) => (
                 <li key={a.trip}>
-                  <span className="sb-time">{a.arrived ? "Here" : formatClock(a.arrivalTime, now)}</span>
+                  <BoardTime at={a.arrivalTime} now={now} here={a.arrived} />
                   <span className="sb-main">
                     <button className="linklike" onClick={() => select({ kind: "train", id: a.trip })}>
                       From {a.from}
@@ -225,7 +225,7 @@ function StationDetails({ id, headingRef }: { id: string; headingRef: React.RefO
             <ul className="station-board">
               {departures.map((d) => (
                 <li key={d.trip}>
-                  <span className="sb-time">{formatClock(d.departureTime, now)}</span>
+                  <BoardTime at={d.departureTime} now={now} />
                   <span className="sb-main">
                     <button className="linklike" onClick={() => select({ kind: "train", id: d.trip })}>
                       To {d.to}
@@ -244,5 +244,17 @@ function StationDetails({ id, headingRef }: { id: string; headingRef: React.RefO
         </div>
       </div>
     </>
+  );
+}
+
+/** A board time: the day (when it isn't today) in small caps above the clock time. */
+function BoardTime({ at, now, here }: { at: number; now: number; here?: boolean }) {
+  if (here) return <span className="sb-time">Now</span>;
+  const { day, time } = clockParts(at, now);
+  return (
+    <span className="sb-time">
+      {day && <span className="dep-day">{day}</span>}
+      {time}
+    </span>
   );
 }

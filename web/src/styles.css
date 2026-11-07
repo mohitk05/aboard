@@ -1053,13 +1053,16 @@ select.input {
 }
 .station-board li {
   display: grid;
-  grid-template-columns: 4.6rem 1fr auto;
+  grid-template-columns: 5.2rem 1fr auto;
   gap: 2px 12px;
   align-items: baseline;
   padding: 10px 0;
   border-bottom: 1px solid var(--separator);
 }
 .sb-time {
+  display: grid;
+  align-self: start;
+  white-space: nowrap;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
