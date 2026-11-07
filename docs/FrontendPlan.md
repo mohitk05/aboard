@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: planned, not started (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
+Status: F0 done (2026-11-07); F1 next. This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 
@@ -103,7 +103,7 @@ The screen you land on depends on your state (`ATSTATION`, `READYTOGO`, `ONBOARD
 
 Each milestone ends with something you can deploy and use. Backend changes ship in the same milestone as the screens that need them.
 
-**F0 Foundation**
+**F0 Foundation (done)**
 - `web/` app scaffold, design tokens, light and dark themes.
 - Served from the Worker. API under `/api`. Cookie sessions.
 - Root `npm run build` builds the web app and runs all tests.

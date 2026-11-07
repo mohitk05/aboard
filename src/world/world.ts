@@ -298,6 +298,10 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  listStops(): Stop[] {
+    return this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray().map(stopOut);
+  }
+
   getStop(id: string): Result<Stop> {
     return guard(() => stopOut(this.stopRow(id)));
   }

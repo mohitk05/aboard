@@ -7,7 +7,8 @@ A slow, real-time train travel world. Trains run real routes at real-world pace 
 It runs on **Cloudflare Workers** and **Durable Objects**:
 
 ```
-client ──HTTP──▶ Worker (src/index.ts)           routing, JWT auth, input validation
+browser ──▶ web app (web/, static assets)        Vite + React, served by the same Worker
+client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, input validation
                    │  RPC
                    ▼
                  World Durable Object             all world state in its SQLite storage
@@ -16,34 +17,38 @@ client ──HTTP──▶ Worker (src/index.ts)           routing, JWT auth, in
 
 - **One `World` object** holds stops, routes, trips, users, tickets and messages in SQLite (`src/world/schema.ts`). A Durable Object handles one request at a time, so ticket purchases (and, later, trades) are atomic without locks.
 - **The world clock** is a Durable Object alarm. It is set when a trip starts and runs `World.tick()` every `WORLD_INTERVAL_MINUTES` while any trip is active.
-- **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto), and sessions are HS256 JWTs signed with `JWT_KEY`.
+- **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto). Sessions are HS256 JWTs signed with `JWT_KEY`, sent as an `HttpOnly; Secure; SameSite=Lax` cookie for the web app, or as `Authorization: Bearer` for scripts.
 - **Scaling:** one object is plenty for now. When it isn't, split by region (one World per network of connected lines) and give each player their own object for inventory and messages.
 
 ## Development
 
 ```sh
-npm install
+npm install                      # npm 11 recommended (npx npm@11 install)
 cp .dev.vars.example .dev.vars   # set JWT_KEY and ADMIN_SECRET
-npm run dev                      # http://localhost:8787
-npm test                         # tests run inside the Workers runtime (workerd)
-npm run typecheck
+npm run dev                      # builds the web app, then serves app + API on http://localhost:8787
+npm run dev:web                  # in a second terminal: hot-reloading app on :5173, proxying /api to :8787
+npm test                         # API tests run inside the Workers runtime (workerd)
+npm run typecheck                # Worker and web app
+npm run build                    # what Workers Builds runs: build the app, typecheck, test
 ```
 
 After changing `wrangler.jsonc`, run `npm run cf-typegen` to regenerate `worker-configuration.d.ts`.
+
+The web app lives in `web/` (Vite + React). The Worker serves its build from `web/dist`: requests to `/api` and `/api/*` go to the Worker, and everything else is a static file, falling back to `index.html` so app routes survive a reload.
 
 ### First admin
 
 There are no admins at first. Create one with the bootstrap endpoint. It only works while no admin exists:
 
 ```sh
-curl -X POST localhost:8787/admin/bootstrap \
+curl -X POST localhost:8787/api/admin/bootstrap \
   -H 'X-Admin-Secret: <ADMIN_SECRET>' -H 'Content-Type: application/json' \
   -d '{"user":{"username":"admin","email":"admin@example.com","password":"...","age":30}}'
 ```
 
 Admins don't need a `currentStop`. Then create stops, routes and trips with the admin token.
 
-`POST /admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
+`POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
 ### Deploy
 
@@ -68,17 +73,19 @@ To deploy by hand instead: `npx wrangler secret put JWT_KEY`, `npx wrangler secr
 
 ## API
 
-Every response is `{ success, data }` or `{ success: false, error }`. All routes except `/`, signup, login, `GET /interest` and bootstrap need `Authorization: Bearer <token>`.
+All paths below are under `/api` (for example `POST /api/user/login`). Every response is `{ success, data }` or `{ success: false, error }`. All routes except `/`, signup, login, logout, `GET /stop`, `GET /interest` and bootstrap need the session cookie or `Authorization: Bearer <token>`.
 
 | Method | Path | Who | Body |
 | --- | --- | --- | --- |
 | GET | `/` | anyone | |
 | POST | `/user/signup` | anyone | `{ user: { username, email, password, age, currentStop, interests?, image?, profileMode? } }` |
-| POST | `/user/login` | anyone | `{ user: { email, password } }` |
+| POST | `/user/login` | anyone | `{ user: { email, password } }` (sets the session cookie) |
+| POST | `/user/logout` | anyone | clears the session cookie |
 | GET | `/user/me` | player | |
 | GET | `/user/:id` | player | (email etc. only for yourself or admin) |
 | GET | `/user/fellow-users` | player | |
 | POST | `/user` | admin | same as signup |
+| GET | `/stop` | anyone | all stops |
 | GET | `/stop/:id` | player | |
 | GET | `/stop/:id/incoming-vehicles?limit=5` | player | |
 | POST | `/stop` | admin | `{ stop: { name, country, coordinates: { lat, lng }, dwellMinutes? } }` |

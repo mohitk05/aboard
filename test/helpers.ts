@@ -7,7 +7,7 @@ export async function api<T = any>(
   path: string,
   opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<{ status: number; success: boolean; data: T; error?: string }> {
-  const res = await SELF.fetch(BASE + path, {
+  const res = await SELF.fetch(BASE + "/api" + path, {
     method,
     headers: {
       "Content-Type": "application/json",

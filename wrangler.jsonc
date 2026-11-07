@@ -4,6 +4,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  // The web app (built by `npm run build:web`). /api/* goes to the Worker; any other path is a
+  // static file, falling back to index.html so the app's own routes work on reload.
+  "assets": {
+    "directory": "./web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api", "/api/*"]
+  },
   "durable_objects": {
     "bindings": [{ "name": "WORLD", "class_name": "World" }]
   },

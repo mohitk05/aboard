@@ -1,5 +1,5 @@
 import { Hono, type Context, type MiddlewareHandler } from "hono";
-import { cors } from "hono/cors";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { sign, verify } from "hono/jwt";
 import { z } from "zod";
@@ -13,6 +13,7 @@ export { World } from "./world/world";
 type AppEnv = { Bindings: Env; Variables: { user: Viewer } };
 
 const TOKEN_TTL_SECONDS = 30 * 24 * 3600;
+const SESSION_COOKIE = "aboard_session";
 
 /** The one World object. Every request goes to the same instance. */
 const world = (env: Env): DurableObjectStub<World> => env.WORLD.get(env.WORLD.idFromName("world"));
@@ -109,10 +110,12 @@ const param = (c: Context, name: string) => {
 const auth =
   (roles: UserRole[]): MiddlewareHandler<AppEnv> =>
   async (c, next) => {
+    // Scripts send a Bearer token; the web app relies on the HttpOnly session cookie.
     const header = c.req.header("Authorization");
-    if (!header?.startsWith("Bearer ")) return fail(c, 401, "Unauthorized.");
+    const token = header?.startsWith("Bearer ") ? header.slice(7) : getCookie(c, SESSION_COOKIE);
+    if (!token) return fail(c, 401, "Unauthorized.");
     try {
-      const payload = await verify(header.slice(7), c.env.JWT_KEY, "HS256");
+      const payload = await verify(token, c.env.JWT_KEY, "HS256");
       const role = payload.role as UserRole;
       if (typeof payload.sub !== "string" || !roles.includes(role)) return fail(c, 401, "Unauthorized.");
       c.set("user", { id: payload.sub, role });
@@ -124,17 +127,27 @@ const auth =
 const anyone = auth(ALL_USER_ROLES);
 const admin = auth([USER_ROLES.ADMIN]);
 
-const issueToken = (env: Env, u: { id: string; username: string; role: UserRole }) =>
-  sign(
+/** Sign a JWT, set it as the session cookie, and return it (for API clients that use Bearer). */
+async function startSession(c: Context, u: { id: string; username: string; role: UserRole }): Promise<string> {
+  const token = await sign(
     { sub: u.id, username: u.username, role: u.role, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS },
-    env.JWT_KEY,
+    c.env.JWT_KEY,
     "HS256",
   );
+  setCookie(c, SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: TOKEN_TTL_SECONDS,
+  });
+  return token;
+}
 
 // ---------- routes ----------
 
-const app = new Hono<AppEnv>();
-app.use("*", cors());
+// Everything lives under /api; other paths are the web app (static assets, see wrangler.jsonc).
+const app = new Hono<AppEnv>({ strict: false }).basePath("/api");
 
 // General
 app.get("/", (c) => ok(c, "hello"));
@@ -149,6 +162,7 @@ app.get("/vehicle/:id", anyone, (c) => send(c, world(c.env).getVehicle(param(c, 
 app.post("/vehicle", admin, async (c) => send(c, world(c.env).createVehicle((await body(c, schemas.vehicle)).vehicle), 201));
 
 // Stop
+app.get("/stop", (c) => world(c.env).listStops().then((list) => ok(c, list))); // public: signup picks a stop
 app.get("/stop/:id", anyone, (c) => send(c, world(c.env).getStop(param(c, "id"))));
 app.post("/stop", admin, async (c) => send(c, world(c.env).createStop((await body(c, schemas.stop)).stop), 201));
 app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
@@ -169,7 +183,7 @@ app.post("/user/signup", async (c) => {
   const { password, ...rest } = user;
   const res = await world(c.env).createUser({ ...rest, passwordHash: await hashPassword(password) });
   if (!res.ok) return fail(c, res.status, res.error);
-  return ok(c, { authToken: await issueToken(c.env, { ...res.data, role: USER_ROLES.PLAYER }), user: res.data }, 201);
+  return ok(c, { authToken: await startSession(c, { ...res.data, role: USER_ROLES.PLAYER }), user: res.data }, 201);
 });
 app.post("/user/login", async (c) => {
   const { user } = await body(c, schemas.login);
@@ -179,7 +193,11 @@ app.post("/user/login", async (c) => {
     ? await verifyPassword(user.password, creds.passwordHash)
     : (await hashPassword(user.password), false);
   if (!creds || !valid) return fail(c, 401, "Wrong email or password.");
-  return ok(c, { authToken: await issueToken(c.env, creds), user: creds.user });
+  return ok(c, { authToken: await startSession(c, creds), user: creds.user });
+});
+app.post("/user/logout", (c) => {
+  deleteCookie(c, SESSION_COOKIE, { path: "/", secure: true });
+  return ok(c, { loggedOut: true });
 });
 app.post("/user", admin, async (c) => {
   const { user } = await body(c, schemas.signup);
@@ -228,7 +246,7 @@ app.post("/admin/bootstrap", async (c) => {
   const { password, ...rest } = user;
   const res = await world(c.env).createUser({ ...rest, role: USER_ROLES.ADMIN, passwordHash: await hashPassword(password) });
   if (!res.ok) return fail(c, res.status, res.error);
-  return ok(c, { authToken: await issueToken(c.env, { ...res.data, role: USER_ROLES.ADMIN }), user: res.data }, 201);
+  return ok(c, { authToken: await startSession(c, { ...res.data, role: USER_ROLES.ADMIN }), user: res.data }, 201);
 });
 /** Advance the world one tick right now, without waiting for the alarm. Useful in development. */
 app.post("/admin/tick", admin, async (c) => ok(c, await world(c.env).tick(Date.now())));
