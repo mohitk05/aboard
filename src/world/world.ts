@@ -593,6 +593,60 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  /**
+   * A station's arrivals and departures boards (public): every running train still due here.
+   * Arrivals include trains ending here; departures leave out trains that end here.
+   */
+  getStationBoard(stopId: string, limit = 8) {
+    return guard(() => {
+      const stop = stopOut(this.stopRow(stopId));
+      const now = Date.now();
+      const candidates = this.sql
+        .exec<TripRow & { pos: number; route_name: string; vehicle_name: string | null }>(
+          `SELECT t.*, rs.position AS pos, r.name AS route_name, v.name AS vehicle_name
+           FROM trips t
+           JOIN route_stops rs ON rs.route_id = t.route_id AND rs.stop_id = ?
+           JOIN routes r ON r.id = t.route_id
+           LEFT JOIN vehicles v ON v.id = t.vehicle_id
+           WHERE t.active = 1`,
+          stopId,
+        )
+        .toArray();
+      const arrivals = [];
+      const departures = [];
+      for (const trip of candidates) {
+        const atPlatform = trip.stop_index === trip.pos && trip.state === "STATIONARY";
+        if (!(trip.stop_index < trip.pos || atPlatform)) continue; // already gone
+        const stops = this.routeStops(trip.route_id);
+        const asOf = this.tripAsOf(trip);
+        const arrivalTime = atPlatform ? (trip.stop_at ?? asOf) : Math.max(now, asOf + this.remainingTo(trip, stops, trip.pos).ms);
+        const base = { trip: trip.id, line: trip.route_name, train: trip.vehicle_name, speedKmh: trip.speed_kmh };
+        if (trip.pos > 0) {
+          arrivals.push({
+            ...base,
+            from: stops[0]!.name,
+            previous: stops[trip.pos - 1]!.name,
+            arrivalTime,
+            arrived: atPlatform,
+            terminates: trip.pos === stops.length - 1,
+          });
+        }
+        if (trip.pos < stops.length - 1) {
+          departures.push({
+            ...base,
+            to: stops[stops.length - 1]!.name,
+            next: stops[trip.pos + 1]!.name,
+            departureTime: Math.max(now, arrivalTime + stops[trip.pos]!.dwell_minutes * 60_000),
+            boarding: atPlatform,
+          });
+        }
+      }
+      arrivals.sort((a, b) => a.arrivalTime - b.arrivalTime);
+      departures.sort((a, b) => a.departureTime - b.departureTime);
+      return { stop, arrivals: arrivals.slice(0, limit), departures: departures.slice(0, limit) };
+    });
+  }
+
   getIncomingVehicles(stopId: string, limit = 5) {
     return guard(() => {
       this.stopRow(stopId);

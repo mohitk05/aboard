@@ -5,7 +5,7 @@
  *   - One canvas: black. The Earth imagery supplies every other colour, so the chrome has none:
  *     no brand accent, no gradients, no blur, no drop shadows.
  *   - Depth is a 1px hairline, never a shadow.
- *   - Titles in Redaction 35, uppercase and tracked; everything else in Barlow, a DIN-style
+ *   - Titles in Redaction 35 in normal case, tightly tracked; everything else in Barlow, a DIN-style
  *     engineering grotesk. Labels, eyebrows and buttons are small tracked capitals.
  *   - Buttons are ghost pills: a white outline that fills white on hover.
  *   - Status colours (red/green/orange/blue) carry meaning only, always alongside text.
@@ -75,15 +75,14 @@ body {
   letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
 }
-/* Titles: Redaction 35 (one weight), uppercase with wide tracking and tight leading. */
+/* Titles: Redaction 35 (one weight), in normal case with tight tracking and leading. */
 h1,
 h2,
 .board-title,
 .brand {
   font-family: var(--font-title);
   font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
 }
 h1 {
   font-size: 1.9rem;
@@ -190,8 +189,7 @@ a {
   align-items: center;
   color: var(--label);
   text-decoration: none;
-  font-size: 1.35rem;
-  letter-spacing: 0.22em;
+  font-size: 1.45rem;
 }
 .content {
   display: grid;
@@ -801,8 +799,7 @@ select.input {
 }
 .start-name {
   font-family: var(--font-title);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
   font-size: 1.3rem;
 }
 
@@ -817,7 +814,6 @@ select.input {
   border: 1px solid var(--hairline);
   color: var(--label);
   font-family: var(--font-title);
-  text-transform: uppercase;
 }
 .people,
 .inbox {
@@ -998,4 +994,104 @@ select.input {
 .input-small {
   width: 5.5rem;
   min-height: 34px;
+}
+
+/* ---------- station details: a full-bleed photo, then the boards ---------- */
+.inspector-station {
+  padding: 0;
+  overflow: auto;
+}
+.station-photo {
+  position: relative;
+  margin: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.station-photo img,
+.station-photo-empty {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.station-photo-head {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px 10px 20px;
+  background: linear-gradient(rgb(0 0 0 / 0.65), transparent);
+  text-shadow: 0 0 6px #000;
+}
+.station-photo-head .inspector-kind {
+  color: var(--label);
+}
+.station-photo figcaption {
+  padding: 8px 20px;
+  font-size: 0.6875rem;
+  color: var(--label-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.station-photo figcaption a {
+  color: var(--label-2);
+}
+.station-body {
+  padding: 16px 20px 20px;
+}
+.station-body h3:first-of-type {
+  margin-top: 1rem;
+}
+.station-board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--separator);
+}
+.station-board li {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr auto;
+  gap: 2px 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--separator);
+}
+.sb-time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sb-main {
+  display: grid;
+  min-width: 0;
+}
+.sb-main .linklike {
+  justify-self: start;
+  text-align: left;
+  font-weight: 600;
+  text-decoration: none;
+}
+.sb-main .linklike:hover {
+  text-decoration: underline;
+}
+.sb-status {
+  font-size: 0.75rem;
+  color: var(--label-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sb-status.is-boarding {
+  color: var(--green);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+}
+.timeline .tl-name.linklike {
+  text-decoration: none;
+  text-align: left;
+}
+.timeline .tl-name.linklike:hover {
+  text-decoration: underline;
 }

@@ -104,6 +104,13 @@ function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
         title={stop ? `${stop.name}, ${stop.country}` : "…"}
         sub={`Traveller ${me.username}`}
       />
+      {stop && (
+        <div className="row">
+          <Button small kind="secondary" onClick={() => select({ kind: "stop", id: stop.id })}>
+            Station details
+          </Button>
+        </div>
+      )}
 
       <Card aria-labelledby="departures-title" role="region">
         <h2 id="departures-title">Departures</h2>

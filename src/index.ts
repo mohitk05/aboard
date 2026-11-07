@@ -5,6 +5,7 @@ import { sign, verify } from "hono/jwt";
 import { z } from "zod";
 import { ALL_USER_ROLES, MAX_SPEED_KMH, MIN_SPEED_KMH, PROFILE_MODES, USER_ROLES, type UserRole } from "./lib/constants";
 import { hashPassword, verifyPassword } from "./lib/password";
+import { findStopPhoto } from "./lib/photo";
 import type { Result } from "./lib/result";
 import type { Viewer, World } from "./world/world";
 
@@ -222,6 +223,28 @@ app.get("/stop/nearest", async (c) => {
 });
 app.get("/stop/:id", anyone, (c) => send(c, world(c.env).getStop(param(c, "id"))));
 app.post("/stop", admin, async (c) => send(c, changed(c.env, world(c.env).createStop((await body(c, schemas.stop)).stop)), 201));
+/** Public: a station's arrivals and departures. */
+app.get("/stop/:id/board", (c) => send(c, world(c.env).getStationBoard(param(c, "id"))));
+/** Public: a photo of the place, from Wikipedia, cached at the edge for a week. */
+app.get("/stop/:id/photo", async (c) => {
+  const found = await world(c.env).getStop(param(c, "id"));
+  if (!found.ok) return fail(c, 404, "Stop not found");
+  const stop = found.data;
+  const key = new Request(`https://photo.aboard/${stop.id}?${new URLSearchParams({ name: stop.name, v: "1" })}`);
+  const cache = (caches as unknown as { default: Cache }).default;
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  let photo = null;
+  try {
+    photo = await findStopPhoto(stop);
+  } catch {
+    return fail(c, 502, "Couldn't reach Wikipedia for a photo.");
+  }
+  const res = photo ? Response.json({ success: true, data: photo }) : Response.json({ success: false, error: "No photo of this place." }, { status: 404 });
+  res.headers.set("Cache-Control", `public, max-age=${photo ? 604800 : 86400}`);
+  c.executionCtx.waitUntil(cache.put(key, res.clone()));
+  return res;
+});
 app.get("/stop/:id/departures", anyone, (c) => send(c, world(c.env).getDepartures(param(c, "id"))));
 app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 5) || 5, 1), 50);

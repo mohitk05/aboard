@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
-/** What's been clicked in the 3D world: a train or a line, shown in the details panel. */
-export type Selection = { kind: "train"; id: string } | { kind: "route"; id: string } | null;
+/** What's been clicked in the 3D world: a train, a line or a station, shown in the details panel. */
+export type Selection = { kind: "train"; id: string } | { kind: "route"; id: string } | { kind: "stop"; id: string } | null;
 
 let current: Selection = null;
 const listeners = new Set<() => void>();

@@ -87,3 +87,59 @@ export function lineHours(route: Route, trips: Trip[], fallbackKmh: number): num
   const waits = route.stops.slice(1, -1).reduce((m, s) => m + s.dwellMinutes, 0) / 60;
   return route.totalKm / speed + waits;
 }
+
+// ---------- a station's boards and photo (public) ----------
+
+export interface StationArrival {
+  trip: string;
+  line: string;
+  train: string | null;
+  speedKmh: number;
+  from: string;
+  previous: string;
+  arrivalTime: number;
+  arrived: boolean;
+  terminates: boolean;
+}
+export interface StationDeparture {
+  trip: string;
+  line: string;
+  train: string | null;
+  speedKmh: number;
+  to: string;
+  next: string;
+  departureTime: number;
+  boarding: boolean;
+}
+export interface StationBoard {
+  stop: Stop;
+  arrivals: StationArrival[];
+  departures: StationDeparture[];
+}
+export interface StopPhoto {
+  url: string;
+  width: number;
+  height: number;
+  title: string;
+  page: string;
+  source: string;
+  credit: string | null;
+  license: string | null;
+}
+
+export function useStationBoard(id: string) {
+  return useQuery({
+    queryKey: ["departures", "board", id], // refreshed on every world tick (live.ts)
+    queryFn: () => api<StationBoard>("GET", `/stop/${id}/board`),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useStopPhoto(id: string) {
+  return useQuery({
+    queryKey: ["stop", id, "photo"],
+    queryFn: () => api<StopPhoto>("GET", `/stop/${id}/photo`),
+    staleTime: Infinity,
+    retry: false,
+  });
+}

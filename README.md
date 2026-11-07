@@ -29,11 +29,12 @@ The whole app is a **three.js world** (`web/src/world3d/`), built following the 
 - **Streamed satellite tiles:** zoom in and the globe swaps its whole-Earth texture for map tiles of just the area in view (Web Mercator, zoom 3–8), like a map app (`tiles.ts`). They're NASA GIBS imagery (Blue Marble by day, Black Marble city lights at night, public domain), fetched through the Worker at `/tiles/{day|night}/{z}/{x}/{y}.{jpg|png}`, which caches them at Cloudflare's edge because GIBS sends `no-store`.
 - **Rail lines** in cool white at a constant on-screen width; hover one to highlight it.
 - **Trains** made of a locomotive and carriages that follow the curve of the track, with windows that light up at night (`trains.ts`). They move smoothly between world ticks.
-- **Click a train or a line** for its details. The same panels open from "Train details" and "Line details" buttons, so they're reachable by keyboard and screen readers too.
+- **Click a station** for a photo of the place (the lead image of its Wikipedia article, credited) and its live arrivals and departures. Hover one and its name brightens.
+- **Click a train or a line** for its details. The same panels open from "Train details", "Line details" and "Station details" buttons (and station names in a line's details), so they're reachable by keyboard and screen readers too.
 
 Every screen is a set of panels floating over the world, and steers the camera with `useWorldFocus()`: your station, your trip, the train you're on. The world draws at full frame rate only while it's moving or being touched, and at 15 fps otherwise.
 
-Panels are plain HTML (`web/src/ui.tsx`), so text, forms and screen readers work as usual. The look is **mission control** ([docs/Design.md](docs/Design.md)): a black canvas where the Earth supplies all the colour, 1px hairlines instead of shadows, white ghost-pill buttons, titles in Redaction 35 (uppercase, tracked) and everything else in Barlow, with small tracked capitals for labels and navigation. Status colours only ever carry meaning, alongside text.
+Panels are plain HTML (`web/src/ui.tsx`), so text, forms and screen readers work as usual. The look is **mission control** ([docs/Design.md](docs/Design.md)): a black canvas where the Earth supplies all the colour, 1px hairlines instead of shadows, white ghost-pill buttons, titles in Redaction 35 and everything else in Barlow, with small tracked capitals for labels and navigation. Status colours only ever carry meaning, alongside text.
 
 ## Development
 
@@ -121,6 +122,8 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/stop` | anyone | all stops |
 | GET | `/stop/nearest?lat=&lng=` | anyone | the station nearest to those coordinates, or to your network location |
 | GET | `/stop/:id` | player | |
+| GET | `/stop/:id/board` | anyone | the station's arrivals and departures |
+| GET | `/stop/:id/photo` | anyone | a photo of the place from Wikipedia, with credit and licence (cached a week) |
 | GET | `/stop/:id/departures` | player | trains still calling here, with destinations, fares and arrival times |
 | GET | `/stop/:id/incoming-vehicles?limit=5` | player | |
 | POST | `/stop` | admin | `{ stop: { name, country, coordinates: { lat, lng }, dwellMinutes? } }` |

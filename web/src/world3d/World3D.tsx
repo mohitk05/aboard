@@ -119,7 +119,19 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
     const stationHi = new THREE.MeshStandardMaterial({ color: LINE, emissive: LINE, emissiveIntensity: 0.4 });
 
     const stopMeshes: THREE.Mesh[] = [];
-    const stopLabels: { obj: CSS2DObject; normal: THREE.Vector3; highlight: boolean }[] = [];
+    const stopLabels: { obj: CSS2DObject; normal: THREE.Vector3; highlight: boolean; id: string; mesh: THREE.Mesh }[] = [];
+    let hoverStop: string | null = null;
+    /** The hovered and the selected station stand out: brighter dot, bigger label. */
+    function highlightStops() {
+      const sel = latest.current.selection;
+      const selected = sel?.kind === "stop" ? sel.id : null;
+      for (const l of stopLabels) {
+        const on = l.highlight || l.id === hoverStop || l.id === selected;
+        l.obj.element.classList.toggle("is-highlight", on);
+        l.mesh.material = on ? stationHi : stationMat;
+        l.mesh.userData.base = on ? 0.011 : 0.006;
+      }
+    }
     const routeLines = new Map<string, { normal: Line2[]; hot: Line2[] }>();
     const pickLines: Line2[] = []; // hit-tested in screen pixels, so easy to hover at any zoom
     const trainGroups = new Map<string, THREE.Group>();
@@ -171,7 +183,7 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
         const obj = new CSS2DObject(div);
         obj.position.set(...toVec3(s.coordinates, TRACK_R + 0.01));
         network.add(obj);
-        stopLabels.push({ obj, normal: new THREE.Vector3(...p).normalize(), highlight: hi });
+        stopLabels.push({ obj, normal: new THREE.Vector3(...p).normalize(), highlight: hi, id: s.id, mesh: m });
       }
       highlightRoutes();
     }
@@ -268,11 +280,15 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
     // Selecting a train or a line flies the camera to it.
     function reselect() {
       highlightRoutes();
+      highlightStops();
       resize(); // the details panel takes space on the right; re-centre the view
       const { selection, routes, trips } = latest.current;
       if (selection?.kind === "train") {
         const t = trips.find((x) => x.id === selection.id);
         if (t) flyTo(trainPosition(t, Date.now()), Math.min(camera.position.length(), 2.4));
+      } else if (selection?.kind === "stop") {
+        const s = latest.current.stops.find((x) => x.id === selection.id);
+        if (s) flyTo(s.coordinates, Math.min(camera.position.length(), 1.6));
       } else if (selection?.kind === "route") {
         const r = routes.find((x) => x.id === selection.id);
         if (r) {
@@ -292,17 +308,34 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
     ray.params.Line2 = { threshold: 8 }; // px of slack around a line
     const ndc = new THREE.Vector2();
     type Hit = { kind: "stop"; id: string } | { kind: "train"; id: string } | { kind: "route"; id: string } | { kind: "globe"; at: LatLng } | null;
+    const projected = new THREE.Vector3();
+    const toCamera = new THREE.Vector3();
+    function pickStop(x: number, y: number, rect: DOMRect): string | null {
+      let best: string | null = null;
+      let bestD = 16; // px
+      for (const m of stopMeshes) {
+        // Only stations on the side of the globe facing you.
+        toCamera.copy(camera.position).sub(m.position);
+        if (toCamera.dot(m.position) <= 0) continue;
+        projected.copy(m.position).project(camera);
+        const d = Math.hypot(((projected.x + 1) / 2) * rect.width - x, ((1 - projected.y) / 2) * rect.height - y);
+        if (d < bestD) {
+          bestD = d;
+          best = m.userData.stopId as string;
+        }
+      }
+      return best;
+    }
+
     function pick(clientX: number, clientY: number): Hit {
       const rect = renderer.domElement.getBoundingClientRect();
       ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
       const globeHit = ray.intersectObject(earth.globe, false)[0];
       const inFront = (d: number) => !globeHit || d < globeHit.distance + 1e-4; // nothing behind the planet
-      const { focus } = latest.current;
-      if (focus.onStopClick) {
-        const s = ray.intersectObjects(stopMeshes, false)[0];
-        if (s && inFront(s.distance)) return { kind: "stop", id: s.object.userData.stopId };
-      }
+      // Stations are tiny, so they're hit-tested on screen: anything within a finger's width.
+      const stopId = pickStop(clientX - rect.left, clientY - rect.top, rect);
+      if (stopId) return { kind: "stop", id: stopId };
       const t = ray.intersectObject(trainGroup, true)[0];
       if (t && inFront(t.distance)) return { kind: "train", id: t.object.userData.tripId };
       const r = ray.intersectObjects(pickLines, false)[0];
@@ -327,7 +360,10 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
       down = null;
       const hit = pick(e.clientX, e.clientY);
       const { focus } = latest.current;
-      if (hit?.kind === "stop") focus.onStopClick?.(hit.id);
+      if (hit?.kind === "stop") {
+        if (focus.onStopClick) focus.onStopClick(hit.id);
+        else select({ kind: "stop", id: hit.id });
+      }
       else if (hit?.kind === "train") select({ kind: "train", id: hit.id });
       else if (hit?.kind === "route") select({ kind: "route", id: hit.id });
       else if (hit?.kind === "globe" && focus.onMapClick) focus.onMapClick(hit.at);
@@ -416,6 +452,11 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
           hoverRoute = next;
           highlightRoutes();
         }
+        const nextStop = hit?.kind === "stop" ? hit.id : null;
+        if (nextStop !== hoverStop) {
+          hoverStop = nextStop;
+          highlightStops();
+        }
         const clickable = hit && (hit.kind !== "globe" || !!latest.current.focus.onMapClick);
         renderer.domElement.style.cursor = clickable ? "pointer" : "";
       }
@@ -423,7 +464,7 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
       // Labels: hide on the far side of the globe, and minor ones when zoomed out.
       camUnit.copy(camera.position).normalize();
       const far = camera.position.length() > 2.6;
-      for (const l of stopLabels) l.obj.visible = l.normal.dot(camUnit) > 0.25 && (l.highlight || !far);
+      for (const l of stopLabels) l.obj.visible = l.normal.dot(camUnit) > 0.25 && (l.highlight || l.obj.element.classList.contains("is-highlight") || !far);
 
       renderer.render(scene, camera);
       labels.render(scene, camera);

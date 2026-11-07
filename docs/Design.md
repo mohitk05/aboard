@@ -9,7 +9,7 @@ The tokens live in `web/src/styles.css` and the components in `web/src/ui.tsx`.
 - **One canvas: black.** The Earth imagery supplies every colour. The chrome has no brand accent, no gradients, no blur and no drop shadows.
 - **Hairlines, not shadows.** Panels are graded black (`rgb(0 0 0 / .84)`) over the globe with a 1px `#3a3a3f` border and a 4px radius. Rows inside them are split by `#26262a` rules.
 - **Type does the work.**
-  - **Titles** use Redaction 35, in uppercase with wide tracking and tight leading. Its bitmap-cut edges give the techno feel.
+  - **Titles** use Redaction 35 in normal case, with slightly tight tracking and leading. Its bitmap-cut edges give the techno feel.
   - **Everything else** uses Barlow, a DIN-style engineering grotesk.
   - **Small labels, eyebrows, buttons and navigation** use Barlow capitals at 11–13px, tracked at `0.09em`.
 - **Interactive means white.**
@@ -17,7 +17,7 @@ The tokens live in `web/src/styles.css` and the components in `web/src/ui.tsx`.
   - **Secondary buttons** have a hairline outline.
   - **Quiet buttons** are bare caps that underline on hover.
   - **Links** are underlined white.
-- **Navigation floats over the world.** The wordmark and nav are white caps placed directly on the imagery, with no bar behind them. On phones the nav becomes a black tab bar with a hairline above and an indicator over the active tab.
+- **Navigation floats over the world.** The Redaction wordmark and the caps nav sit directly on the imagery, with no bar behind them. On phones the nav becomes a black tab bar with a hairline above and an indicator over the active tab.
 - **Status colour only carries meaning,** and always alongside text:
   - `--green` for boarding and success;
   - `--red` for errors and destructive actions;
