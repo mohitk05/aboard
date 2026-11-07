@@ -1,0 +1,2 @@
+JWT_KEY=change-me-to-a-long-random-string
+ADMIN_SECRET=change-me-too

@@ -1,29 +1,26 @@
 {
-	"name": "aboard",
-	"version": "1.0.0",
-	"description": "",
-	"main": "server.js",
-	"scripts": {
-		"test": "nyc mocha --exit",
-		"start": "node server.js"
-	},
-	"keywords": [],
-	"author": "",
-	"license": "ISC",
-	"dependencies": {
-		"body-parser": "^1.19.0",
-		"chalk": "^4.0.0",
-		"cors": "^2.8.5",
-		"cron": "^1.8.2",
-		"dotenv": "^8.2.0",
-		"express": "^4.17.1",
-		"jsonwebtoken": "^8.5.1",
-		"mongoose": "^5.9.12"
-	},
-	"devDependencies": {
-		"axios": "^0.19.2",
-		"chai": "^4.2.0",
-		"mocha": "^7.1.2",
-		"nyc": "^15.0.1"
-	}
+  "name": "aboard",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A slow, real-time train travel world",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "npm run typecheck && npm test",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.13.16",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.6.0",
+    "@cloudflare/workers-types": "^5.20261106.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.158.0"
+  }
 }
