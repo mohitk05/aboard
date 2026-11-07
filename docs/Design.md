@@ -6,8 +6,8 @@ The tokens live in `web/src/styles.css` and the components in `web/src/ui.tsx`.
 
 ## Principles
 
-- **One canvas: black.** The Earth imagery supplies every colour. The chrome has no brand accent, no gradients and no drop shadows. Blur appears in one place only: the details panels for a station, line or train frost the world behind them (24px blur), so their text reads over lines, labels and city lights.
-- **Hairlines, not shadows.** Panels are graded black (`rgb(0 0 0 / .84)`) over the globe with a 1px `#3a3a3f` border and a 4px radius. Rows inside them are split by `#26262a` rules.
+- **One canvas: black.** The Earth imagery supplies every colour. The chrome has no brand accent, no gradients and no drop shadows. Every panel frosts the world behind it (a 24px blur under 55% black), so text reads over lines, labels and city lights.
+- **Hairlines, not shadows.** Panels are frosted black (`rgb(0 0 0 / .55)` with a backdrop blur) over the globe with a 1px `#3a3a3f` border and a 4px radius. Rows inside them are split by `#26262a` rules.
 - **Type does the work.**
   - **Titles** use Redaction 35 in normal case, with slightly tight tracking and leading. Its bitmap-cut edges give the techno feel.
   - **Everything else** uses Barlow, a DIN-style engineering grotesk.
