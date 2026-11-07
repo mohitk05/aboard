@@ -1300,10 +1300,22 @@ export class World extends DurableObject<Env> {
       position = { lat: here.lat + (next.lat - here.lat) * f, lng };
     }
     const asOf = this.tripAsOf(t);
+    const names = this.sql
+      .exec<{ line: string; train: string | null }>(
+        "SELECT r.name AS line, v.name AS train FROM routes r LEFT JOIN vehicles v ON v.id = ? WHERE r.id = ?",
+        t.vehicle_id,
+        t.route_id,
+      )
+      .toArray()[0];
     return {
       id: t.id,
       route: t.route_id,
       vehicle: t.vehicle_id,
+      /** Display names, so a client can describe the train without more requests. */
+      line: names?.line ?? null,
+      train: names?.train ?? null,
+      lastStop: here.name,
+      nextStopName: t.active && next ? next.name : null,
       state: t.state,
       active: t.active === 1,
       speedKmh: t.speed_kmh,

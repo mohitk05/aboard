@@ -64,7 +64,7 @@ export async function checkTag(page: Page, name: string) {
 export async function logOut(page: Page) {
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible({ timeout: 15_000 });
 }
 
 /** Map tiles come from the internet; the tests don't need them (and CI may be offline). */

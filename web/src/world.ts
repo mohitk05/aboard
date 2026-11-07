@@ -23,6 +23,10 @@ export interface Trip extends TripMotion {
   nextStop: string | null;
   nextStopArrival: number | null;
   currentStopTimestamp: number | null;
+  line: string | null;
+  train: string | null;
+  lastStop: string;
+  nextStopName: string | null;
 }
 
 export interface Vehicle {

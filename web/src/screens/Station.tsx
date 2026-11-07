@@ -8,6 +8,7 @@ import { useNow } from "../lib/useNow";
 import { Board, Button, Card, FormError, SelectField } from "../ui";
 import { useWorld } from "../world";
 import { useWorldFocus } from "../world3d/focus";
+import { select } from "../world3d/selection";
 
 /** At a station with no ticket: what's coming, and where you could go. */
 export function Station({ me, stop }: { me: Me; stop: Stop | undefined }) {
@@ -181,6 +182,14 @@ function DepartureRow({ d, from, open, onToggle }: { d: Departure; from: string;
             ))}
           </ul>
           <FormError message={buy.error?.message} />
+          <div className="row">
+            <Button small kind="quiet" onClick={() => select({ kind: "train", id: d.trip.id })}>
+              Train details
+            </Button>
+            <Button small kind="quiet" onClick={() => select({ kind: "route", id: d.trip.route })}>
+              Line details
+            </Button>
+          </div>
         </div>
       )}
     </li>

@@ -1,4 +1,4 @@
-import { ensureWorld, signUp, test, tick, logOut } from "./fixtures";
+import { ADMIN, ensureWorld, signUp, test, tick, logOut } from "./fixtures";
 
 // Screenshots of the main screens for a visual check. Skipped unless SHOTS is set:
 //   SHOTS=/some/dir npm run e2e -- screens
@@ -14,6 +14,17 @@ test("capture desktop", async ({ browser, request }) => {
     await page.goto("/");
     await page.waitForTimeout(3500);
     await page.screenshot({ path: `${dir}/desktop-${scheme}.png` });
+    if (scheme === "light") {
+      // A line selected (it lights up as on hover) with its details open.
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(ADMIN.email);
+      await page.getByLabel("Password").fill(ADMIN.password);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.getByRole("link", { name: "Admin" }).click();
+      await page.getByRole("button", { name: "Lisbon – Vladivostok" }).click();
+      await page.waitForTimeout(3500);
+      await page.screenshot({ path: `${dir}/desktop-line.png` });
+    }
     await ctx.close();
   }
 });
@@ -51,6 +62,16 @@ test("capture screens", async ({ page, request }) => {
   await page.getByText(/On board/).waitFor();
   await page.waitForTimeout(3000);
   await page.screenshot({ path: `${dir}/journey.png` });
+
+  // Zoom right in on the train (wheel over the globe area at the top of the screen).
+  const vp = page.viewportSize()!;
+  await page.mouse.move(vp.width / 2, vp.height * 0.2);
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, -400);
+    await page.waitForTimeout(120);
+  }
+  await page.waitForTimeout(7500); // let the camera drift back onto the train
+  await page.screenshot({ path: `${dir}/train-close.png` });
 
   await page.getByRole("link", { name: "People" }).click();
   await page.waitForTimeout(500);

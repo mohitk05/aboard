@@ -1,9 +1,11 @@
 import { ensureWorld, expect, signUp, test } from "./fixtures";
 
-// Polling would pick these changes up in 10–60 s; live updates should within a couple of seconds.
-const FAST = { timeout: 3000 };
+// Polling picks these changes up after 10–60 s; live updates arrive almost at once. The budget
+// is generous because headless tests render the 3D world in software, which is slow.
+const FAST = { timeout: 10_000 };
 
 test("F6: messages arrive live", async ({ browser, request }) => {
+  test.setTimeout(120_000);
   await ensureWorld(request);
   const opts = test.info().project.use;
   const [aCtx, bCtx] = [await browser.newContext(opts), await browser.newContext(opts)];

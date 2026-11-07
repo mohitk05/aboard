@@ -106,3 +106,20 @@ test("signup suggests the nearest station, and you can still change it", async (
   await start.getByRole("button", { name: "Change" }).click();
   await expect(page.getByLabel("Where are you starting?")).toHaveValue(/.+/);
 });
+
+test("the landing page fits the window without scrolling on a laptop", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  const page = await ctx.newPage();
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  const { h, vh, w, vw } = await page.evaluate(() => ({
+    h: document.documentElement.scrollHeight,
+    vh: innerHeight,
+    w: document.documentElement.scrollWidth,
+    vw: innerWidth,
+  }));
+  expect(h).toBeLessThanOrEqual(vh);
+  expect(w).toBeLessThanOrEqual(vw);
+  await ctx.close();
+});

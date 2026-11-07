@@ -5,6 +5,7 @@ import { formatKm } from "../lib/format";
 import { Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
 import { useWorld, type Route, type Trip, type Vehicle } from "../world";
 import { useWorldFocus } from "../world3d/focus";
+import { select } from "../world3d/selection";
 import { Shell } from "./Shell";
 
 /** Refresh everything world-shaped after an admin change. */
@@ -145,7 +146,9 @@ function RouteBuilder({ stops, routes }: { stops: Stop[]; routes: Route[] }) {
       <ul className="list">
         {routes.map((r) => (
           <li key={r.id}>
-            <strong>{r.name}</strong>
+            <button className="linklike" onClick={() => select({ kind: "route", id: r.id })}>
+              <strong>{r.name}</strong>
+            </button>
             <span className="muted small">
               {r.stops.length} stations · {formatKm(r.totalKm)}
             </span>

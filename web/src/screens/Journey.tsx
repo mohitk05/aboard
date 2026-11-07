@@ -2,7 +2,8 @@ import type { Journey as JourneyData } from "../api";
 import { formatClock, formatIn, formatKm } from "../lib/format";
 import { kmAlong } from "../lib/motion";
 import { useNow } from "../lib/useNow";
-import { Badge, Board, Card } from "../ui";
+import { Badge, Board, Button, Card } from "../ui";
+import { select } from "../world3d/selection";
 import { useWorldFocus } from "../world3d/focus";
 import { NotifyNudge } from "./Notify";
 
@@ -86,6 +87,14 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
           })}
         </ol>
         <p className="muted small">You'll be set down at {j.to.name} automatically.</p>
+        <div className="row">
+          <Button small onClick={() => select({ kind: "train", id: j.trip.id })}>
+            Train details
+          </Button>
+          <Button small kind="quiet" onClick={() => select({ kind: "route", id: j.trip.route })}>
+            Line details
+          </Button>
+        </div>
       </Card>
     </>
   );

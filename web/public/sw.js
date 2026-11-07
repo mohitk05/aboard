@@ -1,6 +1,6 @@
 // Aboard service worker: offline app shell and push notifications.
-const SHELL = "aboard-shell-v1";
-const ASSETS = "aboard-assets-v1";
+const SHELL = "aboard-shell-v2";
+const ASSETS = "aboard-assets-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => c.add("/")).then(() => self.skipWaiting()));
@@ -35,7 +35,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Built assets have content hashes in their names, so a cached copy never goes stale.
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/")) {
+  // (Earth textures are big and never change, so they're cached too.)
+  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/textures/")) {
     event.respondWith(
       caches.match(req).then(
         (hit) =>

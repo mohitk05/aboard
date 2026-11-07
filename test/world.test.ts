@@ -55,6 +55,7 @@ describe("trip timing data", () => {
     const before = (await api("GET", `/trip/${seeded.trip}`, { token: admin })).data;
     expect(before.segment.km).toBeGreaterThan(400);
     expect(before.segment.from).toEqual({ lat: 38.72, lng: -9.14 });
+    expect(before).toMatchObject({ line: "Lisbon – Vladivostok", train: "The Long Way", lastStop: "Lisbon", nextStopName: "Madrid" });
 
     const w = worldStub();
     const t0 = Date.now();
