@@ -30,6 +30,7 @@ npm run dev:web                  # in a second terminal: hot-reloading app on :5
 npm test                         # API tests run inside the Workers runtime (workerd)
 npm run typecheck                # Worker and web app
 npm run build                    # what Workers Builds runs: build the app, typecheck, test
+npm run e2e                      # browser tests (Playwright) against a fresh `wrangler dev` world
 ```
 
 After changing `wrangler.jsonc`, run `npm run cf-typegen` to regenerate `worker-configuration.d.ts`.
@@ -89,11 +90,14 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/stop/:id` | player | |
 | GET | `/stop/:id/incoming-vehicles?limit=5` | player | |
 | POST | `/stop` | admin | `{ stop: { name, country, coordinates: { lat, lng }, dwellMinutes? } }` |
+| GET | `/route` | anyone | all lines with their stations |
 | GET | `/route/:id` | player | |
 | POST | `/route` | admin | `{ route: { name, stops: [stopId, …] } }` |
 | POST | `/route/autogenerate` | admin | `{ config: { count?, minLength?, maxLength? } }` |
+| GET | `/vehicle` | admin | |
 | GET | `/vehicle/:id` | player | |
 | POST | `/vehicle` | admin | `{ vehicle: { name } }` |
+| GET | `/trip?active=1` | anyone | running trains, with `asOf` and `segment` for smooth movement |
 | GET | `/trip/:id` | player | |
 | POST | `/trip` | admin | `{ trip: { route, vehicle?, speedKmh?, active? } }` |
 | POST | `/trip/:id/start` | admin | |
@@ -107,3 +111,4 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/conversation/:id/messages` | member | `{ message: { title?, body } }` |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
+| POST | `/admin/seed` | admin | builds the Lisbon → Vladivostok line and starts a train (safe to repeat) |

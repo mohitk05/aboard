@@ -14,6 +14,7 @@ import {
 import { railKm } from "../lib/geo";
 import { badRequest, conflict, forbidden, guard, notFound, type Result } from "../lib/result";
 import { migrate } from "./schema";
+import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
 
 // ---------- row types (as stored) ----------
 
@@ -186,8 +187,23 @@ export class World extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       this.tickPassengers(summary);
       this.tickTrips(now, summary);
+      this.sql.exec(
+        "INSERT INTO world_meta (key, value) VALUES ('last_tick_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        String(now),
+      );
     });
     return summary;
+  }
+
+  /** When the world last advanced (ms), or null if it never has. */
+  private lastTickAt(): number | null {
+    const row = this.sql.exec<{ value: string }>("SELECT value FROM world_meta WHERE key = 'last_tick_at'").toArray()[0];
+    return row ? Number(row.value) : null;
+  }
+
+  /** The moment a trip's stored progress describes: its last tick, or its last arrival/departure if later. */
+  private tripAsOf(t: TripRow): number {
+    return Math.max(this.lastTickAt() ?? 0, t.stop_at ?? 0) || Date.now();
   }
 
   private tickPassengers(summary: TickSummary): void {
@@ -326,7 +342,7 @@ export class World extends DurableObject<Env> {
           trip.stop_index < trip.pos || (trip.stop_index === trip.pos && trip.state === "STATIONARY");
         if (!due) continue;
         const { km, ms } = this.remainingTo(trip, this.routeStops(trip.route_id), trip.pos);
-        incoming.push({ trip: this.tripOut(trip), distanceKm: km, arrivalTime: now + ms });
+        incoming.push({ trip: this.tripOut(trip), distanceKm: km, arrivalTime: Math.max(now, this.tripAsOf(trip) + ms) });
       }
       incoming.sort((a, b) => a.arrivalTime - b.arrivalTime);
       return incoming.slice(0, limit);
@@ -356,6 +372,13 @@ export class World extends DurableObject<Env> {
       });
       return this.routeOut(routeId);
     });
+  }
+
+  listRoutes() {
+    return this.sql
+      .exec<{ id: string }>("SELECT id FROM routes ORDER BY name")
+      .toArray()
+      .map((r) => this.routeOut(r.id));
   }
 
   getRoute(id: string) {
@@ -412,6 +435,13 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  listVehicles() {
+    return this.sql
+      .exec<{ id: string }>("SELECT id FROM vehicles ORDER BY name")
+      .toArray()
+      .map((v) => this.vehicleOut(v.id));
+  }
+
   getVehicle(id: string) {
     return guard(() => this.vehicleOut(id));
   }
@@ -440,6 +470,13 @@ export class World extends DurableObject<Env> {
     });
     if (res.ok && input.active) await this.ensureClockRunning();
     return res;
+  }
+
+  listTrips(activeOnly: boolean) {
+    return this.sql
+      .exec<TripRow>(`SELECT * FROM trips ${activeOnly ? "WHERE active = 1" : ""} ORDER BY created_at`)
+      .toArray()
+      .map((t) => this.tripOut(t));
   }
 
   getTrip(id: string) {
@@ -530,6 +567,59 @@ export class World extends DurableObject<Env> {
       if (!t) throw notFound("Ticket");
       return ticketOut(t);
     });
+  }
+
+  // ======================= demo world =======================
+
+  /**
+   * Build the Lisbon → Vladivostok line, its interests, a train and a running trip.
+   * Safe to run more than once: it reuses stops, the route and the vehicle if they exist,
+   * and only starts a new trip if none is running on the line.
+   */
+  async seedDemo() {
+    const res = guard(() => {
+      const stopIds = SEED_STOPS.map((s) => {
+        const existing = this.sql
+          .exec<{ id: string }>("SELECT id FROM stops WHERE name = ? AND country = ?", s.name, s.country)
+          .toArray()[0];
+        if (existing) return existing.id;
+        const created = this.createStop(s);
+        if (!created.ok) throw badRequest(created.error);
+        return created.data.id;
+      });
+
+      for (const name of SEED_INTERESTS) {
+        const exists = this.sql.exec("SELECT 1 FROM interests WHERE name = ?", name).toArray().length;
+        if (!exists) this.createInterest({ name });
+      }
+
+      let routeId = this.sql.exec<{ id: string }>("SELECT id FROM routes WHERE name = ?", SEED_LINE_NAME).toArray()[0]?.id;
+      if (!routeId) {
+        const r = this.createRoute({ name: SEED_LINE_NAME, stops: stopIds });
+        if (!r.ok) throw badRequest(r.error);
+        routeId = r.data.id;
+      }
+
+      let vehicleId = this.sql.exec<{ id: string }>("SELECT id FROM vehicles WHERE name = ?", "The Long Way").toArray()[0]?.id;
+      if (!vehicleId) {
+        const v = this.createVehicle({ name: "The Long Way" });
+        if (!v.ok) throw badRequest(v.error);
+        vehicleId = v.data.id;
+      }
+
+      const running = this.sql
+        .exec<{ id: string }>("SELECT id FROM trips WHERE route_id = ? AND active = 1", routeId)
+        .toArray()[0];
+      return { routeId, vehicleId, runningTrip: running?.id ?? null, stops: stopIds.length };
+    });
+    if (!res.ok) return res;
+    let tripId = res.data.runningTrip;
+    if (!tripId) {
+      const t = await this.createTrip({ route: res.data.routeId, vehicle: res.data.vehicleId, active: true });
+      if (!t.ok) return t;
+      tripId = t.data.id;
+    }
+    return { ok: true as const, data: { route: res.data.routeId, vehicle: res.data.vehicleId, trip: tripId, stops: res.data.stops } };
   }
 
   // ======================= users =======================
@@ -794,6 +884,7 @@ export class World extends DurableObject<Env> {
       if (lng < -180) lng += 360;
       position = { lat: here.lat + (next.lat - here.lat) * f, lng };
     }
+    const asOf = this.tripAsOf(t);
     return {
       id: t.id,
       route: t.route_id,
@@ -804,9 +895,15 @@ export class World extends DurableObject<Env> {
       currentStopIndex: t.stop_index,
       currentStop: here.id,
       nextStop: t.active && next ? next.id : null,
-      nextStopArrival: t.active && next ? Date.now() + this.remainingTo(t, stops, t.stop_index + 1).ms : null,
+      nextStopArrival: t.active && next ? asOf + this.remainingTo(t, stops, t.stop_index + 1).ms : null,
       progress: t.progress,
       currentStopTimestamp: t.stop_at,
+      /** The time `progress` and `position` describe. Clients extrapolate from here between ticks. */
+      asOf,
+      /** The stretch of track the train is on (or about to take), so clients can draw it moving. */
+      segment: next
+        ? { from: { lat: here.lat, lng: here.lng }, to: { lat: next.lat, lng: next.lng }, km: next.km }
+        : null,
       position,
     };
   }

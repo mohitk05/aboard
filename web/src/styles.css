@@ -13,6 +13,10 @@
   --board-bg: #15130f;
   --board-ink: #f3c14b;
   --board-dim: #a48a4f;
+  --map-land: #efe8db;
+  --map-water: #cfdfe3;
+  --map-border: #c9bba5;
+  --map-label: #7d7366;
 
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -34,6 +38,10 @@
     --danger: #ff8a7a;
     --board-bg: #0a0907;
     --board-edge: #3a3226;
+    --map-land: #1d1b17;
+    --map-water: #10181b;
+    --map-border: #3d372e;
+    --map-label: #8f8574;
   }
 }
 
@@ -302,4 +310,100 @@ span.chip {
   .pulse {
     animation: none;
   }
+}
+
+/* ---------- headings, lists, grids ---------- */
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+h3 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+  font-weight: 600;
+}
+.list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+}
+ol.list {
+  list-style: decimal inside;
+}
+.list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.list > li:last-child {
+  border-bottom: 0;
+}
+.grid-2 {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.form-wide {
+  display: grid;
+  gap: 14px;
+}
+.linklike {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.linklike:disabled {
+  opacity: 0.6;
+}
+
+/* ---------- navigation ---------- */
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
+  font-weight: 500;
+}
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 0;
+}
+.nav a.active {
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.nav .linklike {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+/* ---------- map ---------- */
+.map {
+  width: 100%;
+  height: clamp(260px, 48vh, 460px);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--map-land);
+}
+.map-tall {
+  height: clamp(320px, 60vh, 560px);
+}
+.map-loading {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.maplibregl-ctrl-attrib {
+  font-size: 11px;
 }

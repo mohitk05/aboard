@@ -1,7 +1,11 @@
 import { Link } from "react-router";
+import { Map } from "../map/LazyMap";
 import { Board, Page } from "../ui";
+import { useWorld } from "../world";
 
 export function Landing() {
+  const world = useWorld();
+  const running = world.trips.length;
   return (
     <Page
       actions={
@@ -10,7 +14,12 @@ export function Landing() {
         </Link>
       }
     >
-      <Board label="Now boarding" title="Lisbon → Vladivostok" sub="13,900 km · about 10 days" />
+      <Board
+        label={running ? `${running} ${running === 1 ? "train" : "trains"} running now` : "Now boarding"}
+        title="Lisbon → Vladivostok"
+        sub="13,900 km · about 10 days"
+      />
+      <Map stops={world.stops} routes={world.routes} trips={world.trips} label="Trains running right now" />
       <section className="hero">
         <h1>A slow journey across the world, in real time.</h1>
         <p className="lede">

@@ -116,6 +116,13 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX messages_by_conversation ON messages(conversation_id, created_at);
   `,
+
+  /* 2: world clock bookkeeping */ `
+  CREATE TABLE world_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

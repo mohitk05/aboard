@@ -153,11 +153,14 @@ const app = new Hono<AppEnv>({ strict: false }).basePath("/api");
 app.get("/", (c) => ok(c, "hello"));
 
 // Trip
+// The world itself (stops, lines, trains) is public, so the landing page can show it.
+app.get("/trip", (c) => world(c.env).listTrips(c.req.query("active") === "1").then((list) => ok(c, list)));
 app.get("/trip/:id", anyone, (c) => send(c, world(c.env).getTrip(param(c, "id"))));
 app.post("/trip", admin, async (c) => send(c, world(c.env).createTrip((await body(c, schemas.trip)).trip), 201));
 app.post("/trip/:id/start", admin, (c) => send(c, world(c.env).startTrip(param(c, "id"))));
 
 // Vehicle
+app.get("/vehicle", admin, (c) => world(c.env).listVehicles().then((list) => ok(c, list)));
 app.get("/vehicle/:id", anyone, (c) => send(c, world(c.env).getVehicle(param(c, "id"))));
 app.post("/vehicle", admin, async (c) => send(c, world(c.env).createVehicle((await body(c, schemas.vehicle)).vehicle), 201));
 
@@ -171,6 +174,7 @@ app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
 });
 
 // Route
+app.get("/route", (c) => world(c.env).listRoutes().then((list) => ok(c, list)));
 app.get("/route/:id", anyone, (c) => send(c, world(c.env).getRoute(param(c, "id"))));
 app.post("/route", admin, async (c) => send(c, world(c.env).createRoute((await body(c, schemas.route)).route), 201));
 app.post("/route/autogenerate", admin, async (c) =>
@@ -250,6 +254,8 @@ app.post("/admin/bootstrap", async (c) => {
 });
 /** Advance the world one tick right now, without waiting for the alarm. Useful in development. */
 app.post("/admin/tick", admin, async (c) => ok(c, await world(c.env).tick(Date.now())));
+/** Build the demo Lisbon → Vladivostok line and start a train on it. Safe to repeat. */
+app.post("/admin/seed", admin, (c) => send(c, world(c.env).seedDemo(), 201));
 
 app.notFound((c) => fail(c, 404, "Not found."));
 app.onError((err, c) => {

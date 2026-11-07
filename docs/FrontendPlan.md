@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: F0 done (2026-11-07); F1 next. This replaces the Expo and three.js plan in `Features.md`.
+Status: F0–F1 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 
@@ -110,7 +110,7 @@ Each milestone ends with something you can deploy and use. Backend changes ship 
 - Login, signup and logout screens.
 - *Done when:* you can sign up on the deployed site and see an empty, signed-in home screen.
 
-**F1 World map + admin console**
+**F1 World map + admin console (done)**
 - List endpoints and `asOf`.
 - A map of stops, routes and moving trains, with trains moving smoothly between ticks.
 - Admin console for stops, routes and trips. A seed button for the Lisbon → Vladivostok line.
