@@ -3,7 +3,7 @@ import { formatClock, formatIn, formatKm } from "../lib/format";
 import { kmAlong } from "../lib/motion";
 import { useNow } from "../lib/useNow";
 import { Map } from "../map/LazyMap";
-import { Board } from "../ui";
+import { Badge, Board, Card } from "../ui";
 import { useWorld } from "../world";
 import { NotifyNudge } from "./Notify";
 
@@ -47,7 +47,7 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
         label="Map following your train"
       />
 
-      <section className="card" aria-label="Your trip">
+      <Card aria-label="Your trip" role="region">
         <div className="trip-progress">
           <div className="trip-ends">
             <span>{j.from.name}</span>
@@ -83,7 +83,7 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
               <li key={s.id} className={cls}>
                 <span className="tl-name">
                   {s.name}
-                  {i === j.toIndex && <span className="tag">Your stop</span>}
+                  {i === j.toIndex && <Badge>Your stop</Badge>}
                 </span>
                 <span className="tl-time">
                   {s.current ? "Here now" : s.passed ? "Passed" : s.eta ? formatClock(s.eta, now) : ""}
@@ -93,7 +93,7 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
           })}
         </ol>
         <p className="muted small">You'll be set down at {j.to.name} automatically.</p>
-      </section>
+      </Card>
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useLogin } from "../auth";
-import { Field, FormError, Page } from "../ui";
+import { Button, Card, FormError, Page, TextField } from "../ui";
 
 export function Login() {
   const login = useLogin();
@@ -15,35 +15,20 @@ export function Login() {
 
   return (
     <Page>
-      <form className="card form" onSubmit={submit} noValidate={false}>
-        <h1>Welcome back</h1>
-        <Field label="Email">
-          <input
-            type="email"
-            autoComplete="email"
-            required
-            autoFocus
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </Field>
-        <Field label="Password">
-          <input
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </Field>
-        <FormError message={login.error?.message} />
-        <button className="btn btn-primary" disabled={login.isPending}>
-          {login.isPending ? "Checking…" : "Log in"}
-        </button>
-        <p className="muted small">
-          New here? <Link to="/signup">Get a ticket</Link>
-        </p>
-      </form>
+      <Card className="form-card">
+        <form className="form" onSubmit={submit}>
+          <h1>Welcome back</h1>
+          <TextField label="Email" type="email" autocomplete="email" required value={email} onValue={setEmail} />
+          <TextField label="Password" type="password" autocomplete="current-password" required value={password} onValue={setPassword} />
+          <FormError message={login.error?.message} />
+          <Button kind="primary" type="submit" disabled={login.isPending}>
+            {login.isPending ? "Checking…" : "Log in"}
+          </Button>
+          <p className="muted small">
+            New here? <Link to="/signup">Get a ticket</Link>
+          </p>
+        </form>
+      </Card>
     </Page>
   );
 }

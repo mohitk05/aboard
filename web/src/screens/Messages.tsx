@@ -5,7 +5,7 @@ import { useMe } from "../auth";
 import { formatClock } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { useInbox, useSend, useThread } from "../people";
-import { FormError } from "../ui";
+import { Button, Card, FormError, TextArea } from "../ui";
 import { Shell } from "./Shell";
 
 export function Inbox() {
@@ -14,7 +14,7 @@ export function Inbox() {
   const now = useNow(60_000);
   return (
     <Shell>
-      <section className="card" aria-labelledby="inbox-title">
+      <Card aria-labelledby="inbox-title" role="region">
         <h1 id="inbox-title">Messages</h1>
         <FormError message={inbox.error?.message} />
         {inbox.data && !inbox.data.length && (
@@ -40,7 +40,7 @@ export function Inbox() {
             </li>
           ))}
         </ul>
-      </section>
+      </Card>
     </Shell>
   );
 }
@@ -69,7 +69,7 @@ export function Conversation() {
 
   return (
     <Shell>
-      <section className="card chat" aria-label={`Conversation with ${other ?? "a traveller"}`}>
+      <Card className="chat" aria-label={`Conversation with ${other ?? "a traveller"}`} role="region">
         <div className="chat-head">
           <Link to="/messages" className="linklike">
             ← Messages
@@ -88,26 +88,28 @@ export function Conversation() {
         {thread.data && !thread.data.length && <p className="muted">Say hello. Messages arrive straight away.</p>}
         <div ref={end} />
         <form className="compose" onSubmit={submit}>
-          <label className="sr-only" htmlFor="compose">
-            Message
-          </label>
-          <textarea
-            id="compose"
-            rows={2}
-            maxLength={5000}
-            placeholder="Write a message"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+          <div
+            className="compose-field"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) submit(e);
+              if (e.key === "Enter" && !e.shiftKey && (e.target as HTMLElement).tagName === "TEXTAREA") submit(e);
             }}
-          />
-          <button className="btn btn-primary" disabled={send.isPending || !text.trim()}>
+          >
+            <TextArea
+              label="Message"
+              showLabel={false}
+              rows={2}
+              maxLength={5000}
+              placeholder="Write a message"
+              value={text}
+              onValue={setText}
+            />
+          </div>
+          <Button kind="primary" type="submit" disabled={send.isPending || !text.trim()}>
             Send
-          </button>
+          </Button>
         </form>
         <FormError message={send.error?.message} />
-      </section>
+      </Card>
     </Shell>
   );
 }

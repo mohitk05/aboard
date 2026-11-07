@@ -17,6 +17,9 @@
     "vapid": "node scripts/vapid.mjs"
   },
   "dependencies": {
+    "@db-ux/core-components": "^6.3.0",
+    "@db-ux/core-foundations": "^6.3.0",
+    "@db-ux/react-core-components": "^6.3.0",
     "@tanstack/react-query": "^5.107.1",
     "hono": "^4.13.16",
     "maplibre-gl": "^5.24.0",

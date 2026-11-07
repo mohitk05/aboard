@@ -5,7 +5,7 @@ import { meKey } from "../auth";
 import { clockParts, formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Map } from "../map/LazyMap";
-import { Board, FormError } from "../ui";
+import { Board, Button, Card, FormError } from "../ui";
 import { useWorld } from "../world";
 
 /** At a station with no ticket: what's coming, and where you could go. */
@@ -27,7 +27,7 @@ export function Station({ me, stop }: { me: Me; stop: Stop | undefined }) {
         sub={`Traveller ${me.username}`}
       />
 
-      <section className="card" aria-labelledby="departures-title" role="region">
+      <Card aria-labelledby="departures-title" role="region">
         <h2 id="departures-title">Departures</h2>
         {departures.isPending && <p className="muted">Reading the board…</p>}
         <FormError message={departures.error?.message} />
@@ -48,7 +48,7 @@ export function Station({ me, stop }: { me: Me; stop: Stop | undefined }) {
             />
           ))}
         </ul>
-      </section>
+      </Card>
 
       <Map
         stops={world.stops}
@@ -101,14 +101,15 @@ function DepartureRow({ d, from, open, onToggle }: { d: Departure; from: string;
                     · arrives {formatClock(x.arrivalTime, now)} ({formatIn(x.arrivalTime - now)}) · {formatKm(x.km)}
                   </span>
                 </span>
-                <button
-                  className="btn btn-primary btn-small"
+                <Button
+                  kind="primary"
+                  small
                   onClick={() => buy.mutate(x.stop.id)}
                   disabled={buy.isPending}
                   aria-label={`Buy a ticket to ${x.stop.name} for ${formatPrice(x.price)}`}
                 >
                   {formatPrice(x.price)}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

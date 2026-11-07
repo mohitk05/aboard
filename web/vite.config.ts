@@ -7,7 +7,8 @@ export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react()],
   // The map chunk (MapLibre) is ~1 MB but only loads on screens with a map.
-  build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 1200 },
+  // cssMinify: esbuild, because LightningCSS (Vite 8's default) mangles the DB UX styles' light-dark().
+  build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 1200, cssMinify: "esbuild" },
   server: {
     port: 5173,
     proxy: { "/api": "http://localhost:8787" },

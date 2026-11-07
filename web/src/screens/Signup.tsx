@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { haversineKm } from "../../../src/lib/geo";
 import { api, type Interest, type Stop } from "../api";
 import { useSignup } from "../auth";
-import { Field, FormError, Page } from "../ui";
+import { Button, Card, Check, FormError, Notice, Page, SelectField, TagPicker, TextField } from "../ui";
 
 export function Signup() {
   const signup = useSignup();
@@ -26,9 +26,7 @@ export function Signup() {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const here = { lat: coords.latitude, lng: coords.longitude };
-        const nearest = [...stops.data].sort(
-          (a, b) => haversineKm(here, a.coordinates) - haversineKm(here, b.coordinates),
-        )[0];
+        const nearest = [...stops.data].sort((a, b) => haversineKm(here, a.coordinates) - haversineKm(here, b.coordinates))[0];
         if (nearest) setStop(nearest.id);
         setLocating("idle");
       },
@@ -36,8 +34,6 @@ export function Signup() {
       { timeout: 10_000, maximumAge: 600_000 },
     );
   };
-
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -55,22 +51,29 @@ export function Signup() {
   if (stops.data && stops.data.length === 0) {
     return (
       <Page>
-        <div className="card">
+        <Card>
           <h1>The line is still being laid</h1>
           <p className="muted">There are no stations yet. Check back soon.</p>
-        </div>
+        </Card>
       </Page>
     );
   }
 
   return (
     <Page>
-      <form className="card form" onSubmit={submit}>
-        <h1>Get a ticket</h1>
+      <Card className="form-card">
+        <form className="form" onSubmit={submit}>
+          <h1>Get a ticket</h1>
 
-        <Field label="Where are you starting?" hint="You can travel anywhere from here.">
-          <div className="row">
-            <select required value={stop} onChange={(e) => setStop(e.target.value)} disabled={!stops.data}>
+          <div className="row row-end">
+            <SelectField
+              label="Where are you starting?"
+              hint="You can travel anywhere from here."
+              required
+              value={stop}
+              onValue={setStop}
+              disabled={!stops.data}
+            >
               <option value="" disabled>
                 {stops.isPending ? "Loading stations…" : "Choose a station"}
               </option>
@@ -79,83 +82,70 @@ export function Signup() {
                   {s.name}, {s.country}
                 </option>
               ))}
-            </select>
-            <button type="button" className="btn btn-quiet" onClick={findNearest} disabled={locating === "busy"}>
+            </SelectField>
+            <Button onClick={findNearest} disabled={locating === "busy"}>
               {locating === "busy" ? "Locating…" : "Nearest to me"}
-            </button>
+            </Button>
           </div>
-        </Field>
-        {locating === "denied" && <p className="muted small">Couldn't get your location. Pick a station instead.</p>}
+          {locating === "denied" && <Notice tone="warning">Couldn't get your location. Pick a station instead.</Notice>}
 
-        <Field label="Username" hint="The only thing other travellers see. Letters, numbers, dots, dashes and underscores.">
-          <input
+          <TextField
+            label="Username"
+            hint="The only thing other travellers see. Letters, numbers, dots, dashes and underscores."
             required
             minLength={3}
             maxLength={32}
             pattern="[a-zA-Z0-9_.\-]+"
-            autoComplete="username"
+            autocomplete="username"
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onValue={setUsername}
           />
-        </Field>
-        <Field label="Email" hint="Never shown to other travellers.">
-          <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-        <Field label="Password" hint="At least 8 characters.">
-          <input
+          <TextField label="Email" hint="Never shown to other travellers." type="email" required autocomplete="email" value={email} onValue={setEmail} />
+          <TextField
+            label="Password"
+            hint="At least 8 characters."
             type="password"
             required
             minLength={8}
-            autoComplete="new-password"
+            autocomplete="new-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onValue={setPassword}
           />
-        </Field>
-        <Field label="Age" hint="Travellers under 18 are only matched with each other.">
-          <input
+          <TextField
+            label="Age"
+            hint="Travellers under 18 are only matched with each other."
             type="number"
             required
             min={13}
             max={120}
-            inputMode="numeric"
+            inputmode="numeric"
             value={age}
-            onChange={(e) => setAge(e.target.value)}
+            onValue={setAge}
           />
-        </Field>
 
-        {!!interests.data?.length && (
-          <fieldset className="field">
-            <legend className="field-label">What do you like to talk about?</legend>
-            <div className="chips">
-              {interests.data.map((i) => (
-                <button
-                  type="button"
-                  key={i.id}
-                  className="chip"
-                  aria-pressed={picked.includes(i.id)}
-                  onClick={() => toggle(i.id)}
-                >
-                  {i.name}
-                </button>
-              ))}
-            </div>
-            <span className="field-hint">You'll meet travellers who share at least one.</span>
-          </fieldset>
-        )}
+          {!!interests.data?.length && (
+            <TagPicker
+              legend="What do you like to talk about?"
+              hint="You'll meet travellers who share at least one."
+              options={interests.data}
+              picked={picked}
+              onChange={setPicked}
+            />
+          )}
 
-        <label className="check">
-          <input type="checkbox" checked={isPrivate} onChange={(e) => setPrivate(e.target.checked)} />
-          <span>Travel privately (other travellers won't see you or where you are)</span>
-        </label>
+          <Check checked={isPrivate} onValue={setPrivate}>
+            Travel privately (other travellers won't see you or where you are)
+          </Check>
 
-        <FormError message={signup.error?.message ?? stops.error?.message} />
-        <button className="btn btn-primary" disabled={signup.isPending || !stops.data}>
-          {signup.isPending ? "Printing your ticket…" : "Start travelling"}
-        </button>
-        <p className="muted small">
-          Already aboard? <Link to="/login">Log in</Link>
-        </p>
-      </form>
+          <FormError message={signup.error?.message ?? stops.error?.message} />
+          <Button kind="primary" type="submit" disabled={signup.isPending || !stops.data}>
+            {signup.isPending ? "Printing your ticket…" : "Start travelling"}
+          </Button>
+          <p className="muted small">
+            Already aboard? <Link to="/login">Log in</Link>
+          </p>
+        </form>
+      </Card>
     </Page>
   );
 }

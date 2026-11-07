@@ -5,7 +5,7 @@ import { meKey } from "../auth";
 import { formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Map } from "../map/LazyMap";
-import { Board, FormError } from "../ui";
+import { Board, Button, Card, FormError } from "../ui";
 import { useWorld } from "../world";
 import { NotifyNudge } from "./Notify";
 
@@ -32,7 +32,7 @@ export function Waiting({ journey }: { journey: Journey }) {
       <Board label="Your ticket" title={`${journey.from.name} → ${journey.to.name}`} sub={status} />
       <NotifyNudge about="Get a notification when your train is near." />
 
-      <section className="card ticket" aria-label="Ticket details">
+      <Card className="ticket" aria-label="Ticket details" role="region">
         <dl className="facts">
           <div>
             <dt>Line</dt>
@@ -63,20 +63,18 @@ export function Waiting({ journey }: { journey: Journey }) {
         </p>
         {confirming ? (
           <div className="row">
-            <button className="btn btn-danger" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+            <Button kind="danger" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
               Yes, cancel my ticket
-            </button>
-            <button className="btn btn-quiet" onClick={() => setConfirming(false)}>
+            </Button>
+            <Button kind="quiet" onClick={() => setConfirming(false)}>
               Keep it
-            </button>
+            </Button>
           </div>
         ) : (
-          <button className="btn btn-quiet" onClick={() => setConfirming(true)}>
-            Cancel ticket
-          </button>
+          <Button onClick={() => setConfirming(true)}>Cancel ticket</Button>
         )}
         <FormError message={cancel.error?.message} />
-      </section>
+      </Card>
 
       <Map
         stops={world.stops}

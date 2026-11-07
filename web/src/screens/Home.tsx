@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api, type Me, type Stop } from "../api";
 import { useMe } from "../auth";
+import { Notice } from "../ui";
 import { Journey } from "./Journey";
 import { Shell } from "./Shell";
 import { Station } from "./Station";
@@ -58,9 +59,7 @@ export function Home() {
   return (
     <Shell>
       {arrived && me.state === "ATSTATION" && (
-        <p className="notice" role="status">
-          You've arrived in {arrived}. Welcome.
-        </p>
+        <Notice tone="successful">You've arrived in {arrived}. Welcome.</Notice>
       )}
       {me.state === "ONBOARD" && me.journey ? (
         <Journey journey={me.journey} />

@@ -1,6 +1,5 @@
-import { Link } from "react-router";
 import { Map } from "../map/LazyMap";
-import { Board, Page } from "../ui";
+import { Board, ButtonLink, Page } from "../ui";
 import { useWorld } from "../world";
 
 export function Landing() {
@@ -9,9 +8,9 @@ export function Landing() {
   return (
     <Page
       actions={
-        <Link to="/login" className="btn btn-quiet">
+        <ButtonLink to="/login" kind="quiet">
           Log in
-        </Link>
+        </ButtonLink>
       }
     >
       <Board
@@ -27,12 +26,10 @@ export function Landing() {
           check in when it reaches a station. Meet the people in your carriage along the way.
         </p>
         <div className="row">
-          <Link to="/signup" className="btn btn-primary">
+          <ButtonLink to="/signup" kind="primary">
             Get a ticket
-          </Link>
-          <Link to="/login" className="btn">
-            I already travel with Aboard
-          </Link>
+          </ButtonLink>
+          <ButtonLink to="/login">I already travel with Aboard</ButtonLink>
         </div>
       </section>
     </Page>

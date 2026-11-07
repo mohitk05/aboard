@@ -42,14 +42,20 @@ export async function signUp(page: Page, station: string, interests: string[] = 
   const username = unique("t");
   await page.goto("/signup");
   await page.getByLabel("Where are you starting?").selectOption({ label: station });
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Email").fill(`${username}@e2e.test`);
-  await page.getByLabel("Password").fill("password123");
-  await page.getByLabel("Age").fill("28");
-  for (const i of interests) await page.getByRole("button", { name: i, exact: true }).click();
+  await page.getByLabel("Username", { exact: true }).fill(username);
+  await page.getByLabel("Email", { exact: true }).fill(`${username}@e2e.test`);
+  await page.getByLabel("Password", { exact: true }).fill("password123");
+  await page.getByLabel("Age", { exact: true }).fill("28");
+  for (const i of interests) await checkTag(page, i);
   await page.getByRole("button", { name: "Start travelling" }).click();
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
   return { username, email: `${username}@e2e.test` };
+}
+
+/** Tick an interest tag the way a person does: by tapping its label. */
+export async function checkTag(page: Page, name: string) {
+  await page.locator(".db-tag label", { hasText: new RegExp(`^${name}$`) }).click();
+  await expect(page.getByRole("checkbox", { name, exact: true })).toBeChecked();
 }
 
 /** Log out from the Profile tab and wait for the landing page. */

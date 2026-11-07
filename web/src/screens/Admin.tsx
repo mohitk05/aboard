@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api, type Stop } from "../api";
 import { Map } from "../map/LazyMap";
 import { formatKm } from "../lib/format";
-import { Field, FormError } from "../ui";
+import { Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
 import { useWorld, type Route, type Trip, type Vehicle } from "../world";
 import { Shell } from "./Shell";
 
@@ -33,7 +33,7 @@ export function Admin() {
 
       <WorldTools />
 
-      <section className="card">
+      <Card>
         <h2>Network</h2>
         <p className="muted small">Click the map to place a new station there.</p>
         <Map
@@ -44,7 +44,7 @@ export function Admin() {
           onMapClick={setClicked}
           className="map-tall"
         />
-      </section>
+      </Card>
 
       <StopForm at={clicked} />
       <RouteBuilder stops={world.stops} routes={world.routes} />
@@ -57,29 +57,25 @@ function WorldTools() {
   const seed = useWorldMutation(() => api<{ trip: string; stops: number }>("POST", "/admin/seed"));
   const tick = useWorldMutation(() => api<Record<string, number>>("POST", "/admin/tick"));
   return (
-    <section className="card">
+    <Card className="form-wide">
       <h2>World</h2>
       <div className="row">
-        <button className="btn btn-primary" onClick={() => seed.mutate(undefined)} disabled={seed.isPending}>
+        <Button kind="primary" onClick={() => seed.mutate(undefined)} disabled={seed.isPending}>
           {seed.isPending ? "Laying track…" : "Seed Lisbon → Vladivostok"}
-        </button>
-        <button className="btn" onClick={() => tick.mutate(undefined)} disabled={tick.isPending}>
+        </Button>
+        <Button onClick={() => tick.mutate(undefined)} disabled={tick.isPending}>
           Advance one tick (5 min)
-        </button>
+        </Button>
       </div>
-      {seed.data && (
-        <p className="muted small" role="status">
-          The line has {seed.data.stops} stations and a train is running on it.
-        </p>
-      )}
+      {seed.data && <Notice tone="successful">The line has {seed.data.stops} stations and a train is running on it.</Notice>}
       {tick.data && (
-        <p className="muted small" role="status">
+        <Notice tone="successful">
           Tick done: {tick.data.arrivals} arrivals, {tick.data.departures} departures, {tick.data.boarded} boarded,{" "}
           {tick.data.alighted} got off.
-        </p>
+        </Notice>
       )}
       <FormError message={seed.error?.message ?? tick.error?.message} />
-    </section>
+    </Card>
   );
 }
 
@@ -108,31 +104,32 @@ function StopForm({ at }: { at: { lat: number; lng: number } | null }) {
   };
 
   return (
-    <form className="card form-wide" onSubmit={submit}>
-      <h2>New station</h2>
-      <div className="grid-2">
-        <Field label="Name">
-          <input required value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        <Field label="Country">
-          <input required value={country} onChange={(e) => setCountry(e.target.value)} />
-        </Field>
-        <Field label="Latitude">
-          <input required type="number" step="any" min={-90} max={90} value={lat} onChange={(e) => setLat(e.target.value)} />
-        </Field>
-        <Field label="Longitude">
-          <input required type="number" step="any" min={-180} max={180} value={lng} onChange={(e) => setLng(e.target.value)} />
-        </Field>
-        <Field label="Dwell (minutes)" hint="How long trains wait here. About 60 for big cities.">
-          <input required type="number" min={1} max={1440} value={dwell} onChange={(e) => setDwell(e.target.value)} />
-        </Field>
-      </div>
-      <FormError message={create.error?.message} />
-      {create.isSuccess && <p className="muted small" role="status">Added {create.data.name}.</p>}
-      <button className="btn btn-primary" disabled={create.isPending}>
-        Add station
-      </button>
-    </form>
+    <Card>
+      <form className="form-wide" onSubmit={submit}>
+        <h2>New station</h2>
+        <div className="grid-2">
+          <TextField label="Name" required value={name} onValue={setName} />
+          <TextField label="Country" required value={country} onValue={setCountry} />
+          <TextField label="Latitude" type="number" step="any" min={-90} max={90} required value={lat} onValue={setLat} />
+          <TextField label="Longitude" type="number" step="any" min={-180} max={180} required value={lng} onValue={setLng} />
+          <TextField
+            label="Dwell (minutes)"
+            hint="How long trains wait here. About 60 for big cities."
+            type="number"
+            min={1}
+            max={1440}
+            required
+            value={dwell}
+            onValue={setDwell}
+          />
+        </div>
+        <FormError message={create.error?.message} />
+        {create.isSuccess && <Notice tone="successful">Added {create.data.name}.</Notice>}
+        <Button kind="primary" type="submit" disabled={create.isPending}>
+          Add station
+        </Button>
+      </form>
+    </Card>
   );
 }
 
@@ -150,7 +147,7 @@ function RouteBuilder({ stops, routes }: { stops: Stop[]; routes: Route[] }) {
   };
 
   return (
-    <section className="card">
+    <Card>
       <h2>Lines</h2>
       <ul className="list">
         {routes.map((r) => (
@@ -166,49 +163,45 @@ function RouteBuilder({ stops, routes }: { stops: Stop[]; routes: Route[] }) {
 
       <form className="form-wide" onSubmit={submit}>
         <h3>New line</h3>
-        <Field label="Name">
-          <input required value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        <Field label="Stations, in order">
-          <div className="row">
-            <select value={next} onChange={(e) => setNext(e.target.value)}>
-              <option value="">Choose a station</option>
-              {stops
-                .filter((s) => !picked.includes(s.id))
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}, {s.country}
-                  </option>
-                ))}
-            </select>
-            <button type="button" className="btn" disabled={!next} onClick={() => (setPicked([...picked, next]), setNext(""))}>
-              Add
-            </button>
-          </div>
-        </Field>
+        <TextField label="Name" required value={name} onValue={setName} />
+        <div className="row row-end">
+          <SelectField label="Stations, in order" value={next} onValue={setNext}>
+            <option value="">Choose a station</option>
+            {stops
+              .filter((s) => !picked.includes(s.id))
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}, {s.country}
+                </option>
+              ))}
+          </SelectField>
+          <Button disabled={!next} onClick={() => (setPicked([...picked, next]), setNext(""))}>
+            Add
+          </Button>
+        </div>
         {picked.length > 0 && (
           <ol className="list">
             {picked.map((id) => (
               <li key={id}>
                 {byId.get(id)?.name}
-                <button type="button" className="linklike" onClick={() => setPicked(picked.filter((p) => p !== id))}>
+                <Button kind="quiet" small onClick={() => setPicked(picked.filter((p) => p !== id))}>
                   Remove
-                </button>
+                </Button>
               </li>
             ))}
           </ol>
         )}
         <FormError message={create.error?.message ?? auto.error?.message} />
         <div className="row">
-          <button className="btn btn-primary" disabled={create.isPending || picked.length < 2}>
+          <Button kind="primary" type="submit" disabled={create.isPending || picked.length < 2}>
             Create line
-          </button>
-          <button type="button" className="btn" onClick={() => auto.mutate(undefined)} disabled={auto.isPending || stops.length < 3}>
+          </Button>
+          <Button onClick={() => auto.mutate(undefined)} disabled={auto.isPending || stops.length < 3}>
             Generate 3 random lines
-          </button>
+          </Button>
         </div>
       </form>
-    </section>
+    </Card>
   );
 }
 
@@ -228,7 +221,7 @@ function Trains({ routes }: { routes: Route[] }) {
   const routeName = (id: string) => routes.find((r) => r.id === id)?.name ?? "Unknown line";
 
   return (
-    <section className="card">
+    <Card>
       <h2>Trains</h2>
       <ul className="list">
         {trips.data?.map((t) => (
@@ -240,9 +233,9 @@ function Trains({ routes }: { routes: Route[] }) {
               </span>
             </span>
             {!t.active && (
-              <button className="linklike" onClick={() => start.mutate(t.id, { onSuccess: refresh })}>
+              <Button kind="quiet" small onClick={() => start.mutate(t.id, { onSuccess: refresh })}>
                 Start
-              </button>
+              </Button>
             )}
           </li>
         ))}
@@ -261,34 +254,28 @@ function Trains({ routes }: { routes: Route[] }) {
       >
         <h3>Run a train</h3>
         <div className="grid-2">
-          <Field label="Line">
-            <select required value={route} onChange={(e) => setRoute(e.target.value)}>
-              <option value="">Choose a line</option>
-              {routes.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Train (optional)">
-            <select value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-              <option value="">None</option>
-              {vehicles.data?.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Average speed (km/h)">
-            <input type="number" min={1} max={400} value={speed} onChange={(e) => setSpeed(e.target.value)} />
-          </Field>
+          <SelectField label="Line" required value={route} onValue={setRoute}>
+            <option value="">Choose a line</option>
+            {routes.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Train (optional)" value={vehicle} onValue={setVehicle}>
+            <option value="">None</option>
+            {vehicles.data?.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </SelectField>
+          <TextField label="Average speed (km/h)" type="number" min={1} max={400} value={speed} onValue={setSpeed} />
         </div>
         <FormError message={addTrip.error?.message ?? start.error?.message} />
-        <button className="btn btn-primary" disabled={addTrip.isPending || !route}>
+        <Button kind="primary" type="submit" disabled={addTrip.isPending || !route}>
           Start from the first station
-        </button>
+        </Button>
       </form>
 
       <form
@@ -299,14 +286,14 @@ function Trains({ routes }: { routes: Route[] }) {
         }}
       >
         <h3>Name a new train</h3>
-        <div className="row">
-          <input required aria-label="Train name" value={vehicleName} onChange={(e) => setVehicleName(e.target.value)} />
-          <button className="btn" disabled={addVehicle.isPending}>
+        <div className="row row-end">
+          <TextField label="Train name" required value={vehicleName} onValue={setVehicleName} />
+          <Button type="submit" disabled={addVehicle.isPending}>
             Add train
-          </button>
+          </Button>
         </div>
         <FormError message={addVehicle.error?.message} />
       </form>
-    </section>
+    </Card>
   );
 }

@@ -21,6 +21,12 @@ client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, in
 - **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto). Sessions are HS256 JWTs signed with `JWT_KEY`, sent as an `HttpOnly; Secure; SameSite=Lax` cookie for the web app, or as `Authorization: Bearer` for scripts.
 - **Scaling:** one object is plenty for now. When it isn't, split by region (one World per network of connected lines) and give each player their own object for inventory and messages.
 
+## Design system
+
+The web app uses the [DB UX Design System](https://design-system.deutschebahn.com/) components (`@db-ux/react-core-components`, `@db-ux/core-foundations`, Apache-2.0) with their **white-label theme** and Aboard's own amber brand colour (`web/src/db.css`). Screens use them through a small kit in `web/src/ui.tsx`.
+
+Deutsche Bahn's own brand assets (the `@db-ux/db-theme` package, DB fonts, icons, logo and colours) are licensed only to DB and its contractors, so Aboard doesn't include them. Don't add them unless the project is built for DB under contract.
+
 ## Development
 
 ```sh

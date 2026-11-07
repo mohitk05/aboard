@@ -1,4 +1,5 @@
 import type { StyleSpecification } from "maplibre-gl";
+import { cssColor } from "./color";
 
 // Our own base-map style on OpenFreeMap's free vector tiles (OpenMapTiles schema): just land,
 // water, country borders and place names, in the app's colours. Rail lines, stations and
@@ -12,8 +13,7 @@ export interface MapColors {
   labelHalo: string;
 }
 
-const read = (name: string, fallback: string) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+const read = cssColor;
 
 export function themeColors(): MapColors {
   return {

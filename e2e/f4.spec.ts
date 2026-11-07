@@ -1,4 +1,4 @@
-import { ensureWorld, expect, signUp, test } from "./fixtures";
+import { checkTag, ensureWorld, expect, signUp, test } from "./fixtures";
 
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
@@ -53,12 +53,12 @@ test("F4: meet someone at the station and talk", async ({ browser }) => {
 test("F4: edit your profile and change your password", async ({ page }) => {
   const me = await signUp(page, "Warsaw, Poland", ["Chess"]);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
-  await expect(page.getByRole("button", { name: "Chess" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Music" }).click();
+  await expect(page.getByRole("checkbox", { name: "Chess" })).toBeChecked();
+  await checkTag(page, "Music");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Music" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("checkbox", { name: "Music" })).toBeChecked();
 
   await page.getByLabel("Current password").fill("wrong-one");
   await page.getByLabel("New password").fill("a-new-password");

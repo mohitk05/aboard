@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import type { Stop } from "../api";
 import { arc, trainPosition, type LatLng } from "../lib/motion";
 import type { Route, Trip } from "../world";
+import { cssColor } from "./color";
 import { applyColors, baseStyle, FONT, themeColors } from "./style";
 
 export interface WorldMapProps {
@@ -66,9 +67,7 @@ function trainsGeo(trips: Trip[], now: number, follow?: string | null): FC {
   );
 }
 
-function css(name: string, fallback: string) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
+const css = cssColor;
 
 export function WorldMap({
   stops,

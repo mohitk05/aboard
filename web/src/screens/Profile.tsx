@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, type Interest, type Me } from "../api";
 import { meKey, useLogout, useMe } from "../auth";
-import { Field, FormError } from "../ui";
+import { Button, Card, Check, FormError, Notice, TagPicker, TextField } from "../ui";
 import { NotificationSettings } from "./Notify";
 import { Shell } from "./Shell";
 
@@ -35,34 +35,28 @@ function ProfileForm({ me }: { me: Me }) {
       qc.invalidateQueries({ queryKey: ["fellow"] });
     },
   });
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   return (
-    <form
-      className="card form-wide"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      <h2>What you like to talk about</h2>
-      <div className="chips">
-        {all.data?.map((i) => (
-          <button type="button" key={i.id} className="chip" aria-pressed={picked.includes(i.id)} onClick={() => toggle(i.id)}>
-            {i.name}
-          </button>
-        ))}
-      </div>
-      <label className="check">
-        <input type="checkbox" checked={isPrivate} onChange={(e) => setPrivate(e.target.checked)} />
-        <span>Travel privately (other travellers won't see you or where you are)</span>
-      </label>
-      <FormError message={save.error?.message} />
-      {save.isSuccess && <p className="muted small" role="status">Saved.</p>}
-      <button className="btn btn-primary" disabled={save.isPending}>
-        Save
-      </button>
-    </form>
+    <Card>
+      <form
+        className="form-wide"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <h2>About you</h2>
+        <TagPicker legend="What you like to talk about" options={all.data ?? []} picked={picked} onChange={setPicked} />
+        <Check checked={isPrivate} onValue={setPrivate}>
+          Travel privately (other travellers won't see you or where you are)
+        </Check>
+        <FormError message={save.error?.message} />
+        {save.isSuccess && <Notice tone="successful">Saved.</Notice>}
+        <Button kind="primary" type="submit" disabled={save.isPending}>
+          Save
+        </Button>
+      </form>
+    </Card>
   );
 }
 
@@ -78,30 +72,37 @@ function PasswordForm() {
     change.mutate();
   };
   return (
-    <form className="card form-wide" onSubmit={submit}>
-      <h2>Change password</h2>
-      <Field label="Current password">
-        <input type="password" required autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-      </Field>
-      <Field label="New password" hint="At least 8 characters.">
-        <input type="password" required minLength={8} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
-      </Field>
-      <FormError message={change.error?.message} />
-      {change.isSuccess && <p className="muted small" role="status">Password changed.</p>}
-      <button className="btn" disabled={change.isPending}>
-        Change password
-      </button>
-    </form>
+    <Card>
+      <form className="form-wide" onSubmit={submit}>
+        <h2>Change password</h2>
+        <TextField label="Current password" type="password" required autocomplete="current-password" value={current} onValue={setCurrent} />
+        <TextField
+          label="New password"
+          hint="At least 8 characters."
+          type="password"
+          required
+          minLength={8}
+          autocomplete="new-password"
+          value={next}
+          onValue={setNext}
+        />
+        <FormError message={change.error?.message} />
+        {change.isSuccess && <Notice tone="successful">Password changed.</Notice>}
+        <Button type="submit" disabled={change.isPending}>
+          Change password
+        </Button>
+      </form>
+    </Card>
   );
 }
 
 function LogOut() {
   const logout = useLogout();
   return (
-    <section className="card">
-      <button className="btn" onClick={() => logout.mutate()} disabled={logout.isPending}>
+    <Card>
+      <Button onClick={() => logout.mutate()} disabled={logout.isPending}>
         Log out
-      </button>
-    </section>
+      </Button>
+    </Card>
   );
 }

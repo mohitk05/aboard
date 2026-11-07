@@ -35,8 +35,8 @@ test("F3: board at Lisbon, ride to Madrid, and get welcomed on arrival", async (
 
   // Ride the rest of the way (~630 km at 5 km a tick).
   await tick(request, adminToken, 125);
-  await page.reload();
-  await expect(page.getByRole("status").filter({ hasText: "You've arrived in Madrid" })).toBeVisible();
+  // No reload: the live connection brings the arrival in, and the welcome appears.
+  await expect(page.getByRole("status").filter({ hasText: "You've arrived in Madrid" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Madrid, Spain")).toBeVisible();
   await expect(page.getByRole("region", { name: "Departures" })).toBeVisible();
 

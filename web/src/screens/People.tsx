@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import type { Me } from "../api";
 import { useMe } from "../auth";
 import { useFellowTravellers, useStartChat } from "../people";
-import { FormError } from "../ui";
+import { Button, Card, FormError, Notice, Tags } from "../ui";
 import { Shell } from "./Shell";
 
 export function People() {
@@ -10,10 +10,11 @@ export function People() {
   const fellow = useFellowTravellers();
   const chat = useStartChat();
   const where = me.state === "ONBOARD" ? "In your carriage" : "At your station";
+  const mine = me.interests.map((i) => i.id);
 
   return (
     <Shell>
-      <section className="card" aria-labelledby="people-title">
+      <Card aria-labelledby="people-title" role="region">
         <h1 id="people-title">{where}</h1>
         <p className="muted">
           {me.state === "ONBOARD"
@@ -21,9 +22,9 @@ export function People() {
             : "Travellers here who share something with you. Some of them might be catching your train."}
         </p>
         {!me.interests.length && (
-          <p className="notice-soft">
+          <Notice tone="informational">
             Add some interests on your <Link to="/profile">profile</Link> so we can find people for you.
-          </p>
+          </Notice>
         )}
         <FormError message={fellow.error?.message ?? chat.error?.message} />
         {fellow.data && !fellow.data.length && me.interests.length > 0 && (
@@ -38,21 +39,15 @@ export function People() {
               <div className="person">
                 <strong>{user.username}</strong>
                 <span className="muted small">{Math.round(score)}% in common</span>
-                <div className="chips">
-                  {user.interests.map((i) => (
-                    <span key={i.id} className={`chip chip-small ${me.interests.some((m) => m.id === i.id) ? "is-shared" : ""}`}>
-                      {i.name}
-                    </span>
-                  ))}
-                </div>
+                <Tags items={user.interests} strong={mine} label={`${user.username}'s interests`} />
               </div>
-              <button className="btn btn-small" onClick={() => chat.mutate(user.id)} disabled={chat.isPending}>
+              <Button small onClick={() => chat.mutate(user.id)} disabled={chat.isPending}>
                 Say hello
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
-      </section>
+      </Card>
     </Shell>
   );
 }

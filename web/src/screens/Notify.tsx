@@ -1,11 +1,11 @@
 import { usePush } from "../push";
-import { FormError } from "../ui";
+import { Button, Card, FormError, Notice } from "../ui";
 
 /** Settings card: turn notifications on or off for this device. */
 export function NotificationSettings() {
   const { status, enable, disable } = usePush();
   return (
-    <section className="card form-wide" aria-labelledby="notify-title" role="region">
+    <Card className="form-wide" aria-labelledby="notify-title" role="region">
       <h2 id="notify-title">Notifications</h2>
       <p className="muted small">
         We'll tell you when your train is near, when you've boarded and arrived, and when someone writes to you. Nothing
@@ -13,20 +13,20 @@ export function NotificationSettings() {
       </p>
       <PushState status={status} />
       {status === "off" && (
-        <button className="btn btn-primary" onClick={() => enable.mutate()} disabled={enable.isPending}>
+        <Button kind="primary" onClick={() => enable.mutate()} disabled={enable.isPending}>
           Turn on notifications
-        </button>
+        </Button>
       )}
       {status === "on" && (
         <>
-          <p role="status">Notifications are on for this device.</p>
-          <button className="btn" onClick={() => disable.mutate()} disabled={disable.isPending}>
+          <Notice tone="successful">Notifications are on for this device.</Notice>
+          <Button onClick={() => disable.mutate()} disabled={disable.isPending}>
             Turn off
-          </button>
+          </Button>
         </>
       )}
       <FormError message={enable.error?.message ?? disable.error?.message} />
-    </section>
+    </Card>
   );
 }
 
@@ -39,9 +39,9 @@ export function NotifyNudge({ about }: { about: string }) {
       {status === "off" ? (
         <>
           <span>{about}</span>
-          <button className="btn btn-small" onClick={() => enable.mutate()} disabled={enable.isPending}>
+          <Button small onClick={() => enable.mutate()} disabled={enable.isPending}>
             Notify me
-          </button>
+          </Button>
         </>
       ) : (
         <span>To get notifications on iPhone, add Aboard to your Home Screen: Share → Add to Home Screen.</span>
@@ -54,13 +54,13 @@ export function NotifyNudge({ about }: { about: string }) {
 function PushState({ status }: { status: ReturnType<typeof usePush>["status"] }) {
   switch (status) {
     case "needs-install":
-      return <p className="notice-soft">On iPhone and iPad, add Aboard to your Home Screen first (Share → Add to Home Screen), then open it from there.</p>;
+      return <Notice tone="informational">On iPhone and iPad, add Aboard to your Home Screen first (Share → Add to Home Screen), then open it from there.</Notice>;
     case "unsupported":
-      return <p className="notice-soft">This browser can't show notifications.</p>;
+      return <Notice tone="neutral">This browser can't show notifications.</Notice>;
     case "unavailable":
-      return <p className="notice-soft">Notifications aren't set up on this server yet.</p>;
+      return <Notice tone="neutral">Notifications aren't set up on this server yet.</Notice>;
     case "denied":
-      return <p className="notice-soft">Notifications are blocked for Aboard. Allow them in your browser's site settings.</p>;
+      return <Notice tone="warning">Notifications are blocked for Aboard. Allow them in your browser's site settings.</Notice>;
     default:
       return null;
   }
