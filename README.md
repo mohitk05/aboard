@@ -77,6 +77,8 @@ Admins don't need a `currentStop`. Then create stops, routes and trips with the 
 
   Needs `curl` and `jq`. It runs once (it stops if the Nexus stations exist) and prints the password all seeded travellers share (set `SEED_PASSWORD` to choose it). The top of the script lists where it differs from the old one.
 
+- **Ten more lines** (`scripts/seed-routes.sh`): each runs through three Nexus stations and 4–6 new ones (50 new stations), from the Great Lakes Express to Cape to Bosphorus, with a train on each. Run it after the Nexus seed, the same way (`ADMIN_TOKEN=… ./scripts/seed-routes.sh` also works). It runs once.
+
 `POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
 ### Deploy
