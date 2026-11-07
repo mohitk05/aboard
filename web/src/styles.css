@@ -3,7 +3,8 @@
  *
  * Inspired by aerospace design language (see docs/Design.md): austere and engineered.
  *   - One canvas: black. The Earth imagery supplies every other colour, so the chrome has none:
- *     no brand accent, no gradients, no blur, no drop shadows.
+ *     no brand accent, no gradients, no drop shadows. (The one exception: details panels frost
+ *     the world behind them, so their text reads over busy imagery.)
  *   - Depth is a 1px hairline, never a shadow.
  *   - Titles in Redaction 35 in normal case, tightly tracked; everything else in Barlow, a DIN-style
  *     engineering grotesk. Labels, eyebrows and buttons are small tracked capitals.
@@ -959,6 +960,24 @@ select.input {
   width: min(380px, calc(100vw - 2 * var(--gutter)));
   max-height: calc(100dvh - 80px);
   overflow: auto;
+  /* Details panels sit over busy imagery (lines, labels, city lights): frost what's behind them
+     so their text stays easy to read. */
+  background: rgb(0 0 0 / 0.55);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2); /* standard last, so the minifier keeps it */
+}
+/* Without backdrop blur, fall back to a near-opaque panel. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .inspector {
+    background: rgb(0 0 0 / 0.92);
+  }
+}
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .inspector {
+    background: #000;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 .inspector-head {
   display: flex;
