@@ -3,14 +3,14 @@ import { chromium } from "playwright";
 import { writeFileSync } from "node:fs";
 
 const icon = (pad) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" ${pad ? "" : 'rx="14"'} fill="#15130f"/>
+  <rect width="64" height="64" ${pad ? "" : 'rx="14"'} fill="#000000"/>
   <g transform="translate(32 32) scale(${pad ? 0.72 : 1}) translate(-32 -32)">
-    <rect x="14" y="16" width="36" height="28" rx="8" fill="#f3c14b"/>
-    <rect x="19" y="21" width="11" height="9" rx="2" fill="#15130f"/>
-    <rect x="34" y="21" width="11" height="9" rx="2" fill="#15130f"/>
-    <circle cx="22" cy="38" r="2.5" fill="#15130f"/>
-    <circle cx="42" cy="38" r="2.5" fill="#15130f"/>
-    <path d="M20 44 L14 52 M44 44 L50 52" stroke="#f3c14b" stroke-width="3" stroke-linecap="round"/>
+    <rect x="14" y="16" width="36" height="28" rx="8" fill="#ffffff"/>
+    <rect x="19" y="21" width="11" height="9" rx="2" fill="#000000"/>
+    <rect x="34" y="21" width="11" height="9" rx="2" fill="#000000"/>
+    <circle cx="22" cy="38" r="2.5" fill="#000000"/>
+    <circle cx="42" cy="38" r="2.5" fill="#000000"/>
+    <path d="M20 44 L14 52 M44 44 L50 52" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
   </g>
 </svg>`;
 

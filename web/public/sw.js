@@ -1,6 +1,6 @@
 // Aboard service worker: offline app shell and push notifications.
-const SHELL = "aboard-shell-v2";
-const ASSETS = "aboard-assets-v2";
+const SHELL = "aboard-shell-v3";
+const ASSETS = "aboard-assets-v3";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => c.add("/")).then(() => self.skipWaiting()));

@@ -38,7 +38,7 @@ function sideTexture(kind: "loco" | "carriage"): { map: THREE.CanvasTexture; glo
   } else {
     p.fillStyle = "#d9dee3"; // brushed silver
     p.fillRect(0, 0, w, h);
-    p.fillStyle = "#e09a3a"; // amber stripe (the app's tint)
+    p.fillStyle = "#1e2b30"; // dark window band
     p.fillRect(0, h * 0.72, w, h * 0.1);
     p.fillStyle = "#1e2b30";
     g.fillStyle = "#ffd9a0";

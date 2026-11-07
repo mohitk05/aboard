@@ -1,8 +1,8 @@
 import { useId, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { Link } from "react-router";
 
-// Aboard's UI kit: native HTML elements with Aboard's own styling (web/src/styles.css), coloured
-// by role following Apple's Human Interface Guidelines. Screens use only these.
+// Aboard's UI kit: native HTML elements with Aboard's own styling (web/src/styles.css, described in
+// docs/Design.md). Screens use only these.
 
 /** Page frame: brand bar, then panels floating over the 3D world. */
 export function Page({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
@@ -10,8 +10,7 @@ export function Page({ children, actions }: { children: ReactNode; actions?: Rea
     <div className="page">
       <header className="topbar">
         <Link to="/" className="brand" aria-label="Aboard home">
-          <img src="/favicon.svg" alt="" width={28} height={28} />
-          <span>Aboard</span>
+          Aboard
         </Link>
         <div className="topbar-actions">{actions}</div>
       </header>
@@ -20,7 +19,7 @@ export function Page({ children, actions }: { children: ReactNode; actions?: Rea
   );
 }
 
-/** A departure-board panel: dark slab with amber lettering (Aboard's own look). */
+/** The headline band: a live caps label, a big Redaction title, and a caps subline. */
 export function Board({ label, title, sub }: { label: string; title: string; sub?: string }) {
   return (
     <section className="board" aria-label={label}>

@@ -27,13 +27,13 @@ The whole app is a **three.js world** (`web/src/world3d/`), built following the 
 
 - **A realistic Earth:** NASA Blue Marble imagery by day, city lights at night, terrain relief, sunlight glinting on water, atmospheric haze at the limb and a starfield, all lit by the sun where it really is right now (`earth.ts`, textures and credits in `web/public/textures/`).
 - **Streamed satellite tiles:** zoom in and the globe swaps its whole-Earth texture for map tiles of just the area in view (Web Mercator, zoom 3–8), like a map app (`tiles.ts`). They're NASA GIBS imagery (Blue Marble by day, Black Marble city lights at night, public domain), fetched through the Worker at `/tiles/{day|night}/{z}/{x}/{y}.{jpg|png}`, which caches them at Cloudflare's edge because GIBS sends `no-store`.
-- **Rail lines** drawn at a constant on-screen width; hover one to highlight it.
+- **Rail lines** in cool white at a constant on-screen width; hover one to highlight it.
 - **Trains** made of a locomotive and carriages that follow the curve of the track, with windows that light up at night (`trains.ts`). They move smoothly between world ticks.
 - **Click a train or a line** for its details. The same panels open from "Train details" and "Line details" buttons, so they're reachable by keyboard and screen readers too.
 
 Every screen is a set of panels floating over the world, and steers the camera with `useWorldFocus()`: your station, your trip, the train you're on. The world draws at full frame rate only while it's moving or being touched, and at 15 fps otherwise.
 
-Panels are plain HTML (`web/src/ui.tsx`), so text, forms and screen readers work as usual. Colour follows Apple's [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/color): role-based tokens (label, background, separator, tint) with light, dark and increased-contrast values; amber only for interactive things; status colours always alongside text. Titles are set in Redaction 35 and text in Manrope (Google Fonts).
+Panels are plain HTML (`web/src/ui.tsx`), so text, forms and screen readers work as usual. The look is **mission control** ([docs/Design.md](docs/Design.md)): a black canvas where the Earth supplies all the colour, 1px hairlines instead of shadows, white ghost-pill buttons, titles in Redaction 35 (uppercase, tracked) and everything else in Barlow, with small tracked capitals for labels and navigation. Status colours only ever carry meaning, alongside text.
 
 ## Development
 

@@ -1,69 +1,58 @@
 /* =============================================================================================
- * Aboard styles.
+ * Aboard styles: mission control.
  *
- * Colour follows Apple's Human Interface Guidelines (developer.apple.com/design/human-interface-
- * guidelines/color):
- *   - colours are named by role (label, background, separator, tint), never by hue;
- *   - every colour has light, dark and increased-contrast values;
- *   - the amber tint means one thing only: "you can interact with this";
- *   - status colours (red/green/orange/blue) carry meaning, always alongside text, never alone;
- *   - text meets WCAG contrast (4.5:1) against its background.
- * The departure board is Aboard's brand slab and keeps its own amber-on-black.
+ * Inspired by aerospace design language (see docs/Design.md): austere and engineered.
+ *   - One canvas: black. The Earth imagery supplies every other colour, so the chrome has none:
+ *     no brand accent, no gradients, no blur, no drop shadows.
+ *   - Depth is a 1px hairline, never a shadow.
+ *   - Titles in Redaction 35, uppercase and tracked; everything else in Barlow, a DIN-style
+ *     engineering grotesk. Labels, eyebrows and buttons are small tracked capitals.
+ *   - Buttons are ghost pills: a white outline that fills white on hover.
+ *   - Status colours (red/green/orange/blue) carry meaning only, always alongside text.
  * ============================================================================================= */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  /* Labels: primary → tertiary, for decreasing emphasis. */
-  --label: light-dark(#000000, #ffffff);
-  --label-2: light-dark(rgb(60 60 67 / 0.6), rgb(235 235 245 / 0.6));
-  --label-3: light-dark(rgb(60 60 67 / 0.3), rgb(235 235 245 / 0.3));
+  /* Text on black: white, a cool off-white for secondary, and a dim grey for tertiary. */
+  --label: #ffffff;
+  --label-2: rgb(240 240 250 / 0.66);
+  --label-3: rgb(240 240 250 / 0.38);
 
-  /* Grouped backgrounds: the page, the panels on it, and things grouped inside a panel. */
-  --bg: light-dark(#f2f2f7, #000000);
-  --surface: light-dark(#ffffff, #1c1c1e);
-  --surface-2: light-dark(#f2f2f7, #2c2c2e);
-  --fill: light-dark(rgb(120 120 128 / 0.12), rgb(118 118 128 / 0.24));
-  --separator: light-dark(rgb(60 60 67 / 0.29), rgb(84 84 88 / 0.6));
+  /* Surfaces: the canvas, panels (graded black over the globe), and insets within a panel. */
+  --bg: #000000;
+  --surface: #000000;
+  --surface-2: #0d0d0f;
+  --panel: rgb(0 0 0 / 0.84);
+  --fill: rgb(240 240 250 / 0.08);
+  --hairline: #3a3a3f;
+  --separator: #26262a;
 
-  /* Tint: Aboard amber, darkened enough for 4.5:1 text contrast on white. */
-  --tint: light-dark(#a65c0d, #e09a3a);
-  --on-tint: light-dark(#ffffff, #000000);
-  --tint-fill: var(--tint);
+  /* Interactive = white. (Kept as a token so components read by role, not hue.) */
+  --tint: #ffffff;
+  --on-tint: #000000;
 
-  /* System status colours (text-safe variants). */
-  --red: light-dark(rgb(233 21 45), rgb(255 66 69));
-  --green: light-dark(rgb(0 137 50), rgb(48 209 88));
-  --orange: light-dark(rgb(197 83 0), rgb(255 146 48));
-  --blue: light-dark(rgb(30 110 244), rgb(0 145 255));
-  --danger-fill: var(--red);
+  /* Status, desaturated a little so they sit quietly on black. */
+  --red: #ff5a5f;
+  --green: #4cd486;
+  --orange: #ffa64d;
+  --blue: #5cb2ff;
 
-  /* Brand slab (departure board). */
-  --board-bg: #15130f;
-  --board-edge: light-dark(rgb(0 0 0 / 0.25), #3a3226);
-  --board-ink: #f3c14b;
-  --board-dim: #b59a5c;
-
-  /* Manrope for text, Redaction 35 for titles (both from Google Fonts, see index.html). */
-  --font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-title: "Redaction 35", "Redaction", Georgia, "Times New Roman", serif;
-  --radius: 14px;
+  --font-sans: "Barlow", "D-DIN", "Arial Narrow", Arial, system-ui, sans-serif;
+  --font-title: "Redaction 35", "Redaction", Georgia, serif;
+  --caps-track: 0.09em;
+  --radius: 4px;
+  --pill: 32px;
   --gutter: 16px;
-  --panel: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
-/* Increase Contrast (prefers-contrast: more): stronger secondary text, separators and colours. */
 @media (prefers-contrast: more) {
   :root {
-    --label-2: light-dark(rgb(60 60 67 / 0.85), rgb(235 235 245 / 0.85));
-    --label-3: light-dark(rgb(60 60 67 / 0.6), rgb(235 235 245 / 0.6));
-    --separator: light-dark(rgb(60 60 67 / 0.6), rgb(140 140 145 / 0.9));
-    --tint: light-dark(#8a4a06, #f0b25e);
-    --red: light-dark(rgb(233 21 45), rgb(255 97 101));
-    --green: light-dark(rgb(0 137 50), rgb(74 217 104));
-    --orange: light-dark(rgb(197 83 0), rgb(255 160 86));
-    --blue: light-dark(rgb(30 110 244), rgb(92 184 255));
-    --panel: var(--surface);
+    --label-2: rgb(240 240 250 / 0.88);
+    --label-3: rgb(240 240 250 / 0.66);
+    --hairline: #8a8a90;
+    --separator: #5a5a60;
+    --panel: #000000;
   }
 }
 
@@ -82,45 +71,53 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--label);
-  font: 16px/1.5 var(--font-sans);
+  font: 400 16px/1.5 var(--font-sans);
+  letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
 }
-/* Titles: Redaction 35 has a single (regular) weight, so no faux bold. */
+/* Titles: Redaction 35 (one weight), uppercase with wide tracking and tight leading. */
 h1,
 h2,
 .board-title,
 .brand {
   font-family: var(--font-title);
   font-weight: 400;
-  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 h1 {
-  font-size: 1.75rem;
-  line-height: 1.2;
-  margin: 0 0 0.5rem;
+  font-size: 1.9rem;
+  line-height: 1.05;
+  margin: 0 0 0.75rem;
 }
 h2 {
   font-size: 1.3rem;
-  margin: 0 0 0.75rem;
+  line-height: 1.1;
+  margin: 0 0 0.9rem;
 }
-h3 {
-  font-size: 1rem;
-  margin: 1.25rem 0 0.5rem;
-  font-weight: 650;
+/* Small headings are caps eyebrows, like every other label. */
+h3,
+.eyebrow {
+  font: 600 0.75rem/1.6 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  color: var(--label-2);
+  margin: 1.5rem 0 0.5rem;
 }
 a {
-  color: var(--tint);
+  color: var(--label);
+  text-underline-offset: 3px;
 }
 :focus-visible {
-  outline: 3px solid var(--tint);
-  outline-offset: 2px;
-  border-radius: 6px;
+  outline: 2px solid var(--tint);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 .muted {
   color: var(--label-2);
 }
 .small {
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 .sr-only {
   position: absolute;
@@ -133,12 +130,12 @@ a {
   border: 0;
 }
 
-/* ---------- layout: panels float over the 3D world ---------- */
+/* ---------- layout: panels over the 3D world ---------- */
 .world {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: #02060a; /* space, until the starfield loads */
+  background: #000;
 }
 .world canvas {
   display: block;
@@ -149,28 +146,27 @@ a {
   inset: 0;
   pointer-events: none;
 }
-/* Labels sit on the photographic Earth, so they're always light-on-dark. */
 .world-label {
-  font: 600 12px/1 var(--font-sans);
-  color: #f1f7fa;
+  font: 600 11px/1 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #f0f0fa;
   text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px #000;
   white-space: nowrap;
   transform: translateY(-14px);
   pointer-events: none;
 }
 .world-label.is-highlight {
-  font-size: 14px;
-  color: #f3c14b;
+  font-size: 13px;
+  color: #fff;
 }
 
 .page {
   position: relative;
   z-index: 1;
-  /* dvh: the visible height on mobile (100vh includes the space under the browser bars). */
   min-height: 100vh;
   min-height: 100dvh;
-  /* Own block formatting context, so the top bar's margin can't collapse through the page and
-     push the document a few pixels past the viewport. */
+  /* Own block formatting context, so no margin collapses through and adds a scrollbar. */
   display: flow-root;
   /* The world behind stays draggable wherever there's no panel. */
   pointer-events: none;
@@ -180,41 +176,33 @@ a {
 .content > * {
   pointer-events: auto;
 }
+/* The nav floats over the imagery, with no bar behind it: white type straight on the world. */
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px var(--gutter);
-  margin: 12px var(--gutter) 0;
-  border-radius: var(--radius);
-  background: var(--panel);
-  backdrop-filter: saturate(1.6) blur(16px);
-  -webkit-backdrop-filter: saturate(1.6) blur(16px);
-  box-shadow: 0 0 0 1px var(--separator);
+  gap: 16px;
+  padding: 20px calc(var(--gutter) + 8px) 8px;
+  text-shadow: 0 0 6px rgb(0 0 0 / 0.8);
 }
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   color: var(--label);
   text-decoration: none;
-  font-size: 1.3rem;
+  font-size: 1.35rem;
+  letter-spacing: 0.22em;
 }
 .content {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   align-content: start;
-  padding: 16px var(--gutter) 48px;
+  padding: 12px var(--gutter) 48px;
 }
 
-/* Wide screens: a column of panels on the left, the world everywhere else. */
 @media (min-width: 900px) {
-  .topbar {
-    max-width: 460px;
-  }
   .content {
-    max-width: calc(460px + 2 * var(--gutter));
+    max-width: calc(440px + 2 * var(--gutter));
   }
 }
 /* Phones: the world fills the top of the screen; panels scroll up over it like a sheet. */
@@ -224,54 +212,68 @@ a {
   }
 }
 
-/* ---------- departure board (brand slab) ---------- */
+/* ---------- the board: the headline band over the world ---------- */
 .board {
-  background: var(--board-bg);
-  color: var(--board-ink);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius);
   padding: 18px 20px 20px;
   font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 0 0 1px var(--board-edge), 0 10px 30px -18px #000;
 }
 .board-label {
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--board-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  color: var(--label-2);
+}
+.board-label::before {
+  /* A live indicator: the one bit of motion in the chrome. */
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--label);
+  vertical-align: 2px;
+  animation: pulse 2.4s ease-in-out infinite;
 }
 .board-title {
-  font-size: clamp(1.7rem, 6.5vw, 2.4rem);
-  line-height: 1.2;
-  margin-top: 6px;
+  font-size: clamp(1.6rem, 6vw, 2.2rem);
+  line-height: 1.05;
+  margin-top: 10px;
   overflow-wrap: anywhere;
 }
 .board-sub {
-  margin-top: 6px;
-  color: var(--board-dim);
+  margin-top: 10px;
+  color: var(--label-2);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
 }
 
 /* ---------- panels ---------- */
 .card {
   background: var(--panel);
-  backdrop-filter: saturate(1.6) blur(16px);
-  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius);
   padding: 20px;
-  box-shadow: 0 0 0 1px var(--separator), 0 12px 32px -20px rgb(0 0 0 / 0.5);
 }
 .hero h1 {
-  font-size: clamp(1.9rem, 5.5vw, 2.5rem);
+  font-size: clamp(2rem, 6vw, 2.6rem);
+  line-height: 1;
 }
 .lede {
   color: var(--label-2);
-  font-size: 1.05rem;
+  font-size: 1rem;
+  line-height: 1.7;
   max-width: 56ch;
 }
 .form,
 .form-wide {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 .form-card {
   width: 100%;
@@ -316,105 +318,141 @@ ol.list {
 }
 
 /* ---------- controls ---------- */
+/* Ghost pills: outlined, uppercase, filling white on hover. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px; /* HIG minimum touch target */
-  padding: 0 18px;
-  border-radius: 12px;
-  border: 0;
-  font: 600 1rem var(--font-sans);
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: var(--pill);
+  border: 1px solid var(--tint);
+  background: transparent;
+  color: var(--tint);
+  font: 700 0.8125rem/1 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
   text-decoration: none;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: default;
 }
-.btn-primary {
-  background: var(--tint-fill);
+.btn:not(:disabled):hover {
+  background: var(--tint);
   color: var(--on-tint);
 }
 .btn-secondary {
-  background: var(--fill);
-  color: var(--tint);
+  border-color: var(--hairline);
+}
+.btn-secondary:not(:disabled):hover {
+  border-color: var(--tint);
 }
 .btn-quiet {
+  border-color: transparent;
+  padding: 0 4px;
+}
+.btn-quiet:not(:disabled):hover {
   background: transparent;
   color: var(--tint);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .btn-danger {
-  background: var(--danger-fill);
-  color: #fff;
+  border-color: var(--red);
+  color: var(--red);
 }
-.btn:not(:disabled):hover {
-  filter: brightness(1.06);
+.btn-danger:not(:disabled):hover {
+  background: var(--red);
+  color: #000;
 }
 .btn-small {
-  min-height: 36px;
-  padding: 0 14px;
-  font-size: 0.95rem;
+  min-height: 34px;
+  padding: 0 16px;
+  font-size: 0.75rem;
 }
 .linklike {
   background: none;
   border: 0;
   padding: 0;
-  color: var(--tint);
+  color: var(--label);
   font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   border: 0;
   margin: 0;
   padding: 0;
   min-width: 0;
 }
 .field-label {
-  font-weight: 600;
   padding: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  color: var(--label-2);
 }
 .field-hint {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   color: var(--label-2);
 }
 .input {
   width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: var(--fill);
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: #000;
   color: var(--label);
-  font: 1rem var(--font-sans);
+  font: 400 1rem var(--font-sans);
+  letter-spacing: 0.02em;
 }
 .input::placeholder {
   color: var(--label-3);
 }
+.input:hover {
+  border-color: #5a5a60;
+}
 .input:focus-visible {
-  outline: 2px solid var(--tint);
-  outline-offset: 0;
+  outline: none;
+  border-color: var(--tint);
 }
 .input:user-invalid {
   border-color: var(--red);
 }
+select.input {
+  appearance: none;
+  padding-right: 36px;
+  background: #000
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23f0f0fa' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
+}
 .textarea {
-  padding: 10px 12px;
+  padding: 12px 14px;
   resize: vertical;
 }
 .check {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
 }
 .check input {
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-  accent-color: var(--tint);
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: #fff;
 }
 
 .chips {
@@ -428,21 +466,28 @@ ol.list {
 .tag {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
+  min-height: 28px;
   padding: 0 12px;
-  border-radius: 999px;
-  background: var(--fill);
-  color: var(--label);
-  font-size: 0.9rem;
+  border-radius: var(--pill);
+  border: 1px solid var(--hairline);
+  color: var(--label-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
 }
 .tag-shared {
-  background: var(--label);
-  color: var(--surface);
+  border-color: var(--label);
+  color: var(--label);
 }
 .tag-toggle {
   position: relative;
   min-height: 36px;
   cursor: pointer;
+}
+.tag-toggle:hover {
+  border-color: var(--label);
+  color: var(--label);
 }
 .tag-toggle input {
   position: absolute;
@@ -452,32 +497,36 @@ ol.list {
   cursor: pointer;
 }
 .tag-toggle:has(input:checked) {
-  background: var(--tint-fill);
+  background: var(--tint);
+  border-color: var(--tint);
   color: var(--on-tint);
 }
 .tag-toggle:has(input:focus-visible) {
-  outline: 3px solid var(--tint);
-  outline-offset: 2px;
+  outline: 2px solid var(--tint);
+  outline-offset: 3px;
 }
 .badge {
   display: inline-block;
   margin-left: 8px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--label);
-  color: var(--surface);
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid var(--label);
+  border-radius: var(--pill);
+  color: var(--label);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
   vertical-align: 2px;
 }
 
-/* Status messages: tinted background + coloured edge, but the text stays in label colour. */
+/* Status messages: a coloured rule on the left; the text stays white. */
 .notice {
   margin: 0;
   padding: 10px 14px;
-  border-radius: 12px;
-  border-left: 4px solid var(--tone);
-  background: color-mix(in srgb, var(--tone) 12%, var(--surface));
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--tone);
+  border-radius: var(--radius);
+  background: var(--surface-2);
   color: var(--label);
 }
 .notice-informational {
@@ -503,26 +552,34 @@ ol.list {
   justify-content: space-between;
   gap: 8px 12px;
   padding: 10px 14px;
+  border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--panel);
-  box-shadow: 0 0 0 1px var(--separator);
 }
 
-/* ---------- navigation ---------- */
+/* ---------- navigation: caps microtext straight on the world ---------- */
 .nav {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 4px 14px;
-  font-weight: 600;
+  gap: 4px 22px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
 }
 .nav a {
   color: var(--label-2);
   text-decoration: none;
-  padding: 6px 0;
+  padding: 8px 0;
+  border-bottom: 1px solid transparent;
+}
+.nav a:hover {
+  color: var(--label);
 }
 .nav a.active {
-  color: var(--tint);
+  color: var(--label);
+  border-bottom-color: var(--label);
 }
 @media (max-width: 640px) {
   .nav {
@@ -534,17 +591,21 @@ ol.list {
     flex-wrap: nowrap;
     justify-content: space-around;
     gap: 0;
-    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
-    background: var(--panel);
-    backdrop-filter: saturate(1.6) blur(16px);
-    -webkit-backdrop-filter: saturate(1.6) blur(16px);
-    box-shadow: 0 -1px 0 var(--separator);
-    font-size: 0.85rem;
+    padding: 0 4px env(safe-area-inset-bottom);
+    background: #000;
+    border-top: 1px solid var(--hairline);
+    text-shadow: none;
+    font-size: 0.6875rem;
   }
   .nav a {
     flex: 1;
     text-align: center;
-    padding: 12px 2px;
+    padding: 16px 2px;
+    border-bottom: 0;
+    border-top: 2px solid transparent;
+  }
+  .nav a.active {
+    border-top-color: var(--label);
   }
   .content {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
@@ -557,42 +618,45 @@ ol.list {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  border-top: 1px solid var(--separator);
+}
+.departures > li {
+  border-bottom: 1px solid var(--separator);
 }
 .departure {
   width: 100%;
   display: grid;
   grid-template-columns: minmax(4.5rem, max-content) 1fr;
   grid-template-areas: "time dest" "time status";
-  gap: 2px 12px;
+  gap: 2px 16px;
   align-items: baseline;
   text-align: left;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 14px 4px;
   border: 0;
-  background: var(--surface-2);
+  background: transparent;
   color: var(--label);
   font: inherit;
   cursor: pointer;
 }
+.departure:hover {
+  background: var(--fill);
+}
 .departures .is-open .departure {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  box-shadow: inset 0 0 0 2px var(--tint);
+  background: var(--fill);
 }
 .dep-time {
   grid-area: time;
   display: grid;
   white-space: nowrap;
   align-self: start;
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .dep-day {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--caps-track);
   color: var(--label-2);
 }
 .dep-dest {
@@ -601,67 +665,70 @@ ol.list {
   flex-wrap: wrap;
   gap: 0 8px;
   align-items: baseline;
+  font-weight: 600;
 }
 .dep-status {
   grid-area: status;
-  font-size: 0.9rem;
+  font-size: 0.8125rem;
   color: var(--label-2);
   font-variant-numeric: tabular-nums;
 }
 .dep-status.is-boarding {
   color: var(--green);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
 }
 .ticket-window {
-  border-radius: 0 0 12px 12px;
-  padding: 4px 14px 12px;
-  box-shadow: inset 0 0 0 2px var(--tint);
-  background: var(--surface);
+  padding: 4px 4px 16px;
+  background: var(--fill);
 }
 .ticket-window h3 {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 /* ---------- ticket & journey ---------- */
 .facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px 20px;
-  margin: 0 0 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px 20px;
+  margin: 0 0 16px;
 }
 .facts dt {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--caps-track);
   color: var(--label-2);
 }
 .facts dd {
-  margin: 2px 0 0;
-  font-size: 1.05rem;
+  margin: 4px 0 0;
+  font-size: 1.125rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .trip-progress {
   display: grid;
-  gap: 8px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 .trip-ends {
   display: flex;
   justify-content: space-between;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
 }
 .bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--fill);
+  height: 2px;
+  background: var(--hairline);
   overflow: hidden;
 }
 .bar > span {
   display: block;
   height: 100%;
-  background: var(--tint-fill);
-  border-radius: inherit;
+  background: var(--tint);
   transition: width 1s linear;
 }
 .timeline {
@@ -673,11 +740,11 @@ ol.list {
 .timeline::before {
   content: "";
   position: absolute;
-  left: 7px;
-  top: 10px;
-  bottom: 10px;
-  width: 2px;
-  background: var(--separator);
+  left: 5px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--hairline);
 }
 .timeline li {
   position: relative;
@@ -689,30 +756,31 @@ ol.list {
 .timeline li::before {
   content: "";
   position: absolute;
-  left: -20px;
-  top: 13px;
-  width: 12px;
-  height: 12px;
+  left: -21px;
+  top: 14px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--label-2);
+  background: #000;
+  border: 1px solid var(--label-2);
 }
 .timeline .is-passed {
-  color: var(--label-2);
+  color: var(--label-3);
 }
 .timeline .is-passed::before {
   background: var(--label-3);
   border-color: var(--label-3);
 }
 .timeline .is-current::before {
-  background: var(--board-ink);
-  border-color: var(--board-bg);
-  box-shadow: 0 0 0 3px var(--label);
+  background: var(--label);
+  border-color: var(--label);
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.18);
 }
 .timeline .is-destination {
   font-weight: 700;
 }
 .timeline .is-destination::before {
+  border-radius: 1px;
   background: var(--label);
   border-color: var(--label);
 }
@@ -722,16 +790,20 @@ ol.list {
 .tl-time {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  color: var(--label-2);
 }
 .start-station {
   display: grid;
   gap: 6px;
   padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
 }
 .start-name {
-  font-size: 1.25rem;
+  font-family: var(--font-title);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1.3rem;
 }
 
 /* ---------- people & messages ---------- */
@@ -742,9 +814,10 @@ ol.list {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-weight: 700;
+  border: 1px solid var(--hairline);
+  color: var(--label);
+  font-family: var(--font-title);
+  text-transform: uppercase;
 }
 .people,
 .inbox {
@@ -768,7 +841,7 @@ ol.list {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 .inbox a {
   display: flex;
@@ -778,6 +851,10 @@ ol.list {
   border-bottom: 1px solid var(--separator);
   color: inherit;
   text-decoration: none;
+}
+.inbox a:hover .inbox-text > :first-child {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .inbox-text {
   flex: 1;
@@ -810,7 +887,7 @@ ol.list {
 .messages li {
   max-width: 80%;
   padding: 8px 12px;
-  border-radius: 18px;
+  border-radius: var(--radius);
   display: grid;
   gap: 2px;
 }
@@ -820,19 +897,19 @@ ol.list {
   overflow-wrap: anywhere;
 }
 .messages time {
-  font-size: 0.75rem;
-  opacity: 0.75;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  opacity: 0.7;
 }
 .messages .theirs {
   justify-self: start;
-  background: var(--surface-2);
-  border-bottom-left-radius: 4px;
+  border: 1px solid var(--hairline);
 }
 .messages .mine {
   justify-self: end;
-  background: var(--tint-fill);
+  background: var(--tint);
   color: var(--on-tint);
-  border-bottom-right-radius: 4px;
 }
 .compose {
   display: flex;
@@ -855,20 +932,24 @@ ol.list {
   gap: 12px;
   padding: var(--gutter);
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
 }
 .pulse {
   animation: pulse 1.6s ease-in-out infinite;
 }
 @keyframes pulse {
   50% {
-    opacity: 0.45;
+    opacity: 0.35;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pulse {
+  .pulse,
+  .board-label::before {
     animation: none;
   }
-  .bar > span {
+  .bar > span,
+  .btn {
     transition: none;
   }
 }
@@ -878,29 +959,28 @@ ol.list {
   position: fixed;
   z-index: 5;
   right: var(--gutter);
-  top: 12px;
+  top: 64px;
   width: min(380px, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100dvh - 24px);
+  max-height: calc(100dvh - 80px);
   overflow: auto;
 }
 .inspector-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 .inspector-kind {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--caps-track);
   color: var(--label-2);
-  font-weight: 600;
+  font-weight: 700;
 }
 .inspector h2:focus {
   outline: none;
 }
 @media (max-width: 899px) {
-  /* Phones: a sheet over the lower part of the screen, above the tab bar. */
   .inspector {
     top: auto;
     left: var(--gutter);
@@ -917,5 +997,5 @@ ol.list {
 }
 .input-small {
   width: 5.5rem;
-  min-height: 36px;
+  min-height: 34px;
 }

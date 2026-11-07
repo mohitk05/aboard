@@ -40,10 +40,10 @@ function arcPoints(a: LatLng, b: LatLng, r: number): THREE.Vector3[] {
 }
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
-// Lines use the app's tint (the dark-mode amber reads best on the photographic Earth);
-// a hovered or selected line brightens to a lighter amber.
-const LINE = 0xe09a3a;
-const LINE_HOT = 0xffd27a;
+// Lines are a cool white, like everything else in the chrome: the Earth supplies the colour.
+// A hovered or selected line brightens to pure white and thickens.
+const LINE = 0xc8ccd6;
+const LINE_HOT = 0xffffff;
 
 export default function World3D({ stops, routes, trips, focus, selection }: World3DProps) {
   const host = useRef<HTMLDivElement>(null);
