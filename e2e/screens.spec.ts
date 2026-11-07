@@ -1,4 +1,4 @@
-import { ensureWorld, signUp, test, tick } from "./fixtures";
+import { ensureWorld, signUp, test, tick, logOut } from "./fixtures";
 
 // Screenshots of the main screens for a visual check. Skipped unless SHOTS is set:
 //   SHOTS=/some/dir npm run e2e -- screens
@@ -28,7 +28,7 @@ test("capture screens", async ({ page, request }) => {
     headers: { Authorization: `Bearer ${adminToken}` },
     data: { trip: { route: seed.route, active: true } },
   });
-  await page.getByRole("button", { name: "Log out" }).click();
+  await logOut(page);
   await signUp(page, "Lisbon, Portugal");
   const board = page.getByRole("region", { name: "Departures" });
   await board.getByRole("button", { name: /Boarding/ }).first().click();
@@ -38,4 +38,11 @@ test("capture screens", async ({ page, request }) => {
   await page.getByText(/On board/).waitFor();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${dir}/journey.png`, fullPage: true });
+
+  await page.getByRole("link", { name: "People" }).click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${dir}/people.png` });
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${dir}/profile.png` });
 });

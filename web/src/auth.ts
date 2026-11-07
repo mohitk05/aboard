@@ -53,10 +53,9 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => api("POST", "/user/logout"),
     onSuccess: () => {
-      // Set "me" first so mounted screens switch to signed-out; then drop everything else.
-      // (qc.clear() would also drop the "me" query that the Gate is subscribed to.)
-      qc.setQueryData(meKey, null);
-      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== meKey[0] });
+      // Start clean on the landing page: a full load drops every cached query and screen state.
+      qc.clear();
+      window.location.assign("/");
     },
   });
 }

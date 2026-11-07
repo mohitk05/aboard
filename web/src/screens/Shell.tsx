@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router";
 import { ADMIN_ROLE } from "../api";
-import { useLogout, useMe } from "../auth";
+import { useMe } from "../auth";
 import { Page } from "../ui";
 
-/** Layout for signed-in screens: brand, navigation, log out. */
+/** Layout for signed-in screens: brand and navigation (a bottom tab bar on phones). */
 export function Shell({ children }: { children: ReactNode }) {
   const me = useMe().data;
-  const logout = useLogout();
   return (
     <Page
       actions={
@@ -15,10 +14,10 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/" end>
             Journey
           </NavLink>
+          <NavLink to="/people">People</NavLink>
+          <NavLink to="/messages">Messages</NavLink>
+          <NavLink to="/profile">Profile</NavLink>
           {me?.role === ADMIN_ROLE && <NavLink to="/admin">Admin</NavLink>}
-          <button className="linklike" onClick={() => logout.mutate()} disabled={logout.isPending}>
-            Log out
-          </button>
         </nav>
       }
     >

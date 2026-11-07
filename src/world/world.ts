@@ -715,6 +715,33 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  /** Change what other travellers see about you, and who you're matched with. */
+  updateProfile(userId: string, input: { interests?: string[]; image?: string | null; profileMode?: ProfileMode }) {
+    return guard(() => {
+      const u = this.userRow(userId);
+      if (input.interests) for (const i of input.interests) this.interestRow(i);
+      this.ctx.storage.transactionSync(() => {
+        if (input.image !== undefined) this.sql.exec("UPDATE users SET image = ? WHERE id = ?", input.image, userId);
+        if (input.profileMode) this.sql.exec("UPDATE users SET profile_mode = ? WHERE id = ?", input.profileMode, userId);
+        if (input.interests) {
+          this.sql.exec("DELETE FROM user_interests WHERE user_id = ?", userId);
+          for (const i of new Set(input.interests))
+            this.sql.exec("INSERT INTO user_interests (user_id, interest_id) VALUES (?, ?)", userId, i);
+        }
+      });
+      return this.privateUserOut(this.userRow(u.id));
+    });
+  }
+
+  /** For password changes: the Worker checks the old password, then stores the new hash. */
+  getPasswordHash(userId: string): string | null {
+    return this.sql.exec<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = ?", userId).toArray()[0]?.password_hash ?? null;
+  }
+
+  setPasswordHash(userId: string, hash: string): void {
+    this.sql.exec("UPDATE users SET password_hash = ? WHERE id = ?", hash, userId);
+  }
+
   /** For login only. The password hash leaves the Durable Object so the Worker can check it. */
   getCredentials(email: string) {
     const u = this.sql.exec<UserRow>("SELECT * FROM users WHERE email = ?", email).toArray()[0];
@@ -805,12 +832,63 @@ export class World extends DurableObject<Env> {
       const all = [...new Set([userId, ...members])];
       if (all.length < 2) throw badRequest("A conversation needs someone else in it.");
       for (const m of all) this.userRow(m);
+      // One-to-one chats are reused: messaging the same person again opens the same thread.
+      if (all.length === 2) {
+        const existing = this.sql
+          .exec<{ conversation_id: string }>(
+            `SELECT conversation_id FROM conversation_members
+             GROUP BY conversation_id
+             HAVING COUNT(*) = 2 AND SUM(user_id = ?) = 1 AND SUM(user_id = ?) = 1`,
+            all[0]!,
+            all[1]!,
+          )
+          .toArray()[0];
+        if (existing) return { id: existing.conversation_id, members: all };
+      }
       const id = newId();
       this.ctx.storage.transactionSync(() => {
         this.sql.exec("INSERT INTO conversations (id, created_at) VALUES (?, ?)", id, Date.now());
         for (const m of all) this.sql.exec("INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)", id, m);
       });
       return { id, members: all };
+    });
+  }
+
+  /** Your conversations, most recently active first, with the other people and the last message. */
+  listConversations(userId: string) {
+    const rows = this.sql
+      .exec<{ id: string; created_at: number; last_at: number | null }>(
+        `SELECT c.id, c.created_at, MAX(m.created_at) AS last_at
+         FROM conversations c
+         JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
+         LEFT JOIN messages m ON m.conversation_id = c.id
+         GROUP BY c.id
+         ORDER BY COALESCE(MAX(m.created_at), c.created_at) DESC`,
+        userId,
+      )
+      .toArray();
+    return rows.map((c) => {
+      const others = this.sql
+        .exec<UserRow>(
+          `SELECT u.* FROM users u JOIN conversation_members cm ON cm.user_id = u.id
+           WHERE cm.conversation_id = ? AND u.id != ?`,
+          c.id,
+          userId,
+        )
+        .toArray()
+        .map((u) => ({ id: u.id, username: u.username, image: u.image }));
+      const last = this.sql
+        .exec<{ from_user_id: string; body: string; created_at: number }>(
+          "SELECT from_user_id, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+          c.id,
+        )
+        .toArray()[0];
+      return {
+        id: c.id,
+        with: others,
+        lastMessage: last ? { from: last.from_user_id, body: last.body, createdAt: last.created_at } : null,
+        updatedAt: c.last_at ?? c.created_at,
+      };
     });
   }
 

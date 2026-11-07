@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: F0–F3 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
+Status: F0–F4 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 
@@ -125,7 +125,7 @@ Each milestone ends with something you can deploy and use. Backend changes ship 
 - Journey screen, stop timeline with ETAs, arrival handling (you're put back at a station).
 - *Done when:* a player rides Paris → Berlin from start to finish without touching the API.
 
-**F4 People**
+**F4 People (done)**
 - Fellow travellers at the station and in the carriage. Inbox and chat (polling at first). Profile editing.
 - *Done when:* two players at the same stop find each other by interests and talk.
 

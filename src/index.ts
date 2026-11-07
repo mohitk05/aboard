@@ -83,6 +83,14 @@ const schemas = {
       image: z.string().url().max(2048).optional(),
     }),
   }),
+  profile: z.object({
+    user: z.object({
+      interests: z.array(id).max(50).optional(),
+      image: z.string().url().max(2048).nullable().optional(),
+      profileMode: z.enum(PROFILE_MODES).optional(),
+    }),
+  }),
+  password: z.object({ current: z.string().min(1).max(256), next: z.string().min(8).max(256) }),
   conversation: z.object({ conversation: z.object({ members: z.array(id).min(1).max(50) }) }),
   message: z.object({ message: z.object({ title: z.string().max(200).optional(), body: z.string().min(1).max(5000) }) }),
 };
@@ -210,6 +218,15 @@ app.post("/user", admin, async (c) => {
   return send(c, world(c.env).createUser({ ...rest, passwordHash: await hashPassword(password) }), 201);
 });
 app.get("/user/me", anyone, (c) => send(c, world(c.env).getUser(c.var.user.id, c.var.user)));
+app.patch("/user/me", anyone, async (c) => send(c, world(c.env).updateProfile(c.var.user.id, (await body(c, schemas.profile)).user)));
+app.post("/user/password", anyone, async (c) => {
+  const { current, next } = await body(c, schemas.password);
+  const w = world(c.env);
+  const stored = await w.getPasswordHash(c.var.user.id);
+  if (!stored || !(await verifyPassword(current, stored))) return fail(c, 403, "Your current password is wrong.");
+  await w.setPasswordHash(c.var.user.id, await hashPassword(next));
+  return ok(c, { changed: true });
+});
 app.get("/user/fellow-users", anyone, (c) => send(c, world(c.env).getFellowUsers(c.var.user.id)));
 app.get("/user/:id", anyone, (c) => send(c, world(c.env).getUser(param(c, "id"), c.var.user)));
 
@@ -227,6 +244,7 @@ app.post("/interest", admin, async (c) =>
 );
 
 // Messaging
+app.get("/conversation", anyone, (c) => world(c.env).listConversations(c.var.user.id).then((list) => ok(c, list)));
 app.post("/conversation", anyone, async (c) =>
   send(c, world(c.env).createConversation(c.var.user.id, (await body(c, schemas.conversation)).conversation.members), 201),
 );

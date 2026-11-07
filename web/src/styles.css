@@ -614,3 +614,174 @@ ol.list {
     transition: none;
   }
 }
+
+/* ---------- people & messages ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+.notice-soft {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px dashed var(--line);
+}
+.avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--board-bg);
+  color: var(--board-ink);
+  font: 600 1.05rem var(--font-mono);
+}
+.people,
+.inbox {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.people > li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.people > li:last-child,
+.inbox > li:last-child a {
+  border-bottom: 0;
+}
+.person {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.chip-small {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+.chip.is-shared {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.inbox a {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.inbox-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.inbox-last {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat {
+  display: grid;
+  gap: 12px;
+}
+.chat-head {
+  display: grid;
+  gap: 4px;
+}
+.chat-head h1 {
+  margin: 0;
+}
+.messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.messages li {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  display: grid;
+  gap: 2px;
+}
+.messages p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.messages time {
+  opacity: 0.7;
+}
+.messages .theirs {
+  justify-self: start;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+.messages .mine {
+  justify-self: end;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-bottom-right-radius: 4px;
+}
+.compose {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.compose textarea {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 1rem var(--font-sans);
+  resize: vertical;
+}
+
+/* Phones: navigation becomes a bottom tab bar. */
+@media (max-width: 640px) {
+  .nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    flex-wrap: nowrap;
+    justify-content: space-around;
+    gap: 0;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    font-size: 0.9rem;
+  }
+  .nav a {
+    flex: 1;
+    text-align: center;
+    padding: 12px 2px;
+  }
+  .nav a.active {
+    box-shadow: inset 0 3px 0 var(--accent);
+  }
+  .content {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}

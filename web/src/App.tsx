@@ -3,6 +3,9 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { ADMIN_ROLE } from "./api";
 import { useMe } from "./auth";
 import { Admin } from "./screens/Admin";
+import { Conversation, Inbox } from "./screens/Messages";
+import { People } from "./screens/People";
+import { Profile } from "./screens/Profile";
 import { Home } from "./screens/Home";
 import { Landing } from "./screens/Landing";
 import { Login } from "./screens/Login";
@@ -24,13 +27,23 @@ function AdminOnly({ children }: { children: ReactNode }) {
   return <>{me?.role === ADMIN_ROLE ? children : home}</>;
 }
 
-const router = createBrowserRouter([
+function RouteError() {
+  return <Splash error="Something went wrong on this screen." onRetry={() => window.location.assign("/")} />;
+}
+
+const routes = [
   { path: "/", element: <Gate signedIn={<Home />} signedOut={<Landing />} /> },
   { path: "/login", element: <Gate signedIn={home} signedOut={<Login />} /> },
   { path: "/signup", element: <Gate signedIn={home} signedOut={<Signup />} /> },
+  { path: "/people", element: <Gate signedIn={<People />} signedOut={<Navigate to="/login" replace />} /> },
+  { path: "/messages", element: <Gate signedIn={<Inbox />} signedOut={<Navigate to="/login" replace />} /> },
+  { path: "/messages/:id", element: <Gate signedIn={<Conversation />} signedOut={<Navigate to="/login" replace />} /> },
+  { path: "/profile", element: <Gate signedIn={<Profile />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/admin", element: <Gate signedIn={<AdminOnly><Admin /></AdminOnly>} signedOut={<Navigate to="/login" replace />} /> },
   { path: "*", element: home },
-]);
+];
+
+const router = createBrowserRouter(routes.map((r) => ({ ...r, errorElement: <RouteError /> })));
 
 export function App() {
   return <RouterProvider router={router} />;

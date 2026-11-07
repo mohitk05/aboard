@@ -85,6 +85,8 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/user/me` | player | includes `journey` (ticket, train, stop-by-stop arrival times) when you have a ticket |
 | GET | `/user/:id` | player | (email etc. only for yourself or admin) |
 | GET | `/user/fellow-users` | player | |
+| PATCH | `/user/me` | player | `{ user: { interests?, image?, profileMode? } }` |
+| POST | `/user/password` | player | `{ current, next }` |
 | POST | `/user` | admin | same as signup |
 | GET | `/stop` | anyone | all stops |
 | GET | `/stop/:id` | player | |
@@ -107,7 +109,8 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/ticket/:id` | admin | |
 | GET | `/interest` | anyone | |
 | POST | `/interest` | admin | `{ interest: { name, description?, image? } }` |
-| POST | `/conversation` | player | `{ conversation: { members: [userId, …] } }` |
+| GET | `/conversation` | player | your conversations, newest activity first, with the last message |
+| POST | `/conversation` | player | `{ conversation: { members: [userId, …] } }` (one-to-one chats are reused) |
 | GET | `/conversation/:id/messages` | member | |
 | POST | `/conversation/:id/messages` | member | `{ message: { title?, body } }` |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |

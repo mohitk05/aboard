@@ -1,4 +1,4 @@
-import { ADMIN, ensureWorld, expect, signUp, test } from "./fixtures";
+import { ADMIN, ensureWorld, expect, signUp, test, logOut } from "./fixtures";
 
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
@@ -14,7 +14,7 @@ test("F0: sign up, stay signed in, log out, log back in", async ({ page, context
   await page.reload();
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Log out" }).click();
+  await logOut(page);
   await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
 
   await page.goto("/login");

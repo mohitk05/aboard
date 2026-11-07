@@ -52,6 +52,13 @@ export async function signUp(page: Page, station: string, interests: string[] = 
   return { username, email: `${username}@e2e.test` };
 }
 
+/** Log out from the Profile tab and wait for the landing page. */
+export async function logOut(page: Page) {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+}
+
 /** Map tiles come from the internet; the tests don't need them (and CI may be offline). */
 export const test = base.extend({
   page: async ({ page }, use) => {
