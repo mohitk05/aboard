@@ -746,6 +746,51 @@ export class World extends DurableObject<Env> {
     return res;
   }
 
+  /**
+   * Admin: put a running train somewhere on its line. `km` = 0 means waiting at the station
+   * `stopIndex`; more than 0 means that far along towards the next station (capped just short
+   * of it). Passengers on board are moved with it; anyone waiting at a station the train has
+   * now passed misses it on the next tick.
+   */
+  setTripPosition(id: string, input: { stopIndex: number; km: number }) {
+    return guard(() => {
+      const trip = this.tripRow(id);
+      if (!trip.active) throw conflict("Start the trip first.");
+      const stops = this.routeStops(trip.route_id);
+      if (input.stopIndex < 0 || input.stopIndex >= stops.length) throw badRequest(`stopIndex must be 0–${stops.length - 1}.`);
+      const last = input.stopIndex === stops.length - 1;
+      if (input.km > 0 && last) throw badRequest("The train can't move past the end of the line.");
+      const now = Date.now();
+      if (input.km > 0) {
+        const segment = stops[input.stopIndex + 1]!.km;
+        const km = Math.min(input.km, Math.max(0, segment - 0.1));
+        // As if it left the station long enough ago to have covered `km`.
+        const departed = now - (km / trip.speed_kmh) * 3_600_000;
+        this.sql.exec(
+          "UPDATE trips SET state = 'MOVING', stop_index = ?, progress = ?, stop_at = ? WHERE id = ?",
+          input.stopIndex,
+          km,
+          Math.round(departed),
+          id,
+        );
+      } else {
+        this.sql.exec(
+          "UPDATE trips SET state = 'STATIONARY', stop_index = ?, progress = 0, stop_at = ? WHERE id = ?",
+          input.stopIndex,
+          now,
+          id,
+        );
+      }
+      this.sql.exec(
+        `UPDATE users SET current_stop_id = ? WHERE state = 'ONBOARD'
+         AND ticket_id IN (SELECT id FROM tickets WHERE trip_id = ?)`,
+        stops[input.stopIndex]!.id,
+        id,
+      );
+      return this.tripOut(this.tripRow(id));
+    });
+  }
+
   // ======================= tickets =======================
 
   buyTicket(userId: string, input: TicketInput): Result<Ticket> {

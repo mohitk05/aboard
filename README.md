@@ -56,6 +56,18 @@ curl -X POST localhost:8787/api/admin/bootstrap \
 
 Admins don't need a `currentStop`. Then create stops, routes and trips with the admin token.
 
+### Seed data
+
+- **Lisbon → Vladivostok:** the "Seed" button in the admin console (or `POST /api/admin/seed`). Safe to repeat.
+- **The Nexus network** (21 stations on six continents, 6 lines, trains mid-journey, 8 travellers with tickets and chats), ported from the old MongoDB seed script:
+
+  ```sh
+  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='…' ./scripts/seed-nexus.sh                       # live site
+  BASE_URL=http://localhost:8787 ADMIN_EMAIL=… ADMIN_PASSWORD=… ./scripts/seed-nexus.sh         # local
+  ```
+
+  Needs `curl` and `jq`. It runs once (it stops if the Nexus stations exist) and prints the password all seeded travellers share (set `SEED_PASSWORD` to choose it). The top of the script lists where it differs from the old one.
+
 `POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
 ### Deploy
@@ -113,6 +125,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/trip/:id` | player | |
 | POST | `/trip` | admin | `{ trip: { route, vehicle?, speedKmh?, active? } }` |
 | POST | `/trip/:id/start` | admin | |
+| POST | `/trip/:id/position` | admin | `{ stopIndex, km? }`: place a running train at a station, or `km` past it; passengers move with it |
 | POST | `/ticket/buy` | player | `{ ticket: { trip, from, to } }` |
 | DELETE | `/ticket` | player | cancel your ticket before boarding |
 | GET | `/ticket/:id` | admin | |

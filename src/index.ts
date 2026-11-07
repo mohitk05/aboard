@@ -178,6 +178,10 @@ app.get("/", (c) => ok(c, "hello"));
 app.get("/trip", (c) => world(c.env).listTrips(c.req.query("active") === "1").then((list) => ok(c, list)));
 app.get("/trip/:id", anyone, (c) => send(c, world(c.env).getTrip(param(c, "id"))));
 app.post("/trip", admin, async (c) => send(c, changed(c.env, world(c.env).createTrip((await body(c, schemas.trip)).trip)), 201));
+app.post("/trip/:id/position", admin, async (c) => {
+  const input = await body(c, z.object({ stopIndex: z.number().int().min(0), km: z.number().min(0).max(20_000).default(0) }));
+  return send(c, changed(c.env, world(c.env).setTripPosition(param(c, "id"), input)));
+});
 app.post("/trip/:id/start", admin, (c) => send(c, changed(c.env, world(c.env).startTrip(param(c, "id")))));
 
 // Vehicle

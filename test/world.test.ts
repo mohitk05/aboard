@@ -69,3 +69,38 @@ describe("trip timing data", () => {
     expect(moving.nextStopArrival).toBeCloseTo(moving.asOf + (kmLeft / 60) * 3_600_000, -3);
   });
 });
+
+describe("placing a train", () => {
+  it("puts a running train at a station or partway along, carrying its passengers", async () => {
+    const seeded = (await api("POST", "/admin/seed", { token: admin })).data;
+    const lisbon = (await api("GET", "/stop")).data.find((s: any) => s.name === "Lisbon").id;
+    const username = `p${Date.now().toString(36)}`;
+    const player = (
+      await api("POST", "/user/signup", {
+        body: { user: { username, email: `${username}@t.test`, password: "password123", age: 30, currentStop: lisbon } },
+      })
+    ).data;
+    const route = (await api("GET", `/route/${seeded.route}`, { token: admin })).data;
+    await api("POST", "/ticket/buy", {
+      token: player.authToken,
+      body: { ticket: { trip: seeded.trip, from: lisbon, to: route.stops[5].id } },
+    });
+    expect((await api("GET", "/user/me", { token: player.authToken })).data.state).toBe("ONBOARD");
+
+    // 300 km past Paris.
+    const moved = await api("POST", `/trip/${seeded.trip}/position`, { token: admin, body: { stopIndex: 2, km: 300 } });
+    expect(moved.status).toBe(200);
+    expect(moved.data).toMatchObject({ state: "MOVING", currentStopIndex: 2, progress: 300 });
+    expect((await api("GET", "/user/me", { token: player.authToken })).data.currentStop).toBe(route.stops[2].id);
+
+    // Too far is capped short of the next station; past the end is refused.
+    const capped = (await api("POST", `/trip/${seeded.trip}/position`, { token: admin, body: { stopIndex: 2, km: 99_99 } })).data;
+    expect(capped.progress).toBeLessThan(route.stops[3].kmFromPrevious);
+    expect((await api("POST", `/trip/${seeded.trip}/position`, { token: admin, body: { stopIndex: 10, km: 5 } })).status).toBe(400);
+
+    // At a station.
+    const parked = (await api("POST", `/trip/${seeded.trip}/position`, { token: admin, body: { stopIndex: 4 } })).data;
+    expect(parked).toMatchObject({ state: "STATIONARY", currentStopIndex: 4 });
+    expect((await api("POST", `/trip/${seeded.trip}/position`, { body: { stopIndex: 1 } })).status).toBe(401);
+  });
+});
