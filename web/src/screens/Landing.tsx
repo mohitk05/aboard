@@ -1,3 +1,4 @@
+import { formatKm } from "../lib/format";
 import { Board, ButtonLink, Card, Page } from "../ui";
 import { useWorld } from "../world";
 import { useWorldFocus } from "../world3d/focus";
@@ -5,6 +6,8 @@ import { useWorldFocus } from "../world3d/focus";
 export function Landing() {
   const world = useWorld();
   const running = world.trips.length;
+  // The longest line in the world, as a taste of how far you can go.
+  const longest = [...world.routes].sort((a, b) => b.totalKm - a.totalKm)[0];
   useWorldFocus({ label: "Trains running right now", distance: 3.2 });
   return (
     <Page
@@ -16,8 +19,8 @@ export function Landing() {
     >
       <Board
         label={running ? `${running} ${running === 1 ? "train" : "trains"} running now` : "Now boarding"}
-        title="Lisbon → Vladivostok"
-        sub="13,900 km · about 10 days"
+        title={longest ? `${longest.stops[0]!.name} → ${longest.stops.at(-1)!.name}` : "The line is being laid"}
+        sub={longest ? `${formatKm(longest.totalKm)} · about ${Math.max(1, Math.round(longest.totalKm / 60 / 24))} days` : undefined}
       />
       <Card className="hero">
         <h1>A slow journey across the world, in real time.</h1>
