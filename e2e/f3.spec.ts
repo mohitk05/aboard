@@ -24,8 +24,8 @@ test("F3: board at Lisbon, ride to Madrid, and get welcomed on arrival", async (
   await expect(trip.locator(".timeline li", { hasText: "Lisbon" }).getByText("Here now")).toBeVisible();
   await expect(page.getByRole("img", { name: "Map following your train" })).toBeVisible();
 
-  // Leave Lisbon (30 min dwell) and get partway along.
-  await tick(request, adminToken, 20);
+  // Leave Lisbon (30 min dwell) and get partway along: 300 km/h is 25 km a tick.
+  await tick(request, adminToken, 12);
   await page.reload();
   await expect(page.getByText("Next: Madrid")).toBeVisible();
   await expect(trip.locator(".timeline li", { hasText: "Lisbon" }).getByText("Passed")).toBeVisible();
@@ -33,8 +33,8 @@ test("F3: board at Lisbon, ride to Madrid, and get welcomed on arrival", async (
   expect(pct).toBeGreaterThan(5);
   expect(pct).toBeLessThan(50);
 
-  // Ride the rest of the way (~630 km at 5 km a tick).
-  await tick(request, adminToken, 125);
+  // Ride the rest of the way (~630 km to Madrid; the slowest train here is the 160 km/h sleeper).
+  await tick(request, adminToken, 60);
   // No reload: the live connection brings the arrival in, and the welcome appears.
   await expect(page.getByRole("status").filter({ hasText: "You've arrived in Madrid" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Madrid, Spain")).toBeVisible();

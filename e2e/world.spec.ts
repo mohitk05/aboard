@@ -15,7 +15,7 @@ test("the world loads the Earth imagery", async ({ page }) => {
 test("train and line details open from the departures board, and close", async ({ page }) => {
   await signUp(page, "Paris, France");
   const board = page.getByRole("region", { name: "Departures" });
-  await board.getByRole("button", { name: /Vladivostok/ }).first().click();
+  await board.getByRole("button", { name: /The Long Way/ }).first().click();
   await board.getByRole("button", { name: "Train details" }).click();
 
   const panel = page.getByRole("region", { name: /The Long Way/ });

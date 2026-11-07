@@ -10,7 +10,7 @@ You are a long-distance carrier. You ride real routes at real-world pace, buy wh
 
 | Area | Decision |
 | --- | --- |
-| Pace | Real-world. Lisbon → Vladivostok ≈ 10 days. Players check in 2–4 times a day. |
+| Pace | Real time, at advanced-railway speeds (updated 2026-11-07): maglev ~450 km/h, high-speed 280–320, sleepers 160; default 300. London → Tokyo ≈ 2 days. Originally real-world pace (~60 km/h, Lisbon → Vladivostok ≈ 10 days). |
 | Economy | Simulated markets. Each city produces some goods and wants others. Prices move with stock levels and recover over days. |
 | Between stops | Window moments (scenery tied to the train's real position, collected in a journal) and telegraph news (price and disruption news that arrives while you travel). |
 | Progression | Cargo capacity (compartment tiers) and shared projects that change the map for everyone. |

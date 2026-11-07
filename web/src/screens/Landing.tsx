@@ -1,6 +1,6 @@
-import { formatKm } from "../lib/format";
+import { formatDuration, formatKm } from "../lib/format";
 import { Board, ButtonLink, Card, Page } from "../ui";
-import { useWorld } from "../world";
+import { DEFAULT_SPEED_KMH, lineHours, useWorld } from "../world";
 import { useWorldFocus } from "../world3d/focus";
 
 export function Landing() {
@@ -20,7 +20,7 @@ export function Landing() {
       <Board
         label={running ? `${running} ${running === 1 ? "train" : "trains"} running now` : "Now boarding"}
         title={longest ? `${longest.stops[0]!.name} → ${longest.stops.at(-1)!.name}` : "The line is being laid"}
-        sub={longest ? `${formatKm(longest.totalKm)} · about ${Math.max(1, Math.round(longest.totalKm / 60 / 24))} days` : undefined}
+        sub={longest ? `${formatKm(longest.totalKm)} · ${formatDuration(lineHours(longest, world.trips, DEFAULT_SPEED_KMH))}` : undefined}
       />
       <Card className="hero">
         <h1>A slow journey across the world, in real time.</h1>

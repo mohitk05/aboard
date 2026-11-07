@@ -910,3 +910,12 @@ ol.list {
     max-height: 55dvh;
   }
 }
+
+.speed-form {
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.input-small {
+  width: 5.5rem;
+  min-height: 36px;
+}

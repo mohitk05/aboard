@@ -1,6 +1,6 @@
 # aboard
 
-A slow, real-time train travel world. Trains run real routes at real-world pace (Lisbon to Vladivostok takes about 10 days). Players buy tickets, board, meet fellow travellers and get off somewhere new. See [docs/CarrierGame.md](docs/CarrierGame.md) for where the game is heading.
+A real-time train travel world. Trains run real routes in real time, at the speeds of railways a little ahead of today's: maglev expresses average 450 km/h, high-speed lines 280–320, night sleepers 160 (new trains default to 300). London to Tokyo takes about two days. Players buy tickets, board, meet fellow travellers and get off somewhere new. See [docs/CarrierGame.md](docs/CarrierGame.md) for where the game is heading.
 
 ## Architecture
 

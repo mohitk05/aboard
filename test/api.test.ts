@@ -160,10 +160,10 @@ describe("travel", () => {
     expect(r).toHaveLength(1);
     expect(r[0].trip.id).toBe(t1.id);
     expect(r[0].distanceKm).toBeGreaterThan(2_000);
-    expect(r[0].arrivalTime).toBeGreaterThan(Date.now() + 24 * 3600_000);
+    expect(r[0].arrivalTime).toBeGreaterThan(Date.now() + 6 * 3600_000); // ~3,000 km at 300 km/h
   });
 
-  it("runs Lisbon → Vladivostok at real-world pace (~10 days)", async () => {
+  it("runs Lisbon → Vladivostok in about two days at the default 300 km/h", async () => {
     const trip = await newTrip(true);
     const ticks = await runInDurableObject(worldStub(), (w: World) => {
       let n = 0;
@@ -175,8 +175,9 @@ describe("travel", () => {
       return n;
     });
     const days = (ticks * 5) / 60 / 24;
-    expect(days).toBeGreaterThan(9);
-    expect(days).toBeLessThan(12);
+    // ~14,000 km at 300 km/h ≈ 47 h, plus 20 min at each of 9 stations ≈ 50 h.
+    expect(days).toBeGreaterThan(1.9);
+    expect(days).toBeLessThan(2.3);
   });
 
   it("ticks on a Durable Object alarm once a trip starts", async () => {

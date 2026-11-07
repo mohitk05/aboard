@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api, type Stop } from "../api";
 import { formatKm } from "../lib/format";
 import { Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
-import { useWorld, type Route, type Trip, type Vehicle } from "../world";
+import { DEFAULT_SPEED_KMH, useWorld, type Route, type Trip, type Vehicle } from "../world";
 import { useWorldFocus } from "../world3d/focus";
 import { select } from "../world3d/selection";
 import { Shell } from "./Shell";
@@ -207,13 +207,16 @@ function Trains({ routes }: { routes: Route[] }) {
   const [vehicleName, setVehicleName] = useState("");
   const [route, setRoute] = useState("");
   const [vehicle, setVehicle] = useState("");
-  const [speed, setSpeed] = useState("60");
+  const [speed, setSpeed] = useState(String(DEFAULT_SPEED_KMH));
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["trips"] });
 
   const addVehicle = useWorldMutation((name: string) => api<Vehicle>("POST", "/vehicle", { vehicle: { name } }));
   const addTrip = useWorldMutation((trip: unknown) => api<Trip>("POST", "/trip", { trip }));
   const start = useWorldMutation((id: string) => api<Trip>("POST", `/trip/${id}/start`));
+  const setTripSpeed = useWorldMutation(({ id, speedKmh }: { id: string; speedKmh: number }) =>
+    api<Trip>("PATCH", `/trip/${id}`, { trip: { speedKmh } }),
+  );
   const routeName = (id: string) => routes.find((r) => r.id === id)?.name ?? "Unknown line";
 
   return (
@@ -223,11 +226,16 @@ function Trains({ routes }: { routes: Route[] }) {
         {trips.data?.map((t) => (
           <li key={t.id}>
             <span>
-              <strong>{routeName(t.route)}</strong>{" "}
+              <strong>{t.train ?? routeName(t.route)}</strong>{" "}
               <span className="muted small">
-                {t.active ? (t.state === "MOVING" ? "moving" : "at a station") : "not running"} · {t.speedKmh} km/h
+                {routeName(t.route)} · {t.active ? (t.state === "MOVING" ? "moving" : "at a station") : "not running"}
               </span>
             </span>
+            <SpeedForm
+              trip={t}
+              pending={setTripSpeed.isPending}
+              onSave={(speedKmh) => setTripSpeed.mutate({ id: t.id, speedKmh }, { onSuccess: refresh })}
+            />
             {!t.active && (
               <Button kind="quiet" small onClick={() => start.mutate(t.id, { onSuccess: refresh })}>
                 Start
@@ -266,9 +274,17 @@ function Trains({ routes }: { routes: Route[] }) {
               </option>
             ))}
           </SelectField>
-          <TextField label="Average speed (km/h)" type="number" min={1} max={400} value={speed} onValue={setSpeed} />
+          <TextField
+            label="Average speed (km/h)"
+            hint="Including slow sections. High-speed lines ~300, maglev ~450, sleepers ~160."
+            type="number"
+            min={40}
+            max={600}
+            value={speed}
+            onValue={setSpeed}
+          />
         </div>
-        <FormError message={addTrip.error?.message ?? start.error?.message} />
+        <FormError message={addTrip.error?.message ?? start.error?.message ?? setTripSpeed.error?.message} />
         <Button kind="primary" type="submit" disabled={addTrip.isPending || !route}>
           Start from the first station
         </Button>
@@ -291,5 +307,37 @@ function Trains({ routes }: { routes: Route[] }) {
         <FormError message={addVehicle.error?.message} />
       </form>
     </Card>
+  );
+}
+
+/** Inline speed editor for one train. */
+function SpeedForm({ trip, pending, onSave }: { trip: Trip; pending: boolean; onSave: (kmh: number) => void }) {
+  const [value, setValue] = useState(String(trip.speedKmh));
+  return (
+    <form
+      className="row speed-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(Number(value));
+      }}
+    >
+      <label className="sr-only" htmlFor={`speed-${trip.id}`}>
+        Speed of {trip.train ?? "this train"} in km/h
+      </label>
+      <input
+        id={`speed-${trip.id}`}
+        className="input input-small"
+        type="number"
+        min={40}
+        max={600}
+        required
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <span className="muted small">km/h</span>
+      <Button small type="submit" disabled={pending || Number(value) === trip.speedKmh}>
+        Set
+      </Button>
+    </form>
   );
 }

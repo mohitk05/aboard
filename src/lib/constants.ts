@@ -2,8 +2,16 @@
 export const WORLD_INTERVAL_MINUTES = 5;
 export const WORLD_INTERVAL_MS = WORLD_INTERVAL_MINUTES * 60_000;
 
-/** Real-world pace: an average long-distance train, including slow sections. */
-export const DEFAULT_SPEED_KMH = 60;
+/**
+ * Average speed (km/h) of a new train over a whole run, curves and slow sections included
+ * (station stops are counted separately). Assumes railways a little ahead of today's: high-speed
+ * lines cruise at 320–350 km/h now, and maglev expresses reach 450–500.
+ */
+export const DEFAULT_SPEED_KMH = 300;
+
+/** Sensible bounds for a train's average speed. */
+export const MIN_SPEED_KMH = 40;
+export const MAX_SPEED_KMH = 600;
 
 /** How long a train waits at a stop unless the stop says otherwise. */
 export const DEFAULT_DWELL_MINUTES = 20;

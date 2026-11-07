@@ -73,3 +73,17 @@ export function useWorld() {
     error: stops.error ?? routes.error ?? trips.error,
   };
 }
+
+/** Average speed (km/h) of a new train; the server uses the same default. */
+export { DEFAULT_SPEED_KMH } from "../../src/lib/constants";
+
+/**
+ * End-to-end time (hours) for a line: its length at the average speed of the trains running on
+ * it (or the default speed if none are), plus the wait at every intermediate station.
+ */
+export function lineHours(route: Route, trips: Trip[], fallbackKmh: number): number {
+  const running = trips.filter((t) => t.route === route.id);
+  const speed = running.length ? running.reduce((s, t) => s + t.speedKmh, 0) / running.length : fallbackKmh;
+  const waits = route.stops.slice(1, -1).reduce((m, s) => m + s.dwellMinutes, 0) / 60;
+  return route.totalKm / speed + waits;
+}

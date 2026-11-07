@@ -33,3 +33,9 @@ export function clockParts(at: number, now = Date.now()): { day: string | null; 
     time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
   };
 }
+
+/** "about 9 hours", "about 2 days": for rough end-to-end journey times. */
+export function formatDuration(hours: number): string {
+  if (hours < 36) return `about ${Math.max(1, Math.round(hours))} hours`;
+  return `about ${Math.round(hours / 24)} days`;
+}

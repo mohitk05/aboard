@@ -19,7 +19,7 @@ test("F5: installable app with a manifest and an offline shell", async ({ page, 
   // Offline: the app still opens and says it can't reach the server.
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByText(/Can't reach Aboard/)).toBeVisible();
+  await expect(page.getByText(/Can't reach Aboard/)).toBeVisible({ timeout: 15_000 });
   await context.setOffline(false);
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();

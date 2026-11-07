@@ -64,10 +64,10 @@ describe("trip timing data", () => {
     const moving = (await api("GET", `/trip/${seeded.trip}`, { token: admin })).data;
     expect(moving.state).toBe("MOVING");
     expect(moving.asOf).toBe(t0 + 7 * 5 * 60_000);
-    expect(moving.progress).toBeCloseTo(5, 5);
+    expect(moving.progress).toBeCloseTo((160 * 5) / 60, 5); // the demo sleeper: 160 km/h for one 5-minute tick
     // Next arrival is measured from asOf, not from "now".
     const kmLeft = moving.segment.km - moving.progress;
-    expect(moving.nextStopArrival).toBeCloseTo(moving.asOf + (kmLeft / 60) * 3_600_000, -3);
+    expect(moving.nextStopArrival).toBeCloseTo(moving.asOf + (kmLeft / moving.speedKmh) * 3_600_000, -3);
   });
 });
 
@@ -103,5 +103,17 @@ describe("placing a train", () => {
     const parked = (await api("POST", `/trip/${seeded.trip}/position`, { token: admin, body: { stopIndex: 4 } })).data;
     expect(parked).toMatchObject({ state: "STATIONARY", currentStopIndex: 4 });
     expect((await api("POST", `/trip/${seeded.trip}/position`, { body: { stopIndex: 1 } })).status).toBe(401);
+  });
+});
+
+describe("train speed", () => {
+  it("lets admins change a running train's speed, within bounds", async () => {
+    const seeded = (await api("POST", "/admin/seed", { token: admin })).data;
+    expect((await api("GET", `/trip/${seeded.trip}`, { token: admin })).data.speedKmh).toBe(160);
+    const r = await api("PATCH", `/trip/${seeded.trip}`, { token: admin, body: { trip: { speedKmh: 450 } } });
+    expect(r.status).toBe(200);
+    expect(r.data.speedKmh).toBe(450);
+    expect((await api("PATCH", `/trip/${seeded.trip}`, { token: admin, body: { trip: { speedKmh: 5000 } } })).status).toBe(400);
+    expect((await api("PATCH", `/trip/${seeded.trip}`, { body: { trip: { speedKmh: 300 } } })).status).toBe(401);
   });
 });

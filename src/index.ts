@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { sign, verify } from "hono/jwt";
 import { z } from "zod";
-import { ALL_USER_ROLES, PROFILE_MODES, USER_ROLES, type UserRole } from "./lib/constants";
+import { ALL_USER_ROLES, MAX_SPEED_KMH, MIN_SPEED_KMH, PROFILE_MODES, USER_ROLES, type UserRole } from "./lib/constants";
 import { hashPassword, verifyPassword } from "./lib/password";
 import type { Result } from "./lib/result";
 import type { Viewer, World } from "./world/world";
@@ -63,7 +63,7 @@ const schemas = {
     trip: z.object({
       route: id,
       vehicle: id.optional(),
-      speedKmh: z.number().positive().max(400).optional(),
+      speedKmh: z.number().min(MIN_SPEED_KMH).max(MAX_SPEED_KMH).optional(),
       active: z.boolean().optional(),
     }),
   }),
@@ -199,6 +199,10 @@ app.post("/trip", admin, async (c) => send(c, changed(c.env, world(c.env).create
 app.post("/trip/:id/position", admin, async (c) => {
   const input = await body(c, z.object({ stopIndex: z.number().int().min(0), km: z.number().min(0).max(20_000).default(0) }));
   return send(c, changed(c.env, world(c.env).setTripPosition(param(c, "id"), input)));
+});
+app.patch("/trip/:id", admin, async (c) => {
+  const { trip } = await body(c, z.object({ trip: z.object({ speedKmh: z.number().min(MIN_SPEED_KMH).max(MAX_SPEED_KMH) }) }));
+  return send(c, changed(c.env, world(c.env).setTripSpeed(param(c, "id"), trip.speedKmh)));
 });
 app.post("/trip/:id/start", admin, (c) => send(c, changed(c.env, world(c.env).startTrip(param(c, "id")))));
 

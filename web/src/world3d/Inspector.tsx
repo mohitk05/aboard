@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { formatClock, formatIn, formatKm } from "../lib/format";
+import { formatClock, formatDuration, formatIn, formatKm } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Button } from "../ui";
-import { useWorld, type Route, type Trip } from "../world";
+import { DEFAULT_SPEED_KMH, lineHours, useWorld, type Route, type Trip } from "../world";
 import { select, useSelection } from "./selection";
 
 /** Details of whatever was clicked in the world: a train or a line. */
@@ -90,15 +90,14 @@ function TrainDetails({ trip, route, headingRef }: { trip: Trip; route: Route; h
 
 function RouteDetails({ route, trips, headingRef }: { route: Route; trips: Trip[]; headingRef: React.RefObject<HTMLHeadingElement | null> }) {
   let km = 0;
-  const days = route.totalKm / 60 / 24;
+  const hours = lineHours(route, trips, DEFAULT_SPEED_KMH);
   return (
     <>
       <h2 id="inspector-title" tabIndex={-1} ref={headingRef}>
         {route.name}
       </h2>
       <p className="muted">
-        {route.stops.length} stations · {formatKm(route.totalKm)} · about {days < 1 ? `${Math.round(days * 24)} hours` : `${Math.round(days)} days`} end to
-        end · {trips.length ? `${trips.length} ${trips.length === 1 ? "train" : "trains"} running` : "no trains running"}
+        {route.stops.length} stations · {formatKm(route.totalKm)} · {formatDuration(hours)} end to end · {trips.length ? `${trips.length} ${trips.length === 1 ? "train" : "trains"} running` : "no trains running"}
       </p>
       <ol className="timeline">
         {route.stops.map((s) => {

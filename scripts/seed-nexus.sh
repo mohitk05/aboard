@@ -8,7 +8,6 @@
 # Options (environment variables):
 #   BASE_URL       where Aboard runs (default: https://aboard.karekar-mohit.workers.dev)
 #   SEED_PASSWORD  password for all seeded travellers (default: a random one, printed at the end)
-#   SPEED_KMH      average train speed (default: 60, the game's real-world pace)
 #
 # Needs curl and jq. Run it once: it stops if the Nexus stations already exist. (It doesn't
 # delete anything, unlike the old script, which dropped the whole database.)
@@ -32,7 +31,6 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-https://aboard.karekar-mohit.workers.dev}"
 API="${BASE_URL%/}/api"
-SPEED_KMH="${SPEED_KMH:-60}"
 SEED_PASSWORD="${SEED_PASSWORD:-$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16)}"
 
 for bin in curl jq; do
@@ -56,7 +54,7 @@ api() {
   jq -c '.data' <<<"$resp"
 }
 id() { jq -r '.id'; }
-km() { echo $((SPEED_KMH * $1)); } # distance covered in $1 hours
+declare -A SPEED # km/h per journey, set by trip()
 
 # ---------- admin login ----------
 if [ -z "${ADMIN_TOKEN:-}" ]; then
@@ -174,12 +172,14 @@ echo "Created ${#USER_ID[@]} travellers"
 
 # ---------- journeys ----------
 declare -A TRIP
-trip() { # trip KEY ROUTE_KEY VEHICLE — starts at the first station of the line
-  TRIP[$1]=$(api POST /trip "$(jq -nc --arg r "${ROUTE[$2]}" --arg v "${VEHICLE[$3]}" --argjson s "$SPEED_KMH" \
+trip() { # trip KEY ROUTE_KEY VEHICLE SPEED_KMH — starts at the first station of the line
+  SPEED[$1]=$4
+  TRIP[$1]=$(api POST /trip "$(jq -nc --arg r "${ROUTE[$2]}" --arg v "${VEHICLE[$3]}" --argjson s "$4" \
     '{trip: {route: $r, vehicle: $v, speedKmh: $s, active: true}}')" | id)
 }
-place() { # place TRIP_KEY STOP_INDEX KM
-  api POST "/trip/${TRIP[$1]}/position" "$(jq -nc --argjson i "$2" --argjson k "$3" '{stopIndex: $i, km: $k}')" >/dev/null
+place() { # place TRIP_KEY STOP_INDEX HOURS_SINCE_DEPARTURE (0 = waiting at the station)
+  local km=$((SPEED[$1] * $3))
+  api POST "/trip/${TRIP[$1]}/position" "$(jq -nc --argjson i "$2" --argjson k "$km" '{stopIndex: $i, km: $k}')" >/dev/null
 }
 ticket() { # ticket USERNAME TRIP_KEY FROM TO → prints the traveller's state afterwards
   api POST /ticket/buy "$(jq -nc --arg t "${TRIP[$2]}" --arg f "${STOP[$3]}" --arg to "${STOP[$4]}" '{ticket: {trip: $t, from: $f, to: $to}}')" \
@@ -187,27 +187,29 @@ ticket() { # ticket USERNAME TRIP_KEY FROM TO → prints the traveller's state a
   printf '  %-15s %s → %s on %s: %s\n' "$1" "$3" "$4" "$2" "$(api GET /user/me "" "${USER_TOKEN[$1]}" | jq -r '.state')"
 }
 
-trip apex7  N1 Apex-7
-trip apex12 N1 Apex-12        # waits at Mexico City
-trip hor5   N2 Horizon-5
-trip hor8   N2 Horizon-8      # waits at London
-trip mer3   N3 Meridian-3
-trip mer6   N3 Meridian-6     # waits at Mumbai
+# Average speeds over a whole run, for railways a little ahead of today's
+# (high-speed lines cruise at 320–350 km/h now; maglev expresses at 450–500):
+trip apex7  N1 Apex-7     320   # high-speed, Americas
+trip apex12 N1 Apex-12    320   # waits at Mexico City
+trip hor5   N2 Horizon-5  450   # maglev express, Eurasia
+trip hor8   N2 Horizon-8  450   # waits at London
+trip mer3   N3 Meridian-3 280   # high-speed; mountains and sea crossings slow it
+trip mer6   N3 Meridian-6 280   # waits at Mumbai
 echo "Created ${#TRIP[@]} journeys. Tickets:"
 
 # Apex-7 (Nexus-1): Emma boards at New York, then the train is 12 h past Denver.
 place apex7 1 0
 ticket emma_rodriguez apex7 NYC VAN
-place apex7 3 "$(km 12)"
+place apex7 3 12
 ticket yuki_tanaka apex7 LAX VAN        # waiting at Los Angeles for it
 
 # Horizon-5 (Nexus-2): Isabella boards at London; the train left Moscow 20 h ago.
 ticket isabella_rossi hor5 LON TYO
-place hor5 3 "$(km 20)"
+place hor5 3 20
 
 # Meridian-3 (Nexus-3): Pradeep boards at Mumbai; the train left Shanghai 18 h ago.
 ticket pradeep_kumar mer3 BOM SYD
-place mer3 3 "$(km 18)"
+place mer3 3 18
 
 # Meridian-6 is at the Mumbai platform, so Mei boards straight away.
 ticket mei_lin mer6 BOM SYD

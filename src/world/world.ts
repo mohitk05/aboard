@@ -757,6 +757,15 @@ export class World extends DurableObject<Env> {
   }
 
   /** (Re)start a trip from the first stop of its route. */
+  /** Admin: change how fast a train runs. Takes effect from the next tick; arrival times update now. */
+  setTripSpeed(id: string, speedKmh: number) {
+    return guard(() => {
+      this.tripRow(id);
+      this.sql.exec("UPDATE trips SET speed_kmh = ? WHERE id = ?", speedKmh, id);
+      return this.tripOut(this.tripRow(id));
+    });
+  }
+
   async startTrip(id: string) {
     const res = guard(() => {
       const trip = this.tripRow(id);
@@ -930,7 +939,8 @@ export class World extends DurableObject<Env> {
     if (!res.ok) return res;
     let tripId = res.data.runningTrip;
     if (!tripId) {
-      const t = await this.createTrip({ route: res.data.routeId, vehicle: res.data.vehicleId, active: true });
+      // The demo line is a night sleeper: comfortable rather than fast.
+      const t = await this.createTrip({ route: res.data.routeId, vehicle: res.data.vehicleId, active: true, speedKmh: 160 });
       if (!t.ok) return t;
       tripId = t.data.id;
     }
