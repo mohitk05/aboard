@@ -1,6 +1,6 @@
 # Frontend plan
 
-Status: F0–F1 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
+Status: F0–F2 done (2026-11-07). This replaces the Expo and three.js plan in `Features.md`.
 
 ## Decisions
 
@@ -116,7 +116,7 @@ Each milestone ends with something you can deploy and use. Backend changes ship 
 - Admin console for stops, routes and trips. A seed button for the Lisbon → Vladivostok line.
 - *Done when:* an admin builds the line in the browser, starts a train, and everyone sees it move across Europe.
 
-**F2 Stations and tickets**
+**F2 Stations and tickets (done)**
 - Departures endpoint and ticket info on `/user/me`.
 - Station screen, ticket window, your-ticket screen, cancel.
 - *Done when:* a player buys a ticket in Paris and watches the countdown to the train.

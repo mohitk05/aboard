@@ -323,6 +323,63 @@ export class World extends DurableObject<Env> {
   }
 
   /** Trains still due at this stop, soonest first, with distance (km) and arrival time (ms). */
+  /**
+   * The departures board: running trains that will still call here, soonest first, each with
+   * the stations you could ride to, their arrival times and fares.
+   */
+  getDepartures(stopId: string, limit = 10) {
+    return guard(() => {
+      this.stopRow(stopId);
+      const candidates = this.sql
+        .exec<TripRow & { pos: number; route_name: string; vehicle_name: string | null }>(
+          `SELECT t.*, rs.position AS pos, r.name AS route_name, v.name AS vehicle_name
+           FROM trips t
+           JOIN route_stops rs ON rs.route_id = t.route_id AND rs.stop_id = ?
+           JOIN routes r ON r.id = t.route_id
+           LEFT JOIN vehicles v ON v.id = t.vehicle_id
+           WHERE t.active = 1`,
+          stopId,
+        )
+        .toArray();
+
+      const out = [];
+      for (const trip of candidates) {
+        const due = trip.stop_index < trip.pos || (trip.stop_index === trip.pos && trip.state === "STATIONARY");
+        const stops = this.routeStops(trip.route_id);
+        if (!due || trip.pos === stops.length - 1) continue; // gone, or this is the end of the line
+        const asOf = this.tripAsOf(trip);
+        const here = this.remainingTo(trip, stops, trip.pos);
+        let km = 0;
+        const destinations = [];
+        for (let j = trip.pos + 1; j < stops.length; j++) {
+          km += stops[j]!.km;
+          destinations.push({
+            stop: stopOut(stops[j]!),
+            km: Math.round(km * 10) / 10,
+            price: Math.round(km * COST_PER_KM * 100) / 100,
+            arrivalTime: asOf + this.remainingTo(trip, stops, j).ms,
+          });
+        }
+        out.push({
+          trip: this.tripOut(trip),
+          line: trip.route_name,
+          train: trip.vehicle_name,
+          boardingNow: trip.stop_index === trip.pos,
+          arrivalTime: Math.max(Date.now(), asOf + here.ms),
+          /** When it leaves this station (arrival plus the wait here). */
+          departureTime: Math.max(
+            Date.now(),
+            (trip.stop_index === trip.pos ? (trip.stop_at ?? asOf) : asOf + here.ms) + stops[trip.pos]!.dwell_minutes * 60_000,
+          ),
+          terminus: stopOut(stops[stops.length - 1]!),
+          destinations,
+        });
+      }
+      out.sort((a, b) => a.arrivalTime - b.arrivalTime);
+      return out.slice(0, limit);
+    });
+  }
+
   getIncomingVehicles(stopId: string, limit = 5) {
     return guard(() => {
       this.stopRow(stopId);
@@ -929,9 +986,58 @@ export class World extends DurableObject<Env> {
     };
   }
 
+  /** Your current ticket, its train, and arrival times along the way. */
+  private journeyOf(u: UserRow) {
+    if (!u.ticket_id) return null;
+    const t = this.sql.exec<TicketRow>("SELECT * FROM tickets WHERE id = ?", u.ticket_id).toArray()[0];
+    if (!t) return null;
+    const trip = this.tripRow(t.trip_id);
+    const stops = this.routeStops(trip.route_id);
+    const route = this.routeRow(trip.route_id);
+    const vehicle = trip.vehicle_id ? this.vehicleRow(trip.vehicle_id) : null;
+    const asOf = this.tripAsOf(trip);
+    const fromIdx = stops.findIndex((s) => s.id === t.from_stop_id);
+    const destId = t.desired_to_stop_id ?? t.to_stop_id;
+    const destIdx = stops.findIndex((s) => s.id === destId);
+
+    const etaAt = (i: number) => {
+      const passed = i < trip.stop_index || (i === trip.stop_index && trip.state !== "STATIONARY");
+      if (passed || !trip.active) return null;
+      return asOf + this.remainingTo(trip, stops, i).ms;
+    };
+    const timeline = stops.map((s, i) => ({
+      ...stopOut(s),
+      kmFromPrevious: s.km,
+      eta: etaAt(i),
+      passed: i < trip.stop_index || (i === trip.stop_index && trip.state === "MOVING"),
+      current: i === trip.stop_index && trip.state === "STATIONARY",
+    }));
+    const kmToDest = destIdx > trip.stop_index ? this.remainingTo(trip, stops, destIdx).km : 0;
+    const tripKm = Math.round(stops.slice(fromIdx + 1, destIdx + 1).reduce((sum, s) => sum + s.km, 0) * 10) / 10;
+
+    return {
+      ticket: ticketOut(t),
+      line: route.name,
+      train: vehicle?.name ?? null,
+      trip: this.tripOut(trip),
+      from: stopOut(stops[fromIdx]!),
+      to: stopOut(stops[destIdx]!),
+      fromIndex: fromIdx,
+      toIndex: destIdx,
+      boardAt: etaAt(fromIdx),
+      arriveAt: etaAt(destIdx),
+      /** How far the train still has to go to your destination (from wherever it is now). */
+      kmToDestination: kmToDest,
+      /** Your ride, boarding station to destination. */
+      tripKm,
+      stops: timeline,
+    };
+  }
+
   private privateUserOut(u: UserRow) {
     return {
       ...this.publicUserOut(u),
+      journey: this.journeyOf(u),
       state: u.state,
       currentStop: u.current_stop_id,
       email: u.email,

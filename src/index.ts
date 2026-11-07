@@ -168,6 +168,7 @@ app.post("/vehicle", admin, async (c) => send(c, world(c.env).createVehicle((awa
 app.get("/stop", (c) => world(c.env).listStops().then((list) => ok(c, list))); // public: signup picks a stop
 app.get("/stop/:id", anyone, (c) => send(c, world(c.env).getStop(param(c, "id"))));
 app.post("/stop", admin, async (c) => send(c, world(c.env).createStop((await body(c, schemas.stop)).stop), 201));
+app.get("/stop/:id/departures", anyone, (c) => send(c, world(c.env).getDepartures(param(c, "id"))));
 app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 5) || 5, 1), 50);
   return send(c, world(c.env).getIncomingVehicles(param(c, "id"), limit));

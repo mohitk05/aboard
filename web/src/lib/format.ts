@@ -23,3 +23,13 @@ export function formatClock(at: number, now = Date.now()): string {
 }
 
 export const formatPrice = (p: number) => `${p.toFixed(2)} credits`;
+
+/** Day (if not today) and time as separate parts, for stacked display on boards. */
+export function clockParts(at: number, now = Date.now()): { day: string | null; time: string } {
+  const d = new Date(at);
+  const sameDay = new Date(now).toDateString() === d.toDateString();
+  return {
+    day: sameDay ? null : d.toLocaleDateString(undefined, { weekday: "short" }),
+    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+  };
+}

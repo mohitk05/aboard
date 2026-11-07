@@ -407,3 +407,104 @@ ol.list {
 .maplibregl-ctrl-attrib {
   font-size: 11px;
 }
+
+/* ---------- departures board ---------- */
+.departures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.departure {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, max-content) 1fr;
+  grid-template-areas: "time dest" "time status";
+  gap: 2px 12px;
+  align-items: baseline;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.departure:hover {
+  border-color: var(--muted);
+}
+.departures .is-open .departure {
+  border-color: var(--accent);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.dep-time {
+  grid-area: time;
+  display: grid;
+  white-space: nowrap;
+  align-self: start;
+  font: 600 1.15rem var(--font-mono);
+  color: var(--accent);
+}
+.dep-dest {
+  grid-area: dest;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+.dep-status {
+  grid-area: status;
+  font: 0.9rem var(--font-mono);
+  color: var(--muted);
+}
+.dep-status.is-boarding {
+  color: var(--accent);
+  font-weight: 600;
+}
+.ticket-window {
+  border: 1px solid var(--accent);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  padding: 4px 14px 12px;
+}
+.ticket-window h3 {
+  margin-top: 10px;
+}
+.btn-small {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.95rem;
+}
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+/* ---------- ticket facts ---------- */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px 20px;
+  margin: 0 0 14px;
+}
+.facts dt {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.facts dd {
+  margin: 2px 0 0;
+  font: 600 1.05rem var(--font-mono);
+}
+.dep-day {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}

@@ -15,7 +15,9 @@ export function useMe() {
         throw e;
       }
     },
-    staleTime: 60_000,
+    staleTime: 30_000,
+    // Your state changes when the world ticks (boarding, arriving), so keep checking while signed in.
+    refetchInterval: (q) => (q.state.data ? 60_000 : false),
   });
 }
 

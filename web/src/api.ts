@@ -58,6 +58,41 @@ export interface Me {
   image: string | null;
   profileMode: "PUBLIC" | "PRIVATE";
   interests: { id: string; name: string }[];
+  journey: Journey | null;
+}
+
+export interface JourneyStop extends Stop {
+  kmFromPrevious: number;
+  eta: number | null;
+  passed: boolean;
+  current: boolean;
+}
+
+export interface Journey {
+  ticket: { id: string; trip: string; from: string; to: string; desiredTo: string | null; price: number };
+  line: string;
+  train: string | null;
+  trip: import("./world").Trip;
+  from: Stop;
+  to: Stop;
+  fromIndex: number;
+  toIndex: number;
+  boardAt: number | null;
+  arriveAt: number | null;
+  kmToDestination: number;
+  tripKm: number;
+  stops: JourneyStop[];
+}
+
+export interface Departure {
+  trip: import("./world").Trip;
+  line: string;
+  train: string | null;
+  boardingNow: boolean;
+  arrivalTime: number;
+  departureTime: number;
+  terminus: Stop;
+  destinations: { stop: Stop; km: number; price: number; arrivalTime: number }[];
 }
 
 export const ADMIN_ROLE = 1;

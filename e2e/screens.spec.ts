@@ -14,6 +14,12 @@ test("capture screens", async ({ page, request }) => {
   await page.screenshot({ path: `${dir}/landing.png`, fullPage: true });
 
   await signUp(page, "Moscow, Russia", ["Trains", "Books"]);
+  await page.getByRole("button", { name: /Vladivostok/ }).first().click();
   await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${dir}/home.png`, fullPage: true });
+  await page.screenshot({ path: `${dir}/station.png`, fullPage: true });
+
+  await page.getByRole("button", { name: /Buy a ticket to Irkutsk/ }).click();
+  await page.getByText("Moscow → Irkutsk").waitFor();
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${dir}/waiting.png`, fullPage: true });
 });

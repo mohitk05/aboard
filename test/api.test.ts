@@ -228,3 +228,51 @@ describe("validation", () => {
     expect((await api("GET", "/trip/not-a-uuid", { token: admin })).status).toBe(404);
   });
 });
+
+describe("departures and journeys", () => {
+  it("lists trains still calling at a station, with destinations, fares and times", async () => {
+    const trip = await newTrip(true);
+    const { token } = await signup(stops[2]!.id); // Paris
+    const deps = (await api("GET", `/stop/${stops[2]!.id}/departures`, { token })).data;
+    expect(deps).toHaveLength(1);
+    const d = deps[0];
+    expect(d.trip.id).toBe(trip.id);
+    expect(d.boardingNow).toBe(false);
+    expect(d.terminus.name).toBe("Vladivostok");
+    expect(d.destinations.map((x: any) => x.stop.name)).toEqual(stops.slice(3).map((s) => s.name));
+    expect(d.destinations[0].price).toBeGreaterThan(0);
+    // Later stations come later, and cost more.
+    expect(d.destinations[1].arrivalTime).toBeGreaterThan(d.destinations[0].arrivalTime);
+    expect(d.destinations[1].price).toBeGreaterThan(d.destinations[0].price);
+    expect(d.departureTime).toBeGreaterThan(d.arrivalTime);
+  });
+
+  it("shows nothing at the end of the line or once the train has left", async () => {
+    await newTrip(true);
+    const { token } = await signup(stops[0]!.id);
+    expect((await api("GET", `/stop/${stops.at(-1)!.id}/departures`, { token })).data).toHaveLength(0);
+    await runInDurableObject(worldStub(), (_w: World, state) => {
+      state.storage.sql.exec("UPDATE trips SET state = 'MOVING', stop_index = 0, progress = 1");
+    });
+    expect((await api("GET", `/stop/${stops[0]!.id}/departures`, { token })).data).toHaveLength(0);
+  });
+
+  it("includes your journey on /user/me", async () => {
+    const trip = await newTrip(true);
+    const { token } = await signup(stops[1]!.id);
+    expect((await api("GET", "/user/me", { token })).data.journey).toBeNull();
+    await api("POST", "/ticket/buy", { token, body: { ticket: { trip: trip.id, from: stops[1]!.id, to: stops[3]!.id } } });
+    const j = (await api("GET", "/user/me", { token })).data.journey;
+    expect(j.from.name).toBe("Madrid");
+    expect(j.to.name).toBe("Berlin");
+    expect(j.boardAt).toBeGreaterThan(Date.now());
+    expect(j.arriveAt).toBeGreaterThan(j.boardAt);
+    expect(j.stops).toHaveLength(stops.length);
+    expect(j.stops[0].current).toBe(true);
+    expect(j.kmToDestination).toBeGreaterThan(1000);
+    // Madrid → Berlin is two segments; the train still has Lisbon → Madrid to do first.
+    const segs = (await api("GET", `/route/${route.id}`, { token })).data.stops;
+    expect(j.tripKm).toBeCloseTo(segs[2].kmFromPrevious + segs[3].kmFromPrevious, 1);
+    expect(j.kmToDestination).toBeCloseTo(j.tripKm + segs[1].kmFromPrevious, 1);
+  });
+});

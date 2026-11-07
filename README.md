@@ -82,12 +82,13 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/user/signup` | anyone | `{ user: { username, email, password, age, currentStop, interests?, image?, profileMode? } }` |
 | POST | `/user/login` | anyone | `{ user: { email, password } }` (sets the session cookie) |
 | POST | `/user/logout` | anyone | clears the session cookie |
-| GET | `/user/me` | player | |
+| GET | `/user/me` | player | includes `journey` (ticket, train, stop-by-stop arrival times) when you have a ticket |
 | GET | `/user/:id` | player | (email etc. only for yourself or admin) |
 | GET | `/user/fellow-users` | player | |
 | POST | `/user` | admin | same as signup |
 | GET | `/stop` | anyone | all stops |
 | GET | `/stop/:id` | player | |
+| GET | `/stop/:id/departures` | player | trains still calling here, with destinations, fares and arrival times |
 | GET | `/stop/:id/incoming-vehicles?limit=5` | player | |
 | POST | `/stop` | admin | `{ stop: { name, country, coordinates: { lat, lng }, dwellMinutes? } }` |
 | GET | `/route` | anyone | all lines with their stations |
