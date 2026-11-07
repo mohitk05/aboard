@@ -43,9 +43,13 @@ function theme() {
     bg: cssColor("--bg", dark ? "#000" : "#f2f2f7"),
     tint: cssColor("--tint", "#a65c0d"),
     label: cssColor("--label", dark ? "#fff" : "#000"),
-    train: "#f3c14b",
-    trainEdge: "#15130f",
-    land: { ocean: dark ? "#0f1a20" : "#cfe0e8", land: dark ? "#2b2924" : "#ebe4d6", coast: dark ? "#4a453c" : "#c4b8a2", grid: dark ? "#1a2830" : "#bfd3dc" },
+    // Trains are the palette red: the one thing moving on the globe.
+    train: "#ff101f",
+    trainEdge: "#0d2423",
+    // Oceans icy/frosted blue, land thistle.
+    land: dark
+      ? { ocean: "#0e2a33", land: "#3a3239", coast: "#5b4e58", grid: "#123540" }
+      : { ocean: "#b2ddf7", land: "#cabac8", coast: "#a8959f", grid: "#9ccbe8" },
   };
 }
 
@@ -121,7 +125,7 @@ export default function World3D({ stops, routes, trips, focus }: World3DProps) {
     scene.add(globe);
     const atmosphere = new THREE.Mesh(
       new THREE.SphereGeometry(R * 1.015, 64, 32),
-      new THREE.MeshBasicMaterial({ color: colors.tint, transparent: true, opacity: 0.05, side: THREE.BackSide }),
+      new THREE.MeshBasicMaterial({ color: "#81d6e3", transparent: true, opacity: 0.12, side: THREE.BackSide }),
     );
     scene.add(atmosphere);
 
@@ -130,7 +134,6 @@ export default function World3D({ stops, routes, trips, focus }: World3DProps) {
       scene.background = new THREE.Color(colors.bg);
       landTexture.image = drawLand(colors.land, texWidth);
       landTexture.needsUpdate = true;
-      (atmosphere.material as THREE.MeshBasicMaterial).color.set(colors.tint);
       fill.intensity = colors.dark ? 0.7 : 1.1;
       rebuild();
     };

@@ -10,7 +10,6 @@ test("capture desktop", async ({ browser, request }) => {
   await ensureWorld(request);
   for (const scheme of ["light", "dark"] as const) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: scheme, deviceScaleFactor: 1 });
-    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     const page = await ctx.newPage();
     await page.goto("/");
     await page.waitForTimeout(3500);

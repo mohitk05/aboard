@@ -14,51 +14,65 @@
 :root {
   color-scheme: light dark;
 
-  /* Labels: primary → tertiary, for decreasing emphasis. */
-  --label: light-dark(#000000, #ffffff);
-  --label-2: light-dark(rgb(60 60 67 / 0.6), rgb(235 235 245 / 0.6));
-  --label-3: light-dark(rgb(60 60 67 / 0.3), rgb(235 235 245 / 0.3));
+  /* Aboard palette (as given):
+       thistle #cabac8 · red #ff101f · icy blue #b2ddf7 · frosted blue #81d6e3 · tropical teal #4cb5ae
+     mapped onto Apple HIG roles. Where a palette colour is too light for text (teal 2.5:1, red
+     3.9:1 on white) we use a deeper shade of the same hue for text, and the palette colour as a
+     fill behind dark (or white) lettering. Every text pairing below is at least 4.5:1. */
+  --palette-thistle: #cabac8;
+  --palette-red: #ff101f;
+  --palette-icy: #b2ddf7;
+  --palette-frosted: #81d6e3;
+  --palette-teal: #4cb5ae;
 
-  /* Grouped backgrounds: the page, the panels on it, and things grouped inside a panel. */
-  --bg: light-dark(#f2f2f7, #000000);
-  --surface: light-dark(#ffffff, #1c1c1e);
-  --surface-2: light-dark(#f2f2f7, #2c2c2e);
-  --fill: light-dark(rgb(120 120 128 / 0.12), rgb(118 118 128 / 0.24));
-  --separator: light-dark(rgb(60 60 67 / 0.29), rgb(84 84 88 / 0.6));
+  /* Labels: primary → tertiary. */
+  --label: light-dark(#0e1f22, #f1f7fa);
+  --label-2: light-dark(#4a5a5e, #a9bcc2);
+  --label-3: light-dark(rgb(14 31 34 / 0.35), rgb(241 247 250 / 0.35));
 
-  /* Tint: Aboard amber, darkened enough for 4.5:1 text contrast on white. */
-  --tint: light-dark(#a65c0d, #e09a3a);
-  --on-tint: light-dark(#ffffff, #000000);
+  /* Grouped backgrounds: icy blue page, white/deep-teal panels, thistle groups inside them. */
+  --bg: light-dark(#eaf5fc, #0b1517);
+  --surface: light-dark(#ffffff, #13242a);
+  --surface-2: light-dark(color-mix(in srgb, var(--palette-thistle) 28%, white), #1c3138);
+  --fill: light-dark(color-mix(in srgb, var(--palette-thistle) 38%, transparent), rgb(129 214 227 / 0.14));
+  --separator: light-dark(rgb(14 31 34 / 0.16), rgb(178 221 247 / 0.18));
 
-  /* System status colours (text-safe variants). */
-  --red: light-dark(rgb(233 21 45), rgb(255 66 69));
+  /* Tint = "you can interact with this": tropical teal. Text uses the deeper shade (5.6:1);
+     filled buttons use the palette teal behind dark lettering (6.4:1). */
+  --tint: light-dark(#23736d, #81d6e3);
+  --tint-fill: var(--palette-teal);
+  --on-tint: #0b2725;
+
+  /* Status. Red is the palette red (deepened for text); the palette has no green or orange,
+     so those stay Apple's system colours. */
+  --red: light-dark(#d70d1a, #ff5a66);
+  --danger-fill: #d70d1a;
   --green: light-dark(rgb(0 137 50), rgb(48 209 88));
   --orange: light-dark(rgb(197 83 0), rgb(255 146 48));
-  --blue: light-dark(rgb(30 110 244), rgb(0 145 255));
+  --blue: light-dark(#1d6fa8, var(--palette-frosted));
 
-  /* Brand slab (departure board). */
-  --board-bg: #15130f;
-  --board-edge: light-dark(rgb(0 0 0 / 0.25), #3a3226);
-  --board-ink: #f3c14b;
-  --board-dim: #b59a5c;
+  /* Brand slab (departure board): icy-blue lettering on deep teal. */
+  --board-bg: #0d2423;
+  --board-edge: light-dark(rgb(0 0 0 / 0.2), rgb(129 214 227 / 0.25));
+  --board-ink: var(--palette-icy);
+  --board-dim: #7fb6bf;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  /* Manrope for text, Redaction 35 for titles (both from Google Fonts, see index.html). */
+  --font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-title: "Redaction 35", "Redaction", Georgia, "Times New Roman", serif;
   --radius: 14px;
   --gutter: 16px;
   --panel: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
-/* Increase Contrast (prefers-contrast: more): stronger secondary text, separators and colours. */
+/* Increase Contrast: stronger secondary text, separators and tint. */
 @media (prefers-contrast: more) {
   :root {
-    --label-2: light-dark(rgb(60 60 67 / 0.85), rgb(235 235 245 / 0.85));
-    --label-3: light-dark(rgb(60 60 67 / 0.6), rgb(235 235 245 / 0.6));
-    --separator: light-dark(rgb(60 60 67 / 0.6), rgb(140 140 145 / 0.9));
-    --tint: light-dark(#8a4a06, #f0b25e);
-    --red: light-dark(rgb(233 21 45), rgb(255 97 101));
-    --green: light-dark(rgb(0 137 50), rgb(74 217 104));
-    --orange: light-dark(rgb(197 83 0), rgb(255 160 86));
-    --blue: light-dark(rgb(30 110 244), rgb(92 184 255));
+    --label-2: light-dark(#2f3d40, #c9d8dc);
+    --label-3: light-dark(rgb(14 31 34 / 0.6), rgb(241 247 250 / 0.6));
+    --separator: light-dark(rgb(14 31 34 / 0.45), rgb(178 221 247 / 0.5));
+    --tint: light-dark(#17544f, #b2ddf7);
+    --red: light-dark(#b00a15, #ff8089);
     --panel: var(--surface);
   }
 }
@@ -81,16 +95,23 @@ body {
   font: 16px/1.5 var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+/* Titles: Redaction 35 has a single (regular) weight, so no faux bold. */
+h1,
+h2,
+.board-title,
+.brand {
+  font-family: var(--font-title);
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
 h1 {
-  font-size: 1.5rem;
-  line-height: 1.25;
+  font-size: 1.75rem;
+  line-height: 1.2;
   margin: 0 0 0.5rem;
-  font-weight: 700;
 }
 h2 {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   margin: 0 0 0.75rem;
-  font-weight: 650;
 }
 h3 {
   font-size: 1rem;
@@ -182,9 +203,7 @@ a {
   gap: 10px;
   color: var(--label);
   text-decoration: none;
-  font-weight: 700;
-  font-size: 1.1rem;
-  letter-spacing: 0.02em;
+  font-size: 1.3rem;
 }
 .content {
   display: grid;
@@ -226,8 +245,7 @@ a {
   color: var(--board-dim);
 }
 .board-title {
-  font-size: clamp(1.5rem, 6vw, 2.1rem);
-  font-weight: 700;
+  font-size: clamp(1.7rem, 6.5vw, 2.4rem);
   line-height: 1.2;
   margin-top: 6px;
   overflow-wrap: anywhere;
@@ -247,7 +265,7 @@ a {
   box-shadow: 0 0 0 1px var(--separator), 0 12px 32px -20px rgb(0 0 0 / 0.5);
 }
 .hero h1 {
-  font-size: clamp(1.6rem, 5vw, 2.1rem);
+  font-size: clamp(1.9rem, 5.5vw, 2.5rem);
 }
 .lede {
   color: var(--label-2);
@@ -319,7 +337,7 @@ ol.list {
   cursor: default;
 }
 .btn-primary {
-  background: var(--tint);
+  background: var(--tint-fill);
   color: var(--on-tint);
 }
 .btn-secondary {
@@ -331,7 +349,7 @@ ol.list {
   color: var(--tint);
 }
 .btn-danger {
-  background: var(--red);
+  background: var(--danger-fill);
   color: #fff;
 }
 .btn:not(:disabled):hover {
@@ -438,7 +456,7 @@ ol.list {
   cursor: pointer;
 }
 .tag-toggle:has(input:checked) {
-  background: var(--tint);
+  background: var(--tint-fill);
   color: var(--on-tint);
 }
 .tag-toggle:has(input:focus-visible) {
@@ -646,7 +664,7 @@ ol.list {
 .bar > span {
   display: block;
   height: 100%;
-  background: var(--tint);
+  background: var(--tint-fill);
   border-radius: inherit;
   transition: width 1s linear;
 }
@@ -816,7 +834,7 @@ ol.list {
 }
 .messages .mine {
   justify-self: end;
-  background: var(--tint);
+  background: var(--tint-fill);
   color: var(--on-tint);
   border-bottom-right-radius: 4px;
 }
