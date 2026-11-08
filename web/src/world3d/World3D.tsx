@@ -27,6 +27,8 @@ export interface World3DProps {
   /** Lines and their return twins, for placing trains running either way. */
   allRoutes: Route[];
   trips: Trip[];
+  /** Your home base (Berlin): always named, and marked as home. */
+  home: string | null;
   focus: WorldFocus;
   selection: Selection;
 }
@@ -48,10 +50,10 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const LINE = 0xc8ccd6;
 const LINE_HOT = 0xffffff;
 
-export default function World3D({ stops, routes, allRoutes, trips, focus, selection }: World3DProps) {
+export default function World3D({ stops, routes, allRoutes, trips, home, focus, selection }: World3DProps) {
   const host = useRef<HTMLDivElement>(null);
-  const latest = useRef({ stops, routes, allRoutes, trips, focus, selection });
-  latest.current = { stops, routes, allRoutes, trips, focus, selection };
+  const latest = useRef({ stops, routes, allRoutes, trips, home, focus, selection });
+  latest.current = { stops, routes, allRoutes, trips, home, focus, selection };
   const api = useRef<{ rebuild: () => void; refocus: () => void; reselect: () => void } | null>(null);
 
   useEffect(() => {
@@ -122,13 +124,27 @@ export default function World3D({ stops, routes, allRoutes, trips, focus, select
     const stationHi = new THREE.MeshStandardMaterial({ color: LINE, emissive: LINE, emissiveIntensity: 0.4 });
 
     const stopMeshes: THREE.Mesh[] = [];
-    const stopLabels: { obj: CSS2DObject; normal: THREE.Vector3; highlight: boolean; id: string; mesh: THREE.Mesh }[] = [];
+    const stopLabels: {
+      obj: CSS2DObject;
+      normal: THREE.Vector3;
+      highlight: boolean;
+      /** Named by the current screen (e.g. your journey's stops). */
+      listed: boolean;
+      /** On the selected line (or the selected train's line). */
+      onSelected: boolean;
+      id: string;
+      mesh: THREE.Mesh;
+    }[] = [];
     let hoverStop: string | null = null;
     /** The hovered and the selected station stand out: brighter dot, bigger label. */
     function highlightStops() {
-      const sel = latest.current.selection;
+      const { selection: sel, allRoutes, trips } = latest.current;
       const selected = sel?.kind === "stop" ? sel.id : null;
+      // A selected line (or train) names all its stations.
+      const routeId = sel?.kind === "route" ? sel.id : sel?.kind === "train" ? trips.find((t) => t.id === sel.id)?.route : undefined;
+      const onLine = new Set(allRoutes.find((r) => r.id === routeId)?.stops.map((s) => s.id) ?? []);
       for (const l of stopLabels) {
+        l.onSelected = onLine.has(l.id);
         const on = l.highlight || l.id === hoverStop || l.id === selected;
         l.obj.element.classList.toggle("is-highlight", on);
         l.mesh.material = on ? stationHi : stationMat;
@@ -171,7 +187,8 @@ export default function World3D({ stops, routes, allRoutes, trips, focus, select
         routeLines.set(r.id, entry);
       }
       for (const s of stops) {
-        const hi = focus.highlight.includes(s.id);
+        const isHome = s.id === latest.current.home;
+        const hi = isHome || focus.highlight.includes(s.id);
         const m = new THREE.Mesh(stationGeometry, hi ? stationHi : stationMat);
         m.userData.base = hi ? 0.011 : 0.006;
         const p = toVec3(s.coordinates, TRACK_R);
@@ -180,13 +197,23 @@ export default function World3D({ stops, routes, allRoutes, trips, focus, select
         network.add(m);
         stopMeshes.push(m);
 
+        // The renderer positions the outer element (centred on the station); the name inside it
+        // is lifted above the dot by CSS.
         const div = document.createElement("div");
-        div.className = `world-label${hi ? " is-highlight" : ""}`;
-        div.textContent = s.name;
+        div.className = `world-label${hi ? " is-highlight" : ""}${isHome ? " is-home" : ""}`;
+        const name = document.createElement("span");
+        name.className = "world-label-name";
+        if (isHome) {
+          const tag = document.createElement("span");
+          tag.className = "world-label-tag";
+          tag.textContent = "Home base";
+          name.append(tag, s.name);
+        } else name.textContent = s.name;
+        div.append(name);
         const obj = new CSS2DObject(div);
-        obj.position.set(...toVec3(s.coordinates, TRACK_R + 0.01));
+        obj.position.set(...toVec3(s.coordinates, TRACK_R));
         network.add(obj);
-        stopLabels.push({ obj, normal: new THREE.Vector3(...p).normalize(), highlight: hi, id: s.id, mesh: m });
+        stopLabels.push({ obj, normal: new THREE.Vector3(...p).normalize(), highlight: hi, listed: focus.labels.includes(s.id), onSelected: false, id: s.id, mesh: m });
       }
       highlightRoutes();
     }
@@ -205,7 +232,10 @@ export default function World3D({ stops, routes, allRoutes, trips, focus, select
     // "Your train" label that rides above the followed train.
     const youDiv = document.createElement("div");
     youDiv.className = "world-label is-highlight";
-    youDiv.textContent = "Your train";
+    const youName = document.createElement("span");
+    youName.className = "world-label-name";
+    youName.textContent = "Your train";
+    youDiv.append(youName);
     const youLabel = new CSS2DObject(youDiv);
     youLabel.visible = false;
     scene.add(youLabel);
@@ -464,10 +494,11 @@ export default function World3D({ stops, routes, allRoutes, trips, focus, select
         renderer.domElement.style.cursor = clickable ? "pointer" : "";
       }
 
-      // Labels: hide on the far side of the globe, and minor ones when zoomed out.
+      // Names: only for the stations this screen is about (and the one you hover or select),
+      // and never on the far side of the globe. Every other station is a dot.
       camUnit.copy(camera.position).normalize();
-      const far = camera.position.length() > 2.6;
-      for (const l of stopLabels) l.obj.visible = l.normal.dot(camUnit) > 0.25 && (l.highlight || l.obj.element.classList.contains("is-highlight") || !far);
+      for (const l of stopLabels)
+        l.obj.visible = l.normal.dot(camUnit) > 0.25 && (l.highlight || l.listed || l.onSelected || l.obj.element.classList.contains("is-highlight"));
 
       renderer.render(scene, camera);
       labels.render(scene, camera);
@@ -494,7 +525,7 @@ export default function World3D({ stops, routes, allRoutes, trips, focus, select
     };
   }, []);
 
-  useEffect(() => api.current?.rebuild(), [stops, routes]);
+  useEffect(() => api.current?.rebuild(), [stops, routes, home]);
   useEffect(() => api.current?.refocus(), [focus]);
   useEffect(() => api.current?.reselect(), [selection]);
 

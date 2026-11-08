@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { api, type Stop } from "./api";
 import type { TripMotion } from "./lib/motion";
 
@@ -62,6 +63,8 @@ export function useActiveTrips() {
   });
 }
 
+const NONE: Route[] = [];
+
 /**
  * Lines run both ways: each has a return twin (id + "~r") that trains switch to at the end of
  * the line. For display, a twin is the same line.
@@ -73,10 +76,12 @@ export function useWorld() {
   const stops = useStops();
   const routes = useRoutes();
   const trips = useActiveTrips();
-  const all = routes.data ?? [];
+  const all = routes.data ?? NONE;
+  // Memoised: a new array here would make the globe rebuild its whole network every render.
+  const lines = useMemo(() => all.filter((r) => !r.returnOf), [all]);
   return {
     stops: stops.data ?? [],
-    routes: all.filter((r) => !r.returnOf),
+    routes: lines,
     allRoutes: all,
     trips: trips.data ?? [],
     isPending: stops.isPending || routes.isPending || trips.isPending,

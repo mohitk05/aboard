@@ -8,8 +8,13 @@ import type { LatLng } from "./geo";
 export interface WorldFocus {
   /** Accessible name for the world view, e.g. "Map following your train". */
   label: string;
-  /** Stations to emphasise. */
+  /** Stations to emphasise (bigger dot, bigger name). */
   highlight: string[];
+  /**
+   * Stations whose names show, besides the highlighted ones (e.g. the stops on your journey).
+   * Every other station is just a dot, named when you hover it, so the map stays uncluttered.
+   */
+  labels: string[];
   /** Keep this train in view as it moves. */
   follow: string | null;
   /** Look at this point… */
@@ -20,7 +25,7 @@ export interface WorldFocus {
   onMapClick?: (at: LatLng) => void;
 }
 
-const DEFAULT: WorldFocus = { label: "Map of the rail network", highlight: [], follow: null, center: null, distance: null };
+const DEFAULT: WorldFocus = { label: "Map of the rail network", highlight: [], labels: [], follow: null, center: null, distance: null };
 
 let current: WorldFocus = DEFAULT;
 const listeners = new Set<() => void>();
@@ -41,13 +46,14 @@ export function useWorldFocus(f: Partial<WorldFocus>) {
   // Click handlers change identity every render; keep the latest without re-focusing.
   const handlers = useRef({ onStopClick: f.onStopClick, onMapClick: f.onMapClick });
   handlers.current = { onStopClick: f.onStopClick, onMapClick: f.onMapClick };
-  const key = JSON.stringify([f.label, f.highlight, f.follow, f.center, f.distance, !!f.onStopClick, !!f.onMapClick]);
+  const key = JSON.stringify([f.label, f.highlight, f.labels, f.follow, f.center, f.distance, !!f.onStopClick, !!f.onMapClick]);
 
   useEffect(() => {
     set({
       ...DEFAULT,
       ...f,
       highlight: f.highlight ?? [],
+      labels: f.labels ?? [],
       onStopClick: f.onStopClick ? (id) => handlers.current.onStopClick?.(id) : undefined,
       onMapClick: f.onMapClick ? (at) => handlers.current.onMapClick?.(at) : undefined,
     });

@@ -110,7 +110,9 @@ function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
           <Button small kind="secondary" onClick={() => select({ kind: "stop", id: stop.id })}>
             Station details
           </Button>
-          <ButtonLink to="/business">Your business</ButtonLink>
+          <ButtonLink to="/business" small>
+            Your business
+          </ButtonLink>
         </div>
       )}
       {stop && <MarketCard stopId={stop.id} />}

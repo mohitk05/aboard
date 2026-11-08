@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { useCatalog } from "../game";
 import { useWorld } from "../world";
 import { useCurrentFocus } from "./focus";
 import { Inspector } from "./Inspector";
@@ -12,10 +13,11 @@ export function WorldLayer() {
   const world = useWorld();
   const focus = useCurrentFocus();
   const selection = useSelection();
+  const home = useCatalog().data?.home?.id ?? null;
   return (
     <>
       <Suspense fallback={<div className="world" aria-hidden />}>
-        <World3D stops={world.stops} routes={world.routes} allRoutes={world.allRoutes} trips={world.trips} focus={focus} selection={selection} />
+        <World3D stops={world.stops} routes={world.routes} allRoutes={world.allRoutes} trips={world.trips} home={home} focus={focus} selection={selection} />
       </Suspense>
       <Inspector />
     </>

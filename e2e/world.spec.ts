@@ -1,4 +1,17 @@
 import { ensureWorld, expect, signUp, test } from "./fixtures";
+import type { Locator } from "@playwright/test";
+
+/** Where a label is once the camera has stopped moving (same spot twice, half a second apart). */
+async function settled(label: Locator) {
+  let last = await label.boundingBox();
+  for (let i = 0; i < 40; i++) {
+    await label.page().waitForTimeout(500);
+    const now = await label.boundingBox();
+    if (now && last && Math.abs(now.x - last.x) < 1 && Math.abs(now.y - last.y) < 1) return now;
+    last = now;
+  }
+  throw new Error("The camera never settled");
+}
 
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
@@ -58,13 +71,29 @@ test("click a station on the globe for its photo, arrivals and departures", asyn
   );
   await signUp(page, "Paris, France");
 
-  // Berlin is up and to the right of Paris, clear of the panels on a phone too.
-  // The station's dot sits just under its label (labels are lifted 14px and let clicks through).
-  const label = page.locator(".world-label", { hasText: /^Berlin$/ });
-  await expect(label).toBeVisible({ timeout: 20_000 });
-  await page.waitForTimeout(2500); // let the camera settle
-  const box = (await label.boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2 + 14);
+  // Your home base and your own station are named on the globe; the rest are dots.
+  const home = page.locator(".world-label.is-home");
+  const paris = page.locator(".world-label", { hasText: /^Paris$/ });
+  const madrid = page.locator(".world-label", { hasText: /^Madrid$/ });
+  await expect(home).toContainText("Home base", { timeout: 20_000 });
+  await expect(home).toContainText("Berlin");
+  await expect(paris).toBeVisible();
+  await expect(madrid).toBeHidden();
+
+  // Selecting a line names its stations; closing it hides them again.
+  const board = page.getByRole("region", { name: "Departures" });
+  await board.getByRole("button", { name: /The Long Way/ }).first().click();
+  await board.getByRole("button", { name: "Line details" }).click();
+  await expect(madrid).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(madrid).toBeHidden();
+  // Fold the departure away again, so its buttons aren't over the globe.
+  await board.getByRole("button", { name: /The Long Way/ }).first().click();
+  await expect(board.getByRole("button", { name: "Line details" })).toHaveCount(0);
+
+  // Click Berlin's dot. (A name's box is centred on its station; the text is drawn just above.)
+  const box = await settled(home);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 
   const panel = page.getByRole("region", { name: "Berlin" });
   await expect(panel).toBeVisible();
@@ -86,4 +115,36 @@ test("click a station on the globe for its photo, arrivals and departures", asyn
   // The same panel opens from the keyboard, for your own station.
   await page.getByRole("button", { name: "Station details" }).click();
   await expect(page.getByRole("region", { name: "Paris" })).toBeVisible();
+});
+
+test("hovering a station's dot names it (mouse)", async ({ browser }) => {
+  test.setTimeout(90_000);
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  const page = await ctx.newPage();
+  await signUp(page, "Paris, France");
+  const moscow = page.locator(".world-label", { hasText: /^Moscow$/ });
+
+  // Find Moscow's dot: open the line (which names its stations), note where Moscow is, close it.
+  const board = page.getByRole("region", { name: "Departures" });
+  await board.getByRole("button", { name: /The Long Way/ }).first().click();
+  await board.getByRole("button", { name: "Line details" }).click();
+  await expect(moscow).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(2500); // let the camera settle
+  const home = page.locator(".world-label.is-home"); // always named: a reference point
+  const box = (await moscow.boundingBox())!;
+  const before = (await home.boundingBox())!;
+  await page.getByRole("button", { name: "Close details" }).click();
+  await board.getByRole("button", { name: /The Long Way/ }).first().click(); // fold the departure away
+  await expect(moscow).toBeHidden();
+  await page.waitForTimeout(2500);
+  // Closing the panel re-centres the view (a sideways shift of everything); follow it.
+  const after = (await home.boundingBox())!;
+  const [dx, dy] = [after.x - before.x, after.y - before.y];
+
+  await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+  await expect(moscow).toBeVisible();
+  await page.mouse.move(5, 400); // away again
+  await expect(moscow).toBeHidden();
+  await ctx.close();
 });

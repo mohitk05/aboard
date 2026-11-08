@@ -57,9 +57,9 @@ export function Button({
 }
 
 /** A router link that looks like a button. */
-export function ButtonLink({ to, kind = "secondary", children }: { to: string; kind?: ButtonKind; children: ReactNode }) {
+export function ButtonLink({ to, kind = "secondary", small, children }: { to: string; kind?: ButtonKind; small?: boolean; children: ReactNode }) {
   return (
-    <Link to={to} className={`btn btn-${kind}`}>
+    <Link to={to} className={`btn btn-${kind}${small ? " btn-small" : ""}`}>
       {children}
     </Link>
   );

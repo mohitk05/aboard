@@ -16,6 +16,7 @@ export function Waiting({ journey }: { journey: Journey }) {
   useWorldFocus({
     label: `Map of your trip from ${journey.from.name} to ${journey.to.name}`,
     highlight: [journey.from.id, journey.to.id],
+    labels: journey.stops.slice(journey.fromIndex, journey.toIndex + 1).map((s) => s.id),
     center: journey.from.coordinates,
     distance: 2.4,
   });

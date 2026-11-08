@@ -19,6 +19,7 @@ export function Journey({ journey: j }: { journey: JourneyData }) {
   useWorldFocus({
     label: "Map following your train",
     highlight: [j.from.id, j.to.id],
+    labels: j.stops.slice(j.fromIndex, j.toIndex + 1).map((s) => s.id),
     follow: j.trip.id,
     distance: 2.1,
   });

@@ -29,6 +29,7 @@ The whole app is a **three.js world** (`web/src/world3d/`), built following the 
 - **Streamed satellite tiles:** zoom in and the globe swaps its whole-Earth texture for map tiles of just the area in view (Web Mercator, zoom 3–8), like a map app (`tiles.ts`). They're NASA GIBS imagery (Blue Marble by day, Black Marble city lights at night, public domain), fetched through the Worker at `/tiles/{day|night}/{z}/{x}/{y}.{jpg|png}`, which caches them at Cloudflare's edge because GIBS sends `no-store`.
 - **Rail lines** in cool white at a constant on-screen width; hover one to highlight it.
 - **Trains** made of a locomotive and carriages that follow the curve of the track, with windows that light up at night (`trains.ts`). They move smoothly between world ticks.
+- **Station names only where they matter:** your home base (Berlin, tagged "Home base"), the station you're at, the stops on your journey, and every station of a line or train you've selected. Other stations are dots; hover one for its name.
 - **Click a station** for a photo of the place (the lead image of its Wikipedia article, credited) and its live arrivals and departures. Hover one and its name brightens.
 - **Click a train or a line** for its details. The same panels open from "Train details", "Line details" and "Station details" buttons (and station names in a line's details), so they're reachable by keyboard and screen readers too.
 
