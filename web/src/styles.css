@@ -634,20 +634,34 @@ select.input {
     bottom: 0;
     z-index: 10;
     flex-wrap: nowrap;
-    justify-content: space-around;
+    justify-content: flex-start;
     gap: 0;
-    padding: 0 4px env(safe-area-inset-bottom);
+    padding: 0 8px env(safe-area-inset-bottom);
     background: #000;
     border-top: 1px solid var(--hairline);
     text-shadow: none;
     font-size: 0.6875rem;
+    /* One row that scrolls sideways, rather than squeezing every tab in. */
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* A soft fade at the right edge hints that there's more. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
   }
   .nav a {
-    flex: 1;
+    flex: 0 0 auto;
+    min-width: 76px;
     text-align: center;
-    padding: 16px 2px;
+    padding: 16px 16px;
     border-bottom: 0;
     border-top: 2px solid transparent;
+    scroll-snap-align: start;
+    white-space: nowrap;
   }
   .nav a.active {
     border-top-color: var(--label);
