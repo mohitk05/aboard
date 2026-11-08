@@ -1181,3 +1181,118 @@ select.input {
 .station-market p {
   margin: 4px 0;
 }
+
+/* ---------- the Story: eight chapters over old-master paintings ---------- */
+.content-wide {
+  max-width: none !important;
+}
+/* The story is read, not a view of the globe: no gap at the top on phones. */
+.content.content-wide {
+  padding-top: 12px;
+}
+.story {
+  pointer-events: auto;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: clamp(28px, 6vw, 72px);
+  padding: clamp(24px, 4vw, 48px);
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.story-head h1 {
+  font-size: clamp(2.2rem, 6vw, 4rem);
+  line-height: 1;
+  margin: 6px 0 0;
+}
+.story-head .eyebrow {
+  margin: 0;
+}
+.chapter {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 48px);
+  align-items: center;
+}
+.chapter.is-flipped {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+}
+.chapter.is-flipped .chapter-art {
+  order: 2;
+}
+.chapter-art {
+  margin: 0;
+  justify-self: center;
+  width: 100%;
+  max-height: 78vh;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  box-shadow: 0 30px 60px -30px #000;
+}
+.chapter-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: 50% 40%;
+  animation: push-in 24s ease-out both;
+  filter: saturate(1.05) contrast(1.04);
+}
+@keyframes push-in {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+.chapter-n {
+  display: block;
+  font-family: var(--font-title);
+  font-size: clamp(3rem, 8vw, 5.5rem);
+  line-height: 1;
+  color: var(--label-3);
+}
+.chapter-text h2 {
+  font-size: clamp(1.7rem, 3.6vw, 2.6rem);
+  line-height: 1.05;
+  margin: 6px 0 14px;
+}
+.chapter-text p {
+  margin: 0 0 14px;
+  font-size: clamp(1rem, 1.4vw, 1.15rem);
+  line-height: 1.65;
+  color: var(--label);
+}
+.chapter-text .chapter-credit {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--label-3);
+}
+.chapter-credit a {
+  color: var(--label-2);
+}
+.chapter-credit cite {
+  font-style: italic;
+}
+.story-end {
+  display: flex;
+  justify-content: center;
+}
+@media (max-width: 800px) {
+  .chapter,
+  .chapter.is-flipped {
+    grid-template-columns: 1fr;
+  }
+  .chapter.is-flipped .chapter-art {
+    order: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chapter-art img {
+    animation: none;
+  }
+}

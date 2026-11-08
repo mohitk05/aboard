@@ -5,7 +5,7 @@ import { Link } from "react-router";
 // docs/Design.md). Screens use only these.
 
 /** Page frame: brand bar, then panels floating over the 3D world. */
-export function Page({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+export function Page({ children, actions, wide }: { children: ReactNode; actions?: ReactNode; wide?: boolean }) {
   return (
     <div className="page">
       <header className="topbar">
@@ -14,7 +14,7 @@ export function Page({ children, actions }: { children: ReactNode; actions?: Rea
         </Link>
         <div className="topbar-actions">{actions}</div>
       </header>
-      <main className="content">{children}</main>
+      <main className={`content${wide ? " content-wide" : ""}`}>{children}</main>
     </div>
   );
 }
