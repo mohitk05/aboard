@@ -158,6 +158,7 @@ describe("the industry game", () => {
     const routes = (await api("GET", "/route")).data;
     const line = routes.find((r: any) => !r.returnOf);
     const back = routes.find((r: any) => r.returnOf === line.id);
+    expect((await api("GET", `/route/${back.id}`, { token })).data.returnOf).toBe(line.id);
     // A train heading back towards Lisbon, still a few stations east of Berlin.
     const made = await api("POST", "/trip", { token: admin, body: { trip: { route: back.id, active: true } } });
     expect(made.status, made.error).toBe(201);

@@ -141,9 +141,9 @@ function whereIs(c: Context, browser?: { lat: number; lng: number }): { at: { la
   return { at: null, source: "none" };
 }
 
-const param = (c: Context, name: string) => {
+const param = (c: Context, name: string, schema: z.ZodType<string> = id) => {
   const v = c.req.param(name);
-  if (!v || !id.safeParse(v).success) throw new HTTPException(404, { message: "Not found." });
+  if (!v || !schema.safeParse(v).success) throw new HTTPException(404, { message: "Not found." });
   return v;
 };
 
@@ -255,7 +255,7 @@ app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
 
 // Route
 app.get("/route", (c) => world(c.env).listRoutes().then((list) => ok(c, list)));
-app.get("/route/:id", anyone, (c) => send(c, world(c.env).getRoute(param(c, "id"))));
+app.get("/route/:id", anyone, (c) => send(c, world(c.env).getRoute(param(c, "id", routeId))));
 app.post("/route", admin, async (c) => send(c, changed(c.env, world(c.env).createRoute((await body(c, schemas.route)).route)), 201));
 app.post("/route/autogenerate", admin, async (c) =>
   send(c, changed(c.env, world(c.env).autogenerateRoutes((await body(c, schemas.autogenerate)).config)), 201),
