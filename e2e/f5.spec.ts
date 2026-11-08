@@ -10,7 +10,7 @@ test("F5: installable app with a manifest and an offline shell", async ({ page, 
   for (const icon of manifest.icons) expect((await request.get(icon.src)).status()).toBe(200);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible();
   // The service worker installs and takes control.
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
@@ -22,7 +22,7 @@ test("F5: installable app with a manifest and an offline shell", async ({ page, 
   await expect(page.getByText(/Can't reach Aboard/)).toBeVisible({ timeout: 15_000 });
   await context.setOffline(false);
   await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible();
 });
 
 test("F5: turn notifications on and off", async ({ page, context }) => {

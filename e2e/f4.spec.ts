@@ -70,7 +70,7 @@ test("F4: edit your profile and change your password", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "Password changed." })).toBeVisible();
 
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible();
   await page.goto("/login");
   await page.getByLabel("Email").fill(me.email);
   await page.getByLabel("Password").fill("a-new-password");

@@ -2,9 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { api, type Interest, type Stop } from "../api";
-import { askCoords, fetchNearest, useNearestStation } from "../lib/location";
 import { useSignup } from "../auth";
-import { Button, Card, Check, FormError, Notice, Page, SelectField, TagPicker, TextField } from "../ui";
+import { Button, Card, Check, FormError, Page, TagPicker, TextField } from "../ui";
 
 export function Signup() {
   const signup = useSignup();
@@ -15,35 +14,10 @@ export function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [age, setAge] = useState("");
-  const [stop, setStop] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [isPrivate, setPrivate] = useState(false);
-  const [locating, setLocating] = useState<"idle" | "busy" | "denied">("idle");
-  const [changing, setChanging] = useState(false);
-
-  // You start at the station nearest to you, worked out without a permission prompt.
-  const nearest = useNearestStation();
-  const [auto, setAuto] = useState<string | null>(null);
-  if (nearest.data && auto === null) {
-    setAuto(nearest.data.stop.id);
-    if (!stop) setStop(nearest.data.stop.id);
-  }
-  const chosen = stops.data?.find((s) => s.id === stop);
-
-  // "Use my exact location": asks the browser, then picks the nearest station to that.
-  const findNearest = async () => {
-    setLocating("busy");
-    const at = await askCoords();
-    if (!at) return setLocating("denied");
-    try {
-      const n = await fetchNearest(at);
-      setStop(n.stop.id);
-      setAuto(n.stop.id);
-      setLocating("idle");
-    } catch {
-      setLocating("denied");
-    }
-  };
+  // Everyone starts at home, in Berlin: that's where your warehouse and factories will be.
+  const home = useQuery({ queryKey: ["catalog"], queryFn: () => api<{ home: Stop | null }>("GET", "/game/catalog") }).data?.home;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -52,7 +26,6 @@ export function Signup() {
       email: email.trim(),
       password,
       age: Number(age),
-      currentStop: stop,
       interests: picked,
       profileMode: isPrivate ? "PRIVATE" : "PUBLIC",
     });
@@ -75,49 +48,14 @@ export function Signup() {
         <form className="form" onSubmit={submit}>
           <h1>Get a ticket</h1>
 
-          {!changing && chosen ? (
-            <div className="start-station" role="group" aria-label="Starting station">
-              <span className="field-label">You'll start at</span>
-              <strong className="start-name">
-                {chosen.name}, {chosen.country}
-              </strong>
-              <span className="field-hint">
-                {stop === auto ? "The station nearest to you." : "Your choice."} You can travel anywhere from here.
-              </span>
-              <div className="row">
-                <Button small onClick={() => setChanging(true)}>
-                  Change
-                </Button>
-                <Button small kind="quiet" onClick={findNearest} disabled={locating === "busy"}>
-                  {locating === "busy" ? "Locating…" : "Use my exact location"}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="row row-end">
-              <SelectField
-                label="Where are you starting?"
-                hint="You can travel anywhere from here."
-                required
-                value={stop}
-                onValue={setStop}
-                disabled={!stops.data}
-              >
-                <option value="" disabled>
-                  {stops.isPending || nearest.isPending ? "Finding stations near you…" : "Choose a station"}
-                </option>
-                {stops.data?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}, {s.country}
-                  </option>
-                ))}
-              </SelectField>
-              <Button onClick={findNearest} disabled={locating === "busy"}>
-                {locating === "busy" ? "Locating…" : "Nearest to me"}
-              </Button>
-            </div>
-          )}
-          {locating === "denied" && <Notice tone="warning">Couldn't get your exact location. Pick a station instead.</Notice>}
+          <div className="start-station" role="group" aria-label="Starting station">
+            <span className="field-label">Your home base</span>
+            <strong className="start-name">{home ? `${home.name}, ${home.country}` : "Berlin"}</strong>
+            <span className="field-hint">
+              Everyone starts here, with 5,000 credits. Ride out to buy materials, bring them home, build a factory and
+              sell what you make.
+            </span>
+          </div>
 
           <TextField
             label="Username"

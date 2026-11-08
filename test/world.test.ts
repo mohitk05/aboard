@@ -1,6 +1,6 @@
 import { reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, bootstrapAdmin, worldStub } from "./helpers";
+import { api, bootstrapAdmin, signup, worldStub } from "./helpers";
 
 let admin: string;
 
@@ -20,7 +20,10 @@ describe("demo seed", () => {
     expect(again.data.route).toBe(first.data.route);
 
     expect((await api("GET", "/stop")).data).toHaveLength(11);
-    expect((await api("GET", "/route")).data).toHaveLength(1);
+    // One line, plus its return twin (the same stations, reversed).
+    const routes = (await api("GET", "/route")).data;
+    expect(routes).toHaveLength(2);
+    expect(routes.filter((r: any) => !r.returnOf)).toHaveLength(1);
     expect((await api("GET", "/interest")).data.length).toBeGreaterThanOrEqual(10);
     const trips = (await api("GET", "/trip?active=1")).data;
     expect(trips).toHaveLength(1);
@@ -75,12 +78,8 @@ describe("placing a train", () => {
   it("puts a running train at a station or partway along, carrying its passengers", async () => {
     const seeded = (await api("POST", "/admin/seed", { token: admin })).data;
     const lisbon = (await api("GET", "/stop")).data.find((s: any) => s.name === "Lisbon").id;
-    const username = `p${Date.now().toString(36)}`;
-    const player = (
-      await api("POST", "/user/signup", {
-        body: { user: { username, email: `${username}@t.test`, password: "password123", age: 30, currentStop: lisbon } },
-      })
-    ).data;
+    const { token } = await signup(lisbon);
+    const player = { authToken: token };
     const route = (await api("GET", `/route/${seeded.route}`, { token: admin })).data;
     await api("POST", "/ticket/buy", {
       token: player.authToken,

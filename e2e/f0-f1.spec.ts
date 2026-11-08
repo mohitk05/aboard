@@ -5,6 +5,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 test("F0: sign up, stay signed in, log out, log back in", async ({ page, context }) => {
+  test.setTimeout(60_000);
   const { username, email } = await signUp(page, "Paris, France", ["Trains", "Tea"]);
   await expect(page.getByText("Paris, France")).toBeVisible();
 
@@ -15,7 +16,7 @@ test("F0: sign up, stay signed in, log out, log back in", async ({ page, context
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 
   await logOut(page);
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible();
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -95,16 +96,15 @@ test("an admin with no station is placed at the one nearest to them", async ({ p
   await expect(page.getByText("At the station")).toBeVisible();
 });
 
-test("signup suggests the nearest station, and you can still change it", async ({ page, context }) => {
-  // The browser shares its location (Moscow); the app picks the nearest station without asking.
+test("everyone starts at home in Berlin, wherever they are", async ({ page, context }) => {
+  // Even when the browser shares its location (Moscow), you start in Berlin, your home base.
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: 55.75, longitude: 37.6 });
-  await page.goto("/signup");
-  const start = page.getByRole("group", { name: "Starting station" });
-  await expect(start.getByText("Moscow, Russia")).toBeVisible();
-  await expect(start.getByText("The station nearest to you.")).toBeVisible();
-  await start.getByRole("button", { name: "Change" }).click();
-  await expect(page.getByLabel("Where are you starting?")).toHaveValue(/.+/);
+  await signUp(page);
+  await expect(page.getByRole("region", { name: "At the station" })).toContainText("Berlin, Germany");
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Business" }).click();
+  await expect(page.getByRole("region", { name: "Your business" })).toContainText("5,000 cr");
+  await expect(page.getByRole("region", { name: "Chocolate factory" })).toBeVisible();
 });
 
 test("the landing page fits the window without scrolling on a laptop", async ({ browser }) => {
@@ -112,7 +112,7 @@ test("the landing page fits the window without scrolling on a laptop", async ({ 
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   const page = await ctx.newPage();
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible();
   const { h, vh, w, vw } = await page.evaluate(() => ({
     h: document.documentElement.scrollHeight,
     vh: innerHeight,

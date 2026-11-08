@@ -9,6 +9,8 @@ export interface RouteStop extends Stop {
 export interface Route {
   id: string;
   name: string;
+  /** Set on a line's return twin (same stations, reversed): the line it runs back along. */
+  returnOf: string | null;
   stops: RouteStop[];
   totalKm: number;
 }
@@ -60,14 +62,22 @@ export function useActiveTrips() {
   });
 }
 
-/** Everything the map needs. */
+/**
+ * Lines run both ways: each has a return twin (id + "~r") that trains switch to at the end of
+ * the line. For display, a twin is the same line.
+ */
+export const lineId = (routeId: string) => (routeId.endsWith("~r") ? routeId.slice(0, -2) : routeId);
+
+/** Everything the map needs. `routes` are the lines; `allRoutes` adds their return twins. */
 export function useWorld() {
   const stops = useStops();
   const routes = useRoutes();
   const trips = useActiveTrips();
+  const all = routes.data ?? [];
   return {
     stops: stops.data ?? [],
-    routes: routes.data ?? [],
+    routes: all.filter((r) => !r.returnOf),
+    allRoutes: all,
     trips: trips.data ?? [],
     isPending: stops.isPending || routes.isPending || trips.isPending,
     error: stops.error ?? routes.error ?? trips.error,
@@ -82,7 +92,7 @@ export { DEFAULT_SPEED_KMH } from "../../src/lib/constants";
  * it (or the default speed if none are), plus the wait at every intermediate station.
  */
 export function lineHours(route: Route, trips: Trip[], fallbackKmh: number): number {
-  const running = trips.filter((t) => t.route === route.id);
+  const running = trips.filter((t) => lineId(t.route) === route.id);
   const speed = running.length ? running.reduce((s, t) => s + t.speedKmh, 0) / running.length : fallbackKmh;
   const waits = route.stops.slice(1, -1).reduce((m, s) => m + s.dwellMinutes, 0) / 60;
   return route.totalKm / speed + waits;

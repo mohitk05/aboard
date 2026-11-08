@@ -22,7 +22,10 @@ import { createTrainKit, poseTrain } from "./trains";
 
 export interface World3DProps {
   stops: Stop[];
+  /** Lines to draw. */
   routes: Route[];
+  /** Lines and their return twins, for placing trains running either way. */
+  allRoutes: Route[];
   trips: Trip[];
   focus: WorldFocus;
   selection: Selection;
@@ -45,10 +48,10 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const LINE = 0xc8ccd6;
 const LINE_HOT = 0xffffff;
 
-export default function World3D({ stops, routes, trips, focus, selection }: World3DProps) {
+export default function World3D({ stops, routes, allRoutes, trips, focus, selection }: World3DProps) {
   const host = useRef<HTMLDivElement>(null);
-  const latest = useRef({ stops, routes, trips, focus, selection });
-  latest.current = { stops, routes, trips, focus, selection };
+  const latest = useRef({ stops, routes, allRoutes, trips, focus, selection });
+  latest.current = { stops, routes, allRoutes, trips, focus, selection };
   const api = useRef<{ rebuild: () => void; refocus: () => void; reselect: () => void } | null>(null);
 
   useEffect(() => {
@@ -225,7 +228,7 @@ export default function World3D({ stops, routes, trips, focus, selection }: Worl
           trainGroup.add(g);
           trainGroups.set(t.id, g);
         }
-        poseTrain(g, t, routes.find((r) => r.id === t.route), now, len, TRACK_R);
+        poseTrain(g, t, allRoutes.find((r) => r.id === t.route), now, len, TRACK_R);
         nightSum += 1 - THREE.MathUtils.smoothstep(g.children[0]!.position.clone().normalize().dot(sunDir), -0.1, 0.2);
         if (t.id === focus.follow) {
           // Float the label well above the train so it doesn't sit on station names.

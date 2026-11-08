@@ -163,19 +163,25 @@ describe("travel", () => {
     expect(r[0].arrivalTime).toBeGreaterThan(Date.now() + 6 * 3600_000); // ~3,000 km at 300 km/h
   });
 
-  it("runs Lisbon → Vladivostok in about two days at the default 300 km/h", async () => {
+  it("runs Lisbon → Vladivostok in about two days at the default 300 km/h, then turns back", async () => {
     const trip = await newTrip(true);
-    const ticks = await runInDurableObject(worldStub(), (w: World) => {
+    const { ticks, after } = await runInDurableObject(worldStub(), (w: World) => {
       let n = 0;
       const t0 = Date.now();
-      while (w.getTrip(trip.id).ok && (w.getTrip(trip.id) as any).data.active && n < 10_000) {
+      // Run until the train turns around onto the line's return twin.
+      while ((w.getTrip(trip.id) as any).data.route.id === trip.route && n < 10_000) {
         w.tick(t0 + n * 5 * 60_000);
         n++;
       }
-      return n;
+      return { ticks: n, after: (w.getTrip(trip.id) as any).data };
     });
+    expect(after.route.id).toBe(`${trip.route}~r`);
+    expect(after.route.returnOf).toBe(trip.route);
+    expect(after.active).toBe(true);
+    expect(after.lastStop).toBe("Vladivostok");
+    expect(after.nextStopName).toBe("Khabarovsk");
     const days = (ticks * 5) / 60 / 24;
-    // ~14,000 km at 300 km/h ≈ 47 h, plus 20 min at each of 9 stations ≈ 50 h.
+    // ~14,000 km at 300 km/h ≈ 47 h, plus 20 min at each of 10 stations ≈ 50 h.
     expect(days).toBeGreaterThan(1.9);
     expect(days).toBeLessThan(2.3);
   });

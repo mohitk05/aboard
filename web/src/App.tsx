@@ -5,6 +5,7 @@ import { useMe } from "./auth";
 import { useLiveUpdates } from "./live";
 import { WorldLayer } from "./world3d/WorldLayer";
 import { Admin } from "./screens/Admin";
+import { Business } from "./screens/Business";
 import { Conversation, Inbox } from "./screens/Messages";
 import { People } from "./screens/People";
 import { Profile } from "./screens/Profile";
@@ -37,6 +38,7 @@ const routes = [
   { path: "/", element: <Gate signedIn={<Home />} signedOut={<Landing />} /> },
   { path: "/login", element: <Gate signedIn={home} signedOut={<Login />} /> },
   { path: "/signup", element: <Gate signedIn={home} signedOut={<Signup />} /> },
+  { path: "/business", element: <Gate signedIn={<Business />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/people", element: <Gate signedIn={<People />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/messages", element: <Gate signedIn={<Inbox />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/messages/:id", element: <Gate signedIn={<Conversation />} signedOut={<Navigate to="/login" replace />} /> },

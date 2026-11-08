@@ -7,7 +7,8 @@ let current: Selection = null;
 const listeners = new Set<() => void>();
 
 export function select(s: Selection) {
-  current = s;
+  // A line's return twin is the same line.
+  current = s?.kind === "route" && s.id.endsWith("~r") ? { kind: "route", id: s.id.slice(0, -2) } : s;
   listeners.forEach((l) => l());
 }
 

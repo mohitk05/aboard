@@ -39,6 +39,8 @@ const changed = async <T>(env: Env, result: Promise<Result<T>> | Result<T>): Pro
 // ---------- validation ----------
 
 const id = z.string().uuid();
+/** A line, or its return twin (the line's id + "~r"). */
+const routeId = z.string().regex(/^[0-9a-f-]{36}(~r)?$/i, "Invalid line id");
 const latLng = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 const schemas = {
   stop: z.object({
@@ -62,7 +64,7 @@ const schemas = {
   vehicle: z.object({ vehicle: z.object({ name: z.string().min(1).max(100) }) }),
   trip: z.object({
     trip: z.object({
-      route: id,
+      route: routeId,
       vehicle: id.optional(),
       speedKmh: z.number().min(MIN_SPEED_KMH).max(MAX_SPEED_KMH).optional(),
       active: z.boolean().optional(),
@@ -262,11 +264,9 @@ app.post("/route/autogenerate", admin, async (c) =>
 // User
 app.post("/user/signup", async (c) => {
   const { user } = await body(c, schemas.signup);
-  const { password, near, ...rest } = user;
-  const w = world(c.env);
-  const currentStop = rest.currentStop ?? (await w.nearestStop(whereIs(c, near).at))?.id;
-  if (!currentStop) return fail(c, 409, "There are no stations yet.");
-  const res = await w.createUser({ ...rest, currentStop, passwordHash: await hashPassword(password) });
+  // Everyone starts at home (Berlin): where they ask to start, or where they are, doesn't matter.
+  const { password, near: _near, currentStop: _stop, ...rest } = user;
+  const res = await world(c.env).createUser({ ...rest, passwordHash: await hashPassword(password) });
   if (!res.ok) return fail(c, res.status, res.error);
   return ok(c, { authToken: await startSession(c, { ...res.data, role: USER_ROLES.PLAYER }), user: res.data }, 201);
 });
@@ -296,6 +296,44 @@ app.post("/user/me/locate", anyone, async (c) => {
   const { near } = await body(c, z.object({ near: latLng.optional() }).default({}));
   return send(c, world(c.env).placeNearest(c.var.user.id, whereIs(c, near).at));
 });
+/** Admin: put a player at a station (for testing and support). */
+app.post("/user/:id/place", admin, async (c) => {
+  const { stop } = await body(c, z.object({ stop: z.string().min(1) }));
+  return send(c, world(c.env).placeUser(param(c, "id"), stop));
+});
+/** Admin: give a player credits (negative takes them away). */
+app.post("/user/:id/grant", admin, async (c) => {
+  const { credits } = await body(c, z.object({ credits: z.number().min(-1_000_000).max(1_000_000) }));
+  return send(c, world(c.env).grant(param(c, "id"), credits));
+});
+
+// ---------- the industry game ----------
+const qty = z.number().int().min(1).max(1000);
+/** Public: goods, industries and every market with today's prices. */
+app.get("/game/catalog", (c) => world(c.env).catalog().then((data) => ok(c, data)));
+app.get("/game", anyone, (c) => send(c, world(c.env).getGame(c.var.user.id)));
+app.post("/game/buy", anyone, async (c) => {
+  const i = await body(c, z.object({ good: z.string(), qty }));
+  return send(c, world(c.env).buy(c.var.user.id, i.good, i.qty));
+});
+app.post("/game/sell", anyone, async (c) => {
+  const i = await body(c, z.object({ good: z.string(), qty }));
+  return send(c, world(c.env).sell(c.var.user.id, i.good, i.qty));
+});
+app.post("/game/unload", anyone, (c) => send(c, world(c.env).unload(c.var.user.id)));
+app.post("/game/load", anyone, async (c) => {
+  const i = await body(c, z.object({ good: z.string(), qty }));
+  return send(c, world(c.env).load(c.var.user.id, i.good, i.qty));
+});
+app.post("/game/build", anyone, async (c) => {
+  const i = await body(c, z.object({ industry: z.string() }));
+  return send(c, world(c.env).build(c.var.user.id, i.industry));
+});
+app.post("/game/produce", anyone, async (c) => {
+  const i = await body(c, z.object({ industry: z.string() }));
+  return send(c, world(c.env).produce(c.var.user.id, i.industry));
+});
+
 app.post("/user/password", anyone, async (c) => {
   const { current, next } = await body(c, schemas.password);
   const w = world(c.env);

@@ -23,10 +23,10 @@ export function Landing() {
         sub={longest ? `${formatKm(longest.totalKm)} · ${formatDuration(lineHours(longest, world.trips, DEFAULT_SPEED_KMH))}` : undefined}
       />
       <Card className="hero">
-        <h1>A slow journey across the world, in real time.</h1>
+        <h1>Build an industry from Berlin, one train at a time.</h1>
         <p className="lede">
-          Trains on Aboard run at the pace of real trains. Buy a ticket, board when your train pulls in, and
-          check in when it reaches a station. Meet the people in your carriage along the way.
+          There are no planes and no ships, only railways, and they run in real time. Ride out for cocoa, lithium or
+          polysilicon, bring it home to Berlin, build your factory and sell what you make across the world.
         </p>
         <div className="row">
           <ButtonLink to="/signup" kind="primary">

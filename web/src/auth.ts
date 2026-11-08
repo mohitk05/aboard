@@ -26,7 +26,6 @@ export interface SignupInput {
   email: string;
   password: string;
   age: number;
-  currentStop: string;
   interests: string[];
   profileMode: "PUBLIC" | "PRIVATE";
 }

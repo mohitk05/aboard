@@ -57,11 +57,29 @@ export async function buildWorld() {
   return { admin, stops, route };
 }
 
-export async function signup(currentStop: string, extra: Record<string, unknown> = {}) {
+/** The bootstrapped admin's token (see bootstrapAdmin). */
+export async function adminToken() {
+  const r = await api("POST", "/user/login", { body: { user: { email: "admin@aboard.test", password: "admin-password" } } });
+  if (r.status !== 200) throw new Error(`admin login failed: ${r.status} ${r.error}`);
+  return r.data.authToken as string;
+}
+
+/**
+ * A new player. Players always start at home (Berlin); to start a test somewhere else, pass the
+ * stop and the admin moves them there.
+ */
+export async function signup(currentStop?: string, extra: Record<string, unknown> = {}) {
   const username = unique("p");
   const r = await api("POST", "/user/signup", {
-    body: { user: { username, email: `${username}@aboard.test`, password: "password123", age: 25, currentStop, ...extra } },
+    body: { user: { username, email: `${username}@aboard.test`, password: "password123", age: 25, ...extra } },
   });
   if (r.status !== 201) throw new Error(`signup failed: ${r.status} ${r.error}`);
-  return { token: r.data.authToken as string, user: r.data.user };
+  const token = r.data.authToken as string;
+  let user = r.data.user;
+  if (currentStop && user.currentStop !== currentStop) {
+    const placed = await api("POST", `/user/${user.id}/place`, { token: await adminToken(), body: { stop: currentStop } });
+    if (placed.status !== 200) throw new Error(`placing failed: ${placed.status} ${placed.error}`);
+    user = (await api("GET", "/user/me", { token })).data;
+  }
+  return { token, user };
 }

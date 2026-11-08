@@ -25,7 +25,7 @@ const newUser = (extra: object = {}) => {
   return { user: { username: u, email: `${u}@t.test`, password: "password123", age: 30, ...extra } };
 };
 
-describe("starting near where you are", () => {
+describe("where you start", () => {
   it("finds the nearest station from the network location", async () => {
     const r = await (await from(50.1, 8.7, "/stop/nearest")).json<any>(); // Frankfurt
     expect(r.data.source).toBe("network");
@@ -39,19 +39,20 @@ describe("starting near where you are", () => {
     expect(r.data).toMatchObject({ source: "browser", stop: { name: "Novosibirsk" } });
   });
 
-  it("signs you up at the station nearest to you when you don't pick one", async () => {
+  it("starts every player at home in Berlin, wherever they are", async () => {
     const res = await from(55.75, 37.6, "/user/signup", { method: "POST", body: JSON.stringify(newUser()) }); // Moscow
     expect(res.status).toBe(201);
     const me = ((await res.json()) as any).data.user;
-    expect(me.currentStop).toBe(stops.find((s) => s.name === "Moscow")!.id);
+    expect(me.currentStop).toBe(stops.find((s) => s.name === "Berlin")!.id);
+    expect(me.balance).toBe(5000);
   });
 
-  it("still honours a station you chose", async () => {
+  it("ignores a station a player asks to start at", async () => {
     const res = await from(55.75, 37.6, "/user/signup", {
       method: "POST",
-      body: JSON.stringify(newUser({ currentStop: stops[0]!.id })),
+      body: JSON.stringify(newUser({ currentStop: stops[0]!.id, near: { lat: 38.7, lng: -9.1 } })),
     });
-    expect(((await res.json()) as any).data.user.currentStop).toBe(stops[0]!.id);
+    expect(((await res.json()) as any).data.user.currentStop).toBe(stops.find((s) => s.name === "Berlin")!.id);
   });
 
   it("places an account with no station (like a new admin) nearest to it", async () => {

@@ -15,6 +15,18 @@ import { haversineKm, railKm, type LatLng } from "../lib/geo";
 import { sendPush, type PushMessage, type PushSubscription, type VapidKeys } from "../lib/webpush";
 import { badRequest, conflict, forbidden, guard, notFound, type Result } from "../lib/result";
 import { migrate } from "./schema";
+import {
+  CARGO_CAPACITY,
+  GOODS,
+  HOME_STOP_NAMES,
+  INDUSTRIES,
+  MARKETS,
+  STARTING_BALANCE,
+  homeBuys,
+  priceAt,
+  type GoodId,
+  type IndustryId,
+} from "../game/catalog";
 import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
 
 // ---------- row types (as stored) ----------
@@ -54,6 +66,15 @@ type UserRow = {
   image: string | null;
   profile_mode: ProfileMode;
   created_at: number;
+  balance: number;
+};
+type FactoryRow = {
+  user_id: string;
+  industry: IndustryId;
+  built_at: number;
+  batch_started_at: number | null;
+  batch_ready_at: number | null;
+  batches: number;
 };
 type TicketRow = {
   id: string;
@@ -160,7 +181,10 @@ export class World extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
-    ctx.blockConcurrencyWhile(async () => migrate(ctx.storage));
+    ctx.blockConcurrencyWhile(async () => {
+      migrate(ctx.storage);
+      await this.ensureClockRunning(); // e.g. trains a migration turned around
+    });
   }
 
   // ======================= world clock =======================
@@ -199,6 +223,7 @@ export class World extends DurableObject<Env> {
         String(now),
       );
     });
+    this.settleFactories(now); // finished production batches, with a notification
     this.broadcast({ type: "tick", at: now, summary });
     return summary;
   }
@@ -315,8 +340,20 @@ export class World extends DurableObject<Env> {
           this.sql.exec("UPDATE trips SET state = 'MOVING', progress = 0, stop_at = ? WHERE id = ?", now, trip.id);
           summary.departures++;
         } else {
-          // End of the line. The trip keeps stop_index so late passengers can be put down here.
-          this.sql.exec("UPDATE trips SET state = 'IDLE', active = 0, progress = 0 WHERE id = ?", trip.id);
+          // End of the line: everyone for here has got off during the dwell. Turn around onto
+          // the line's return twin and wait at the platform again before heading back.
+          const route = this.routeRow(trip.route_id);
+          const twin = route.return_of ?? `${route.id}~r`;
+          if (this.sql.exec("SELECT 1 FROM routes WHERE id = ?", twin).toArray().length) {
+            this.sql.exec(
+              "UPDATE trips SET route_id = ?, stop_index = 0, progress = 0, state = 'STATIONARY', stop_at = ? WHERE id = ?",
+              twin,
+              now,
+              trip.id,
+            );
+          } else {
+            this.sql.exec("UPDATE trips SET state = 'IDLE', active = 0, progress = 0 WHERE id = ?", trip.id);
+          }
         }
       }
     }
@@ -681,16 +718,22 @@ export class World extends DurableObject<Env> {
       if (new Set(input.stops).size !== input.stops.length) throw badRequest("A route can't visit a stop twice.");
       const stops = input.stops.map((id) => this.stopRow(id));
       const routeId = newId();
+      const twinId = `${routeId}~r`;
+      const kms = stops.map((s, i) => (i === 0 ? 0 : railKm(stops[i - 1]!, s)));
       this.ctx.storage.transactionSync(() => {
-        this.sql.exec("INSERT INTO routes (id, name, created_at) VALUES (?, ?, ?)", routeId, input.name, Date.now());
+        const now = Date.now();
+        this.sql.exec("INSERT INTO routes (id, name, created_at) VALUES (?, ?, ?)", routeId, input.name, now);
+        // The return twin: same stations, reversed, so trains can turn around at the end.
+        this.sql.exec("INSERT INTO routes (id, name, created_at, return_of) VALUES (?, ?, ?, ?)", twinId, input.name, now, routeId);
         stops.forEach((s, i) => {
-          const km = i === 0 ? 0 : railKm(stops[i - 1]!, s);
+          this.sql.exec("INSERT INTO route_stops (route_id, position, stop_id, km) VALUES (?, ?, ?, ?)", routeId, i, s.id, kms[i]);
+          const r = stops.length - 1 - i; // position i of the twin is position r of the line
           this.sql.exec(
             "INSERT INTO route_stops (route_id, position, stop_id, km) VALUES (?, ?, ?, ?)",
-            routeId,
+            twinId,
             i,
-            s.id,
-            km,
+            stops[r]!.id,
+            i === 0 ? 0 : kms[r + 1]!,
           );
         });
       });
@@ -700,7 +743,7 @@ export class World extends DurableObject<Env> {
 
   listRoutes() {
     return this.sql
-      .exec<{ id: string }>("SELECT id FROM routes ORDER BY name")
+      .exec<{ id: string }>("SELECT id FROM routes ORDER BY name, return_of IS NOT NULL")
       .toArray()
       .map((r) => this.routeOut(r.id));
   }
@@ -909,9 +952,12 @@ export class World extends DurableObject<Env> {
         price: Math.round(km * COST_PER_KM * 100) / 100,
         created_at: Date.now(),
       };
+      if (user.balance < ticket.price)
+        throw conflict(`This ticket costs ${ticket.price} credits and you have ${Math.floor(user.balance)}.`);
       // Already standing at the platform while the train waits? Board straight away.
       const boardNow = trip.active === 1 && trip.state === "STATIONARY" && trip.stop_index === fromIdx;
       this.ctx.storage.transactionSync(() => {
+        this.charge(userId, ticket.price, "fare", `Ticket ${stops[fromIdx]!.name} → ${stops[toIdx]!.name}`);
         this.sql.exec(
           `INSERT INTO tickets (id, user_id, trip_id, from_stop_id, to_stop_id, desired_to_stop_id, price, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -934,7 +980,11 @@ export class World extends DurableObject<Env> {
       const user = this.userRow(userId);
       if (!user.ticket_id) throw notFound("Ticket");
       if (user.state !== "READYTOGO") throw conflict("You can only cancel before boarding.");
-      this.sql.exec("UPDATE users SET ticket_id = NULL, state = 'ATSTATION' WHERE id = ?", userId);
+      const t = this.sql.exec<TicketRow>("SELECT * FROM tickets WHERE id = ?", user.ticket_id).toArray()[0];
+      this.ctx.storage.transactionSync(() => {
+        this.sql.exec("UPDATE users SET ticket_id = NULL, state = 'ATSTATION' WHERE id = ?", userId);
+        if (t && t.price > 0) this.charge(userId, -t.price, "refund", "Ticket refunded");
+      });
       return { cancelled: user.ticket_id };
     });
   }
@@ -945,6 +995,332 @@ export class World extends DurableObject<Env> {
       if (!t) throw notFound("Ticket");
       return ticketOut(t);
     });
+  }
+
+  // ======================= the industry game =======================
+  // Rules and numbers are in src/game/catalog.ts.
+
+  /** Home: where every player starts and keeps their warehouse and factories (Berlin). */
+  homeStop(): Stop | null {
+    for (const name of HOME_STOP_NAMES) {
+      const row = this.sql.exec<StopRow>("SELECT * FROM stops WHERE name = ?", name).toArray()[0];
+      if (row) return stopOut(row);
+    }
+    return null;
+  }
+
+  /** Admin: put a player at a station (they can't be holding a ticket). */
+  placeUser(userId: string, stopId: string) {
+    return guard(() => {
+      const u = this.userRow(userId);
+      this.stopRow(stopId);
+      if (u.state !== "ATSTATION") throw conflict("They have a ticket; they can't be moved now.");
+      this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", stopId, userId);
+      return this.privateUserOut(this.userRow(userId));
+    });
+  }
+
+  /** Admin: give or take credits (e.g. for testing). */
+  grant(userId: string, credits: number, note = "Grant") {
+    return guard(() => {
+      this.userRow(userId);
+      this.charge(userId, -credits, "grant", note);
+      return this.gameState(userId);
+    });
+  }
+
+  /** Today's prices at a station's market, or null if there's no market there. */
+  private marketAt(stop: StopRow, now: number) {
+    const home = this.homeStop();
+    const def = stop.id === home?.id ? { buys: homeBuys() } : MARKETS[stop.name];
+    if (!def) return null;
+    const list = (m?: Partial<Record<GoodId, number>>) =>
+      Object.entries(m ?? {}).map(([good, base]) => ({ good: good as GoodId, price: priceAt(base!, stop.name, good as GoodId, now) }));
+    return { sells: list(def.sells), buys: list(def.buys) };
+  }
+
+  /** Everything players need to plan: goods, industries, and every market with today's prices. */
+  catalog() {
+    const now = Date.now();
+    const markets = [];
+    for (const row of this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray()) {
+      const m = this.marketAt(row, now);
+      if (m) markets.push({ stop: stopOut(row), ...m });
+    }
+    return {
+      home: this.homeStop(),
+      cargoCapacity: CARGO_CAPACITY,
+      goods: Object.values(GOODS),
+      industries: Object.values(INDUSTRIES),
+      markets,
+    };
+  }
+
+  /** Your money, goods and factories. Finished production batches land in the warehouse first. */
+  getGame(userId: string) {
+    return guard(() => {
+      this.userRow(userId);
+      this.settleFactories(Date.now(), userId);
+      return this.gameState(userId);
+    });
+  }
+
+  buy(userId: string, good: string, qty: number) {
+    return guard(() => {
+      const { user, stop } = this.atMarket(userId);
+      const offer = this.marketAt(stop, Date.now())?.sells.find((o) => o.good === good);
+      if (!offer) throw badRequest(`${stop.name} doesn't sell that.`);
+      const space = CARGO_CAPACITY - this.cargoCount(userId);
+      if (qty > space) throw conflict(`You can carry ${space} more ${space === 1 ? "unit" : "units"}.`);
+      const cost = offer.price * qty;
+      if (user.balance < cost) throw conflict(`That costs ${cost} credits and you have ${Math.floor(user.balance)}.`);
+      this.ctx.storage.transactionSync(() => {
+        this.charge(userId, cost, "buy", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
+        this.addHolding(userId, "cargo", offer.good, qty);
+      });
+      return this.gameState(userId);
+    });
+  }
+
+  /** Sell from what you carry; at home, from your warehouse too (cargo first). */
+  sell(userId: string, good: string, qty: number) {
+    return guard(() => {
+      const { stop } = this.atMarket(userId);
+      const offer = this.marketAt(stop, Date.now())?.buys.find((o) => o.good === good);
+      if (!offer) throw badRequest(`Nobody at ${stop.name} buys that.`);
+      const atHome = stop.id === this.homeStop()?.id;
+      const fromCargo = Math.min(qty, this.holding(userId, "cargo", offer.good));
+      const fromBase = atHome ? Math.min(qty - fromCargo, this.holding(userId, "base", offer.good)) : 0;
+      if (fromCargo + fromBase < qty) throw conflict(`You only have ${fromCargo + fromBase} to sell here.`);
+      this.ctx.storage.transactionSync(() => {
+        this.addHolding(userId, "cargo", offer.good, -fromCargo);
+        this.addHolding(userId, "base", offer.good, -fromBase);
+        this.charge(userId, -offer.price * qty, "sell", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
+      });
+      return this.gameState(userId);
+    });
+  }
+
+  /** At home: move everything you carry into the warehouse. */
+  unload(userId: string) {
+    return guard(() => {
+      this.atHome(userId);
+      const cargo = this.holdings(userId, "cargo");
+      this.ctx.storage.transactionSync(() => {
+        for (const [good, qty] of Object.entries(cargo)) {
+          this.addHolding(userId, "cargo", good as GoodId, -qty!);
+          this.addHolding(userId, "base", good as GoodId, qty!);
+        }
+      });
+      return this.gameState(userId);
+    });
+  }
+
+  /** At home: take goods from the warehouse to carry (e.g. products to sell elsewhere). */
+  load(userId: string, good: string, qty: number) {
+    return guard(() => {
+      this.atHome(userId);
+      if (!(good in GOODS)) throw badRequest("Unknown goods.");
+      const have = this.holding(userId, "base", good as GoodId);
+      if (have < qty) throw conflict(`Your warehouse has ${have}.`);
+      const space = CARGO_CAPACITY - this.cargoCount(userId);
+      if (qty > space) throw conflict(`You can carry ${space} more.`);
+      this.ctx.storage.transactionSync(() => {
+        this.addHolding(userId, "base", good as GoodId, -qty);
+        this.addHolding(userId, "cargo", good as GoodId, qty);
+      });
+      return this.gameState(userId);
+    });
+  }
+
+  /** Build a factory at home, from credits and materials in your warehouse. */
+  build(userId: string, industryId: string) {
+    return guard(() => {
+      const user = this.atHome(userId);
+      const industry = INDUSTRIES[industryId as IndustryId];
+      if (!industry) throw badRequest("Unknown industry.");
+      if (this.factory(userId, industry.id)) throw conflict(`You already have a ${industry.name.toLowerCase()}.`);
+      if (user.balance < industry.build.credits)
+        throw conflict(`Building it costs ${industry.build.credits} credits and you have ${Math.floor(user.balance)}.`);
+      this.requireMaterials(userId, industry.build.materials);
+      this.ctx.storage.transactionSync(() => {
+        this.useMaterials(userId, industry.build.materials);
+        this.charge(userId, industry.build.credits, "build", `Built a ${industry.name.toLowerCase()}`);
+        this.sql.exec("INSERT INTO factories (user_id, industry, built_at) VALUES (?, ?, ?)", userId, industry.id, Date.now());
+      });
+      return this.gameState(userId);
+    });
+  }
+
+  /** Start a production batch: the inputs leave the warehouse now, the output arrives later. */
+  produce(userId: string, industryId: string) {
+    return guard(() => {
+      this.userRow(userId);
+      const industry = INDUSTRIES[industryId as IndustryId];
+      if (!industry) throw badRequest("Unknown industry.");
+      this.settleFactories(Date.now(), userId);
+      const f = this.factory(userId, industry.id);
+      if (!f) throw conflict(`Build a ${industry.name.toLowerCase()} first.`);
+      if (f.batch_ready_at) throw conflict("A batch is already in production.");
+      this.requireMaterials(userId, industry.recipe.inputs);
+      const now = Date.now();
+      this.ctx.storage.transactionSync(() => {
+        this.useMaterials(userId, industry.recipe.inputs);
+        this.sql.exec(
+          "UPDATE factories SET batch_started_at = ?, batch_ready_at = ? WHERE user_id = ? AND industry = ?",
+          now,
+          now + industry.recipe.hours * 3_600_000,
+          userId,
+          industry.id,
+        );
+      });
+      return this.gameState(userId);
+    });
+  }
+
+  /** Deliver finished batches to warehouses (everyone's, or one player's). */
+  private settleFactories(now: number, userId?: string) {
+    const due = this.sql
+      .exec<FactoryRow>(
+        `SELECT * FROM factories WHERE batch_ready_at IS NOT NULL AND batch_ready_at <= ?${userId ? " AND user_id = ?" : ""}`,
+        ...(userId ? [now, userId] : [now]),
+      )
+      .toArray();
+    for (const f of due) {
+      const { recipe, name } = INDUSTRIES[f.industry];
+      this.ctx.storage.transactionSync(() => {
+        this.addHolding(f.user_id, "base", recipe.output, recipe.quantity);
+        this.sql.exec(
+          "UPDATE factories SET batch_started_at = NULL, batch_ready_at = NULL, batches = batches + 1 WHERE user_id = ? AND industry = ?",
+          f.user_id,
+          f.industry,
+        );
+        this.record(f.user_id, "produce", 0, `${recipe.quantity} × ${GOODS[recipe.output].name} made`);
+      });
+      this.notify(f.user_id, {
+        title: `${name}: batch ready`,
+        body: `${recipe.quantity} cases of ${GOODS[recipe.output].name.toLowerCase()} are in your warehouse.`,
+        url: "/business",
+        tag: `factory-${f.industry}`,
+      });
+    }
+  }
+
+  private gameState(userId: string) {
+    const u = this.userRow(userId);
+    const home = this.homeStop();
+    const factories = this.sql
+      .exec<FactoryRow>("SELECT * FROM factories WHERE user_id = ? ORDER BY built_at", userId)
+      .toArray()
+      .map((f) => ({
+        industry: f.industry,
+        builtAt: f.built_at,
+        batches: f.batches,
+        batch: f.batch_ready_at ? { startedAt: f.batch_started_at!, readyAt: f.batch_ready_at } : null,
+      }));
+    const ledger = this.sql
+      .exec<{ at: number; kind: string; amount: number; note: string }>(
+        "SELECT at, kind, amount, note FROM ledger WHERE user_id = ? ORDER BY at DESC, rowid DESC LIMIT 20",
+        userId,
+      )
+      .toArray();
+    return {
+      balance: Math.round(u.balance * 100) / 100,
+      home,
+      atHome: !!home && u.current_stop_id === home.id && u.state !== "ONBOARD",
+      cargo: this.holdings(userId, "cargo"),
+      cargoCapacity: CARGO_CAPACITY,
+      warehouse: this.holdings(userId, "base"),
+      factories,
+      ledger: ledger.map((l) => ({ ...l, amount: Math.round(l.amount * 100) / 100 })),
+    };
+  }
+
+  /** You must be standing at a station (not on a train) to trade. */
+  private atMarket(userId: string) {
+    const user = this.userRow(userId);
+    if (user.state === "ONBOARD" || !user.current_stop_id) throw conflict("You can only trade at a station, not on the train.");
+    return { user, stop: this.stopRow(user.current_stop_id) };
+  }
+
+  private atHome(userId: string) {
+    const { user, stop } = this.atMarket(userId);
+    const home = this.homeStop();
+    if (stop.id !== home?.id) throw conflict(`Your warehouse and factories are at ${home?.name ?? "home"}.`);
+    return user;
+  }
+
+  private factory(userId: string, industry: IndustryId) {
+    return this.sql.exec<FactoryRow>("SELECT * FROM factories WHERE user_id = ? AND industry = ?", userId, industry).toArray()[0];
+  }
+
+  private requireMaterials(userId: string, need: Partial<Record<GoodId, number>>) {
+    const missing = Object.entries(need)
+      .map(([good, n]) => ({ good: good as GoodId, short: n! - this.holding(userId, "base", good as GoodId) }))
+      .filter((m) => m.short > 0);
+    if (missing.length)
+      throw conflict(`Your warehouse is short of ${missing.map((m) => `${m.short} × ${GOODS[m.good].name}`).join(", ")}.`);
+  }
+
+  private useMaterials(userId: string, need: Partial<Record<GoodId, number>>) {
+    for (const [good, n] of Object.entries(need)) this.addHolding(userId, "base", good as GoodId, -n!);
+  }
+
+  private holding(userId: string, place: "cargo" | "base", good: GoodId): number {
+    return (
+      this.sql
+        .exec<{ qty: number }>("SELECT qty FROM holdings WHERE user_id = ? AND place = ? AND good = ?", userId, place, good)
+        .toArray()[0]?.qty ?? 0
+    );
+  }
+
+  private holdings(userId: string, place: "cargo" | "base"): Partial<Record<GoodId, number>> {
+    const out: Partial<Record<GoodId, number>> = {};
+    for (const r of this.sql
+      .exec<{ good: GoodId; qty: number }>("SELECT good, qty FROM holdings WHERE user_id = ? AND place = ? AND qty > 0 ORDER BY good", userId, place)
+      .toArray())
+      out[r.good] = r.qty;
+    return out;
+  }
+
+  private cargoCount(userId: string): number {
+    return this.sql.exec<{ n: number | null }>("SELECT SUM(qty) AS n FROM holdings WHERE user_id = ? AND place = 'cargo'", userId).one().n ?? 0;
+  }
+
+  private addHolding(userId: string, place: "cargo" | "base", good: GoodId, delta: number) {
+    if (!delta) return;
+    if (delta < 0) {
+      // (An upsert would check qty >= 0 against the would-be inserted row, so update directly.)
+      this.sql.exec("UPDATE holdings SET qty = qty + ? WHERE user_id = ? AND place = ? AND good = ?", delta, userId, place, good);
+    } else {
+      this.sql.exec(
+        `INSERT INTO holdings (user_id, place, good, qty) VALUES (?, ?, ?, ?)
+         ON CONFLICT (user_id, place, good) DO UPDATE SET qty = qty + excluded.qty`,
+        userId,
+        place,
+        good,
+        delta,
+      );
+    }
+    this.sql.exec("DELETE FROM holdings WHERE user_id = ? AND place = ? AND good = ? AND qty = 0", userId, place, good);
+  }
+
+  /** Take credits (negative: pay out) and note it in the ledger. */
+  private charge(userId: string, credits: number, kind: string, note: string) {
+    this.sql.exec("UPDATE users SET balance = balance - ? WHERE id = ?", credits, userId);
+    this.record(userId, kind, -credits, note);
+  }
+
+  private record(userId: string, kind: string, amount: number, note: string) {
+    this.sql.exec(
+      "INSERT INTO ledger (id, user_id, at, kind, amount, note) VALUES (?, ?, ?, ?, ?, ?)",
+      newId(),
+      userId,
+      Date.now(),
+      kind,
+      amount,
+      note,
+    );
   }
 
   // ======================= demo world =======================
@@ -971,7 +1347,7 @@ export class World extends DurableObject<Env> {
         if (!exists) this.createInterest({ name });
       }
 
-      let routeId = this.sql.exec<{ id: string }>("SELECT id FROM routes WHERE name = ?", SEED_LINE_NAME).toArray()[0]?.id;
+      let routeId = this.sql.exec<{ id: string }>("SELECT id FROM routes WHERE name = ? AND return_of IS NULL", SEED_LINE_NAME).toArray()[0]?.id;
       if (!routeId) {
         const r = this.createRoute({ name: SEED_LINE_NAME, stops: stopIds });
         if (!r.ok) throw badRequest(r.error);
@@ -986,7 +1362,7 @@ export class World extends DurableObject<Env> {
       }
 
       const running = this.sql
-        .exec<{ id: string }>("SELECT id FROM trips WHERE route_id = ? AND active = 1", routeId)
+        .exec<{ id: string }>("SELECT id FROM trips WHERE route_id IN (?, ?) AND active = 1", routeId, `${routeId}~r`)
         .toArray()[0];
       return { routeId, vehicleId, runningTrip: running?.id ?? null, stops: stopIds.length };
     });
@@ -1005,8 +1381,14 @@ export class World extends DurableObject<Env> {
 
   createUser(input: NewUserInput) {
     return guard(() => {
+      // Players start at home (Berlin). Only admins may choose somewhere else.
+      const player = (input.role ?? USER_ROLES.PLAYER) !== USER_ROLES.ADMIN;
       if (input.currentStop) this.stopRow(input.currentStop);
-      else if ((input.role ?? USER_ROLES.PLAYER) !== USER_ROLES.ADMIN) throw badRequest("Players need a current stop.");
+      else if (player) {
+        const home = this.homeStop();
+        if (!home) throw conflict("There are no stations yet.");
+        input = { ...input, currentStop: home.id };
+      }
       const interests = input.interests ?? [];
       for (const i of interests) this.interestRow(i);
       const taken = this.sql
@@ -1017,8 +1399,8 @@ export class World extends DurableObject<Env> {
       const id = newId();
       this.ctx.storage.transactionSync(() => {
         this.sql.exec(
-          `INSERT INTO users (id, username, email, password_hash, role, state, current_stop_id, ticket_id, age, image, profile_mode, created_at)
-           VALUES (?, ?, ?, ?, ?, 'ATSTATION', ?, NULL, ?, ?, ?, ?)`,
+          `INSERT INTO users (id, username, email, password_hash, role, state, current_stop_id, ticket_id, age, image, profile_mode, created_at, balance)
+           VALUES (?, ?, ?, ?, ?, 'ATSTATION', ?, NULL, ?, ?, ?, ?, ?)`,
           id,
           input.username,
           input.email,
@@ -1029,6 +1411,7 @@ export class World extends DurableObject<Env> {
           input.image ?? null,
           input.profileMode ?? "PUBLIC",
           Date.now(),
+          STARTING_BALANCE,
         );
         for (const i of new Set(interests))
           this.sql.exec("INSERT INTO user_interests (user_id, interest_id) VALUES (?, ?)", id, i);
@@ -1281,7 +1664,8 @@ export class World extends DurableObject<Env> {
     return row;
   }
   private stopRow = (id: string) => this.one<StopRow>("SELECT * FROM stops WHERE id = ?", id, "Stop");
-  private routeRow = (id: string) => this.one<{ id: string; name: string }>("SELECT * FROM routes WHERE id = ?", id, "Route");
+  private routeRow = (id: string) =>
+    this.one<{ id: string; name: string; return_of: string | null }>("SELECT * FROM routes WHERE id = ?", id, "Route");
   private vehicleRow = (id: string) => this.one<{ id: string; name: string }>("SELECT * FROM vehicles WHERE id = ?", id, "Vehicle");
   private tripRow = (id: string) => this.one<TripRow>("SELECT * FROM trips WHERE id = ?", id, "Trip");
   private userRow = (id: string) => this.one<UserRow>("SELECT * FROM users WHERE id = ?", id, "User");
@@ -1335,6 +1719,8 @@ export class World extends DurableObject<Env> {
     return {
       id: route.id,
       name: route.name,
+      /** Set on a line's return twin (the same stations, reversed): the line it runs back along. */
+      returnOf: route.return_of,
       stops: stops.map((s) => ({ ...stopOut(s), kmFromPrevious: s.km })),
       totalKm: Math.round(stops.reduce((sum, s) => sum + s.km, 0) * 10) / 10,
     };
@@ -1479,6 +1865,7 @@ export class World extends DurableObject<Env> {
       role: u.role,
       profileMode: u.profile_mode,
       ticket: u.ticket_id,
+      balance: Math.round(u.balance * 100) / 100,
       createdAt: u.created_at,
     };
   }

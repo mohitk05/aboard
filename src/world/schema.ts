@@ -140,6 +140,59 @@ export const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   );
   `,
+
+  /* 4: lines run both ways, and the industry game */ `
+  -- Every line has a return twin: the same stations in reverse. Trains turn around at the end
+  -- of the line onto the twin, so they shuttle back and forth for ever. The twin's id is the
+  -- line's id + '~r'; return_of points back at the line.
+  ALTER TABLE routes ADD COLUMN return_of TEXT REFERENCES routes(id) ON DELETE CASCADE;
+  INSERT INTO routes (id, name, created_at, return_of) SELECT id || '~r', name, created_at, id FROM routes;
+  -- Reversed stops: position q is the original position n-1-q, and its km (from the previous
+  -- station) is the original km of the station after it.
+  INSERT INTO route_stops (route_id, position, stop_id, km)
+    SELECT rs.route_id || '~r', c.n - 1 - rs.position, rs.stop_id,
+           COALESCE((SELECT nx.km FROM route_stops nx WHERE nx.route_id = rs.route_id AND nx.position = rs.position + 1), 0)
+    FROM route_stops rs
+    JOIN (SELECT route_id, COUNT(*) AS n FROM route_stops GROUP BY route_id) c ON c.route_id = rs.route_id;
+  -- Trains that already reached the end of their line turn around and run again.
+  UPDATE trips SET route_id = route_id || '~r', stop_index = 0, progress = 0, state = 'STATIONARY', active = 1,
+                   stop_at = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+    WHERE state = 'IDLE' AND active = 0 AND stop_index > 0;
+
+  -- Money (credits). Everyone starts with some; fares and goods cost credits.
+  ALTER TABLE users ADD COLUMN balance REAL NOT NULL DEFAULT 5000;
+
+  -- Goods you own: carried with you ('cargo') or stored in your warehouse at home ('base').
+  CREATE TABLE holdings (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    place TEXT NOT NULL CHECK (place IN ('cargo', 'base')),
+    good TEXT NOT NULL,
+    qty INTEGER NOT NULL CHECK (qty >= 0),
+    PRIMARY KEY (user_id, place, good)
+  );
+
+  -- Your factories at home: one per industry. A batch runs from batch_started_at to batch_ready_at.
+  CREATE TABLE factories (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    industry TEXT NOT NULL,
+    built_at INTEGER NOT NULL,
+    batch_started_at INTEGER,
+    batch_ready_at INTEGER,
+    batches INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, industry)
+  );
+
+  -- What happened to your money and goods, newest first.
+  CREATE TABLE ledger (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    amount REAL NOT NULL,
+    note TEXT NOT NULL
+  );
+  CREATE INDEX ledger_by_user ON ledger(user_id, at);
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

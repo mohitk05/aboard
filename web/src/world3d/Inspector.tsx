@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import { clockParts, formatClock, formatDuration, formatIn, formatKm } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Button } from "../ui";
-import { DEFAULT_SPEED_KMH, lineHours, useStationBoard, useStopPhoto, useWorld, type Route, type Trip } from "../world";
+import { DEFAULT_SPEED_KMH, lineHours, lineId, useStationBoard, useStopPhoto, useWorld, type Route, type Trip } from "../world";
 import { select, useSelection } from "./selection";
+import { goodName, useCatalog } from "../game";
 
 /** Details of whatever was clicked in the world: a train, a line or a station. */
 export function Inspector() {
@@ -31,7 +32,7 @@ export function Inspector() {
   }
   const trip = selection.kind === "train" ? world.trips.find((t) => t.id === selection.id) : undefined;
   const route =
-    selection.kind === "route" ? world.routes.find((r) => r.id === selection.id) : world.routes.find((r) => r.id === trip?.route);
+    selection.kind === "route" ? world.routes.find((r) => r.id === selection.id) : world.allRoutes.find((r) => r.id === trip?.route);
   if ((selection.kind === "train" && !trip) || !route) return null;
 
   return (
@@ -45,7 +46,7 @@ export function Inspector() {
       {trip ? (
         <TrainDetails trip={trip} route={route} headingRef={heading} />
       ) : (
-        <RouteDetails route={route} trips={world.trips.filter((t) => t.route === route.id)} headingRef={heading} />
+        <RouteDetails route={route} trips={world.trips.filter((t) => lineId(t.route) === route.id)} headingRef={heading} />
       )}
     </aside>
   );
@@ -188,6 +189,7 @@ function StationDetails({ id, headingRef }: { id: string; headingRef: React.RefO
         <p className="muted small">
           {stop.country} · {lines.length ? lines.map((l) => l.name).join(", ") : "No lines call here yet"}
         </p>
+        <StationMarket stopId={id} />
 
         <div>
           <h3>Arrivals</h3>
@@ -256,5 +258,31 @@ function BoardTime({ at, now, here }: { at: number; now: number; here?: boolean 
       {day && <span className="dep-day">{day}</span>}
       {time}
     </span>
+  );
+}
+
+/** What a station's market sells and buys today, if it has one. */
+function StationMarket({ stopId }: { stopId: string }) {
+  const catalog = useCatalog().data;
+  const market = catalog?.markets.find((m) => m.stop.id === stopId);
+  if (!catalog || !market) return null;
+  const isHome = catalog.home?.id === stopId;
+  const list = (offers: { good: string; price: number }[]) => offers.map((o) => `${goodName(catalog.goods, o.good)} ${o.price} cr`).join(" · ");
+  return (
+    <div className="station-market">
+      <h3>{isHome ? "Home base · market" : "Market"}</h3>
+      {market.sells.length > 0 && (
+        <p className="small">
+          <span className="muted">Sells </span>
+          {list(market.sells)}
+        </p>
+      )}
+      {market.buys.length > 0 && (
+        <p className="small">
+          <span className="muted">Buys </span>
+          {list(market.buys)}
+        </p>
+      )}
+    </div>
   );
 }

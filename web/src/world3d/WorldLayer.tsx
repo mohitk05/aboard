@@ -15,7 +15,7 @@ export function WorldLayer() {
   return (
     <>
       <Suspense fallback={<div className="world" aria-hidden />}>
-        <World3D stops={world.stops} routes={world.routes} trips={world.trips} focus={focus} selection={selection} />
+        <World3D stops={world.stops} routes={world.routes} allRoutes={world.allRoutes} trips={world.trips} focus={focus} selection={selection} />
       </Suspense>
       <Inspector />
     </>

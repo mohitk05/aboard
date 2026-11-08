@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api, type Stop } from "../api";
 import { formatKm } from "../lib/format";
 import { Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
-import { DEFAULT_SPEED_KMH, useWorld, type Route, type Trip, type Vehicle } from "../world";
+import { DEFAULT_SPEED_KMH, lineId, useWorld, type Route, type Trip, type Vehicle } from "../world";
 import { useWorldFocus } from "../world3d/focus";
 import { select } from "../world3d/selection";
 import { Shell } from "./Shell";
@@ -217,7 +217,7 @@ function Trains({ routes }: { routes: Route[] }) {
   const setTripSpeed = useWorldMutation(({ id, speedKmh }: { id: string; speedKmh: number }) =>
     api<Trip>("PATCH", `/trip/${id}`, { trip: { speedKmh } }),
   );
-  const routeName = (id: string) => routes.find((r) => r.id === id)?.name ?? "Unknown line";
+  const routeName = (id: string) => routes.find((r) => r.id === lineId(id))?.name ?? "Unknown line";
 
   return (
     <Card>

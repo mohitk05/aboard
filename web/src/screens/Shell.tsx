@@ -14,6 +14,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/" end>
             Journey
           </NavLink>
+          <NavLink to="/business">Business</NavLink>
           <NavLink to="/people">People</NavLink>
           <NavLink to="/messages">Messages</NavLink>
           <NavLink to="/profile">Profile</NavLink>

@@ -1,6 +1,6 @@
 # aboard
 
-A real-time train travel world. Trains run real routes in real time, at the speeds of railways a little ahead of today's: maglev expresses average 450 km/h, high-speed lines 280–320, night sleepers 160 (new trains default to 300). London to Tokyo takes about two days. Players buy tickets, board, meet fellow travellers and get off somewhere new. See [docs/CarrierGame.md](docs/CarrierGame.md) for where the game is heading.
+A real-time industry game on a world-wide railway. There are no planes and no ships, only long-distance trains running real routes in real time, at the speeds of railways a little ahead of today's. Every player is based in **Berlin**: ride out to buy raw materials around the world, bring them home, build a factory (chocolate, batteries or semiconductors) and sell what you make. See [docs/Industry.md](docs/Industry.md) for the rules.
 
 ## Architecture
 
@@ -112,7 +112,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | Method | Path | Who | Body |
 | --- | --- | --- | --- |
 | GET | `/` | anyone | |
-| POST | `/user/signup` | anyone | `{ user: { username, email, password, age, currentStop?, near?, interests?, image?, profileMode? } }`: without `currentStop` you start at the station nearest to `near` (browser coordinates) or to your network location |
+| POST | `/user/signup` | anyone | `{ user: { username, email, password, age, interests?, image?, profileMode? } }`: every player starts at home in Berlin, with 5,000 credits |
 | POST | `/user/login` | anyone | `{ user: { email, password } }` (sets the session cookie) |
 | POST | `/user/logout` | anyone | clears the session cookie |
 | GET | `/user/me` | player | includes `journey` (ticket, train, stop-by-stop arrival times) when you have a ticket |
@@ -130,7 +130,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/stop/:id/departures` | player | trains still calling here, with destinations, fares and arrival times |
 | GET | `/stop/:id/incoming-vehicles?limit=5` | player | |
 | POST | `/stop` | admin | `{ stop: { name, country, coordinates: { lat, lng }, dwellMinutes? } }` |
-| GET | `/route` | anyone | all lines with their stations |
+| GET | `/route` | anyone | all lines with their stations, and each line's return twin (`returnOf`; id + `~r`), which trains switch to at the end of the line |
 | GET | `/route/:id` | player | |
 | POST | `/route` | admin | `{ route: { name, stops: [stopId, …] } }` |
 | POST | `/route/autogenerate` | admin | `{ config: { count?, minLength?, maxLength? } }` |
@@ -142,8 +142,8 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/trip` | admin | `{ trip: { route, vehicle?, speedKmh?, active? } }` |
 | POST | `/trip/:id/start` | admin | |
 | POST | `/trip/:id/position` | admin | `{ stopIndex, km? }`: place a running train at a station, or `km` past it; passengers move with it |
-| POST | `/ticket/buy` | player | `{ ticket: { trip, from, to } }` |
-| DELETE | `/ticket` | player | cancel your ticket before boarding |
+| POST | `/ticket/buy` | player | `{ ticket: { trip, from, to } }`: costs 0.01 credits per km |
+| DELETE | `/ticket` | player | cancel your ticket before boarding (refunded) |
 | GET | `/ticket/:id` | admin | |
 | GET | `/interest` | anyone | |
 | POST | `/interest` | admin | `{ interest: { name, description?, image? } }` |
@@ -155,6 +155,16 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/push/subscription` | player | how many devices you've turned notifications on for |
 | POST | `/push/subscription` | player | `{ subscription }` from `PushManager.subscribe().toJSON()` |
 | DELETE | `/push/subscription` | player | `{ subscription: { endpoint } }` |
+| GET | `/game/catalog` | anyone | goods, industries, home station and every market with today's prices |
+| GET | `/game` | player | your credits, cargo, warehouse, factories and ledger (finished batches are delivered first) |
+| POST | `/game/buy` | player | `{ good, qty }` at a station that sells it, into your cargo (60 units max) |
+| POST | `/game/sell` | player | `{ good, qty }` at a station that buys it, from your cargo (in Berlin, also from your warehouse) |
+| POST | `/game/unload` | player | in Berlin: move your cargo into the warehouse |
+| POST | `/game/load` | player | in Berlin: `{ good, qty }` from the warehouse into your cargo |
+| POST | `/game/build` | player | in Berlin: `{ industry }`, paid in credits and warehouse materials |
+| POST | `/game/produce` | player | `{ industry }`: start a batch (inputs from the warehouse, output after some hours) |
+| POST | `/user/:id/place` | admin | `{ stop }`: move a player to a station |
+| POST | `/user/:id/grant` | admin | `{ credits }`: give (or take) credits |
 | GET | `/live` | anyone | WebSocket: `tick`, `world` and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |

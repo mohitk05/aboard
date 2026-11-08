@@ -5,7 +5,8 @@ import { meKey } from "../auth";
 import { clockParts, formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
 import { grantedCoords } from "../lib/location";
 import { useNow } from "../lib/useNow";
-import { Board, Button, Card, FormError, SelectField } from "../ui";
+import { Board, Button, ButtonLink, Card, FormError, SelectField } from "../ui";
+import { MarketCard } from "./Business";
 import { useWorld } from "../world";
 import { useWorldFocus } from "../world3d/focus";
 import { select } from "../world3d/selection";
@@ -109,8 +110,10 @@ function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
           <Button small kind="secondary" onClick={() => select({ kind: "stop", id: stop.id })}>
             Station details
           </Button>
+          <ButtonLink to="/business">Your business</ButtonLink>
         </div>
       )}
+      {stop && <MarketCard stopId={stop.id} />}
 
       <Card aria-labelledby="departures-title" role="region">
         <h2 id="departures-title">Departures</h2>

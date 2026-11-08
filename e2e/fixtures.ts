@@ -1,4 +1,4 @@
-import { test as base, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test as base, expect, request, type APIRequestContext, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 /** ADMIN_SECRET from .dev.vars, which `wrangler dev` also reads. */
@@ -37,21 +37,40 @@ export async function tick(request: APIRequestContext, adminToken: string, n = 1
   }
 }
 
-/** Sign up through the UI, starting at `station`. */
-export async function signUp(page: Page, station: string, interests: string[] = []) {
+/**
+ * Sign up through the UI. Everyone starts at home in Berlin; to start a test somewhere else
+ * ("Paris, France"), the admin moves the new player there.
+ */
+export async function signUp(page: Page, station = "Berlin, Germany", interests: string[] = []) {
   const username = unique("t");
   await page.goto("/signup");
-  // You start at the station nearest to you; tests choose one explicitly.
-  await page.getByRole("group", { name: "Starting station" }).getByRole("button", { name: "Change" }).click();
-  await page.getByLabel("Where are you starting?").selectOption({ label: station });
+  await expect(page.getByRole("group", { name: "Starting station" })).toContainText("Berlin");
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Email", { exact: true }).fill(`${username}@e2e.test`);
   await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByLabel("Age", { exact: true }).fill("28");
   for (const i of interests) await checkTag(page, i);
   await page.getByRole("button", { name: "Start travelling" }).click();
-  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  // Slow when several software-rendered 3D worlds run at once.
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible({ timeout: 15_000 });
+  if (station !== "Berlin, Germany") await placeAt(page, station);
   return { username, email: `${username}@e2e.test` };
+}
+
+/** As the admin, move the signed-in player to `station` ("Paris, France"), then reload. */
+export async function placeAt(page: Page, station: string) {
+  const origin = new URL(page.url()).origin;
+  const admin = await request.newContext({ baseURL: origin });
+  const token = (await (await admin.post("/api/user/login", { data: { user: ADMIN } })).json()).data.authToken;
+  const stop = ((await (await admin.get("/api/stop")).json()).data as { id: string; name: string; country: string }[]).find(
+    (s) => `${s.name}, ${s.country}` === station,
+  );
+  if (!stop) throw new Error(`No station ${station}`);
+  const me = (await (await page.request.get("/api/user/me")).json()).data;
+  const r = await admin.post(`/api/user/${me.id}/place`, { headers: { Authorization: `Bearer ${token}` }, data: { stop: stop.id } });
+  expect(r.status()).toBe(200);
+  await admin.dispose();
+  await page.reload();
 }
 
 /** Tick an interest tag the way a person does: by tapping its label. */
@@ -64,7 +83,7 @@ export async function checkTag(page: Page, name: string) {
 export async function logOut(page: Page) {
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("heading", { name: /slow journey/i })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible({ timeout: 15_000 });
 }
 
 /** Map tiles come from the internet; the tests don't need them (and CI may be offline). */
