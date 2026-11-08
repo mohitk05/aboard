@@ -1181,3 +1181,195 @@ select.input {
 .station-market p {
   margin: 4px 0;
 }
+
+/* ---------- the Story: an action comic in horizontal strips ---------- */
+.content-wide {
+  max-width: none !important;
+  padding-top: 12px;
+}
+.story {
+  pointer-events: auto;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 28px;
+  padding: 28px clamp(14px, 3vw, 36px) 36px;
+  background: #fbf3e0; /* comic paper */
+  color: #14110f;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.story-head h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1;
+  margin: 4px 0 0;
+}
+.story .eyebrow {
+  margin: 0;
+  color: #6b5d50;
+}
+.strip {
+  display: grid;
+  gap: 8px;
+}
+.strip-title {
+  margin: 0;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.strip-n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 50%;
+  background: #14110f;
+  color: #ffd23f;
+  font-size: 0.7em;
+}
+.strip-panels {
+  display: grid;
+  gap: 10px;
+}
+.panel {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 4 / 3;
+  border: 4px solid #14110f;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 5px 5px 0 #14110f;
+}
+.panel[style*="span 2"] {
+  aspect-ratio: auto;
+}
+.panel svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.panel .sfx,
+.panel .sign {
+  font-family: var(--font-title);
+  letter-spacing: 0.02em;
+}
+.panel .sign {
+  font-size: 26px;
+  fill: #14110f;
+}
+.panel .diagram {
+  font: 700 13px var(--font-sans);
+  letter-spacing: 0.08em;
+  fill: #14110f;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+}
+.panel .diagram:first-of-type {
+  fill: #fff;
+  stroke: none;
+}
+.panel .note {
+  font: 600 italic 15px var(--font-title);
+  fill: #6b2a1a;
+}
+/* Narration and speech, lettered over the strip. */
+.caption,
+.balloon {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  font: 700 clamp(0.72rem, 1.25vw, 0.92rem) / 1.3 var(--font-sans);
+  letter-spacing: 0.03em;
+  color: #14110f;
+  border: 3px solid #14110f;
+}
+.caption {
+  max-width: 72%;
+  padding: 6px 10px;
+  background: #ffd23f;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #14110f;
+}
+.caption-wide {
+  max-width: calc(100% - 20px);
+}
+.caption-top-left {
+  top: 10px;
+  left: 10px;
+}
+.caption-top-right {
+  top: 10px;
+  right: 10px;
+}
+.caption-bottom-left {
+  bottom: 10px;
+  left: 10px;
+}
+.caption-bottom-right {
+  bottom: 10px;
+  right: 10px;
+}
+.balloon {
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 50% / 40%;
+  text-align: center;
+}
+.balloon::after {
+  content: "";
+  position: absolute;
+  bottom: -16px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border: 3px solid #14110f;
+  border-top: 0;
+  border-left: 0;
+  transform: skewX(-25deg) rotate(45deg);
+}
+.balloon-left::after {
+  left: 22%;
+}
+.balloon-right::after {
+  right: 22%;
+}
+.story-end {
+  display: flex;
+  justify-content: center;
+}
+.story-end .btn {
+  border-color: #14110f;
+  color: #14110f;
+  font-size: 0.9rem;
+  min-height: 52px;
+  padding: 0 28px;
+}
+.story-end .btn:hover {
+  background: #14110f;
+  color: #ffd23f;
+}
+/* Phones: each panel on its own row; lettering flows under the art instead of over it. */
+@media (max-width: 720px) {
+  .strip-panels {
+    grid-template-columns: 1fr !important;
+  }
+  .panel {
+    grid-column: auto !important;
+    aspect-ratio: 4 / 3 !important;
+  }
+  .caption,
+  .balloon {
+    position: static;
+    max-width: none;
+    border-radius: 0;
+  }
+  .balloon {
+    border-radius: 18px;
+  }
+  .balloon::after {
+    display: none;
+  }
+}

@@ -12,9 +12,14 @@ export function Landing() {
   return (
     <Page
       actions={
-        <ButtonLink to="/login" kind="quiet">
-          Log in
-        </ButtonLink>
+        <div className="row">
+          <ButtonLink to="/story" kind="quiet">
+            Story
+          </ButtonLink>
+          <ButtonLink to="/login" kind="quiet">
+            Log in
+          </ButtonLink>
+        </div>
       }
     >
       <Board
