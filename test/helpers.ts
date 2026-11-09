@@ -64,14 +64,21 @@ export async function adminToken() {
   return r.data.authToken as string;
 }
 
+/** A fresh invite code from the admin (signing up needs one). */
+export async function invite(note?: string): Promise<string> {
+  const r = await api("POST", "/admin/invites", { token: await adminToken(), body: { invite: { note } } });
+  if (r.status !== 201) throw new Error(`invite failed: ${r.status} ${r.error}`);
+  return r.data.code;
+}
+
 /**
- * A new player. Players always start at home (Berlin); to start a test somewhere else, pass the
- * stop and the admin moves them there.
+ * A new player, signed up with an invite. Players always start at home (Berlin); to start a test
+ * somewhere else, pass the stop and the admin moves them there.
  */
 export async function signup(currentStop?: string, extra: Record<string, unknown> = {}) {
   const username = unique("p");
   const r = await api("POST", "/user/signup", {
-    body: { user: { username, email: `${username}@aboard.test`, password: "password123", age: 25, ...extra } },
+    body: { user: { username, email: `${username}@aboard.test`, password: "password123", age: 25, invite: await invite(), ...extra } },
   });
   if (r.status !== 201) throw new Error(`signup failed: ${r.status} ${r.error}`);
   const token = r.data.authToken as string;

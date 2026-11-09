@@ -25,7 +25,7 @@ export function Login() {
             {login.isPending ? "Checking…" : "Log in"}
           </Button>
           <p className="muted small">
-            New here? <Link to="/signup">Get a ticket</Link>
+            New here? Aboard is invite-only: <Link to="/signup">use your invite</Link>
           </p>
         </form>
       </Card>

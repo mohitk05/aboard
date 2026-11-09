@@ -33,6 +33,7 @@ export function Admin() {
         </div>
       </section>
 
+      <Invites />
       <WorldTools />
 
       <Card>
@@ -339,5 +340,112 @@ function SpeedForm({ trip, pending, onSave }: { trip: Trip; pending: boolean; on
         Set
       </Button>
     </form>
+  );
+}
+
+interface Invite {
+  code: string;
+  note: string | null;
+  status: "open" | "used" | "expired" | "revoked";
+  createdAt: number;
+  expiresAt: number | null;
+  usedAt: number | null;
+  usedBy: { id: string; username: string } | null;
+}
+
+const inviteLink = (code: string) => `${window.location.origin}/signup?invite=${code}`;
+const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+/** Aboard is invite-only: make a one-time signup link, share it, see who joined. */
+function Invites() {
+  const qc = useQueryClient();
+  const invites = useQuery({ queryKey: ["invites"], queryFn: () => api<Invite[]>("GET", "/admin/invites") });
+  const [note, setNote] = useState("");
+  const [days, setDays] = useState("30");
+  const [copied, setCopied] = useState<string | null>(null);
+  const create = useMutation({
+    mutationFn: () => api<Invite>("POST", "/admin/invites", { invite: { note: note.trim() || undefined, days: days ? Number(days) : undefined } }),
+    onSuccess: () => {
+      setNote("");
+      qc.invalidateQueries({ queryKey: ["invites"] });
+    },
+  });
+  const revoke = useMutation({
+    mutationFn: (code: string) => api<Invite>("DELETE", `/admin/invites/${code}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["invites"] }),
+  });
+  const copy = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(inviteLink(code));
+      setCopied(code);
+    } catch {
+      setCopied(null);
+    }
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    create.mutate();
+  };
+  const fresh = create.data;
+
+  return (
+    <Card aria-labelledby="invites-title" role="region">
+      <h2 id="invites-title">Invites</h2>
+      <p className="muted small">Aboard is invite-only. Each link lets one person sign up.</p>
+      <form className="form" onSubmit={submit}>
+        <TextField label="Who's it for?" hint="Optional. Only admins see this; it greets them on the signup page." maxLength={120} value={note} onValue={setNote} />
+        <SelectField label="Expires" value={days} onValue={setDays}>
+          <option value="7">In 7 days</option>
+          <option value="30">In 30 days</option>
+          <option value="90">In 90 days</option>
+          <option value="">Never</option>
+        </SelectField>
+        <Button kind="primary" type="submit" disabled={create.isPending}>
+          {create.isPending ? "Making…" : "Create invite link"}
+        </Button>
+        <FormError message={create.error?.message} />
+      </form>
+      {fresh && (
+        <Notice tone="successful">
+          <span className="invite-link">{inviteLink(fresh.code)}</span>{" "}
+          <Button small kind="secondary" onClick={() => copy(fresh.code)}>
+            {copied === fresh.code ? "Copied" : "Copy link"}
+          </Button>
+        </Notice>
+      )}
+
+      <h3>All invites</h3>
+      <FormError message={invites.error?.message ?? revoke.error?.message} />
+      {invites.data && !invites.data.length && <p className="muted small">No invites yet.</p>}
+      <ul className="list invite-list">
+        {invites.data?.map((inv) => (
+          <li key={inv.code}>
+            <span className="invite-main">
+              <strong>{inv.note ?? "No note"}</strong>
+              <span className="muted small">
+                <code>{inv.code}</code> ·{" "}
+                {inv.status === "used" && inv.usedBy
+                  ? `used by ${inv.usedBy.username} on ${day(inv.usedAt!)}`
+                  : inv.status === "open"
+                    ? inv.expiresAt
+                      ? `open until ${day(inv.expiresAt)}`
+                      : "open, never expires"
+                    : inv.status}
+              </span>
+            </span>
+            {inv.status === "open" && (
+              <span className="row">
+                <Button small kind="quiet" onClick={() => copy(inv.code)} aria-label={`Copy link for ${inv.note ?? inv.code}`}>
+                  {copied === inv.code ? "Copied" : "Copy"}
+                </Button>
+                <Button small kind="danger" onClick={() => revoke.mutate(inv.code)} disabled={revoke.isPending} aria-label={`Revoke ${inv.note ?? inv.code}`}>
+                  Revoke
+                </Button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

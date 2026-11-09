@@ -28,6 +28,8 @@ export interface SignupInput {
   age: number;
   interests: string[];
   profileMode: "PUBLIC" | "PRIVATE";
+  /** The invite code from the admin's link. */
+  invite: string;
 }
 
 export function useLogin() {

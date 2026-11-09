@@ -54,6 +54,10 @@ After changing `wrangler.jsonc`, run `npm run cf-typegen` to regenerate `worker-
 
 The web app lives in `web/` (Vite + React). The Worker serves its build from `web/dist`: requests to `/api`, `/api/*` and `/tiles/*` go to the Worker, and everything else is a static file, falling back to `index.html` so app routes survive a reload.
 
+### Invites
+
+Aboard is invite-only. In the admin console (**Admin → Invites**), create an invite link (optionally noting who it's for, and when it expires) and send it to someone. Each link signs up one person; the list shows who used which. Admins can also create accounts directly with `POST /api/user`.
+
 ### First admin
 
 There are no admins at first. Create one with the bootstrap endpoint. It only works while no admin exists:
@@ -120,7 +124,8 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | Method | Path | Who | Body |
 | --- | --- | --- | --- |
 | GET | `/` | anyone | |
-| POST | `/user/signup` | anyone | `{ user: { username, email, password, age, interests?, image?, profileMode? } }`: every player starts at home in Berlin, with 5,000 credits |
+| POST | `/user/signup` | anyone with an invite | `{ user: { username, email, password, age, invite, interests?, image?, profileMode? } }`: Aboard is invite-only (403 without an invite). Every player starts at home in Berlin, with 5,000 credits |
+| GET | `/invite/:code` | anyone | whether an invite code can be used (`{ valid, note }`, or why not) |
 | POST | `/user/login` | anyone | `{ user: { email, password } }` (sets the session cookie) |
 | POST | `/user/logout` | anyone | clears the session cookie |
 | GET | `/user/me` | player | includes `journey` (ticket, train, stop-by-stop arrival times) when you have a ticket |
@@ -176,4 +181,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/live` | anyone | WebSocket: `tick`, `world` and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
+| GET | `/admin/invites` | admin | every invite, with its status and who used it |
+| POST | `/admin/invites` | admin | `{ invite: { note?, days? } }`: a one-time signup code; share it as `/signup?invite=CODE` |
+| DELETE | `/admin/invites/:code` | admin | withdraw an unused invite |
 | POST | `/admin/seed` | admin | builds the Lisbon → Vladivostok line and starts a train (safe to repeat) |

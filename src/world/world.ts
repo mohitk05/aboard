@@ -997,6 +997,95 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  // ======================= invites =======================
+  // Signing up needs an invite from an admin: a one-time code, shared as a link.
+
+  /** Admin: make an invite, optionally noting who it's for, valid for `days` (or for ever). */
+  createInvite(adminId: string, input: { note?: string; days?: number }) {
+    return guard(() => {
+      const bytes = crypto.getRandomValues(new Uint8Array(12));
+      // Crockford-style base32: no I, L, O or U, so codes are easy to read out and type.
+      const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+      const code = [...bytes].map((b) => alphabet[b % 32]).join("");
+      const now = Date.now();
+      this.sql.exec(
+        "INSERT INTO invites (code, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+        code,
+        input.note?.trim() || null,
+        adminId,
+        now,
+        input.days ? now + input.days * 86_400_000 : null,
+      );
+      return this.inviteOut(code);
+    });
+  }
+
+  /** Admin: every invite, newest first, with who (if anyone) used it. */
+  listInvites() {
+    return this.sql
+      .exec<{ code: string }>("SELECT code FROM invites ORDER BY created_at DESC")
+      .toArray()
+      .map((r) => this.inviteOut(r.code));
+  }
+
+  /** Admin: stop an unused invite from working. */
+  revokeInvite(code: string) {
+    return guard(() => {
+      const row = this.inviteRow(code);
+      if (row.used_by) throw conflict("That invite has already been used.");
+      this.sql.exec("UPDATE invites SET revoked_at = ? WHERE code = ? AND revoked_at IS NULL", Date.now(), row.code);
+      return this.inviteOut(row.code);
+    });
+  }
+
+  /** Public: can this code be used to sign up? (Says why not, without revealing anything else.) */
+  checkInvite(code: string) {
+    return guard(() => {
+      const inv = this.usableInvite(code);
+      return { valid: true as const, note: inv.note };
+    });
+  }
+
+  private inviteRow(code: string) {
+    const row = this.sql
+      .exec<{ code: string; note: string | null; created_by: string; created_at: number; expires_at: number | null; used_by: string | null; used_at: number | null; revoked_at: number | null }>(
+        "SELECT * FROM invites WHERE code = ?",
+        code.trim().toUpperCase(),
+      )
+      .toArray()[0];
+    if (!row) throw notFound("Invite");
+    return row;
+  }
+
+  private usableInvite(code: string) {
+    const row = (() => {
+      try {
+        return this.inviteRow(code);
+      } catch {
+        throw badRequest("That invite code isn't valid.");
+      }
+    })();
+    if (row.used_by) throw conflict("That invite has already been used.");
+    if (row.revoked_at) throw conflict("That invite has been withdrawn.");
+    if (row.expires_at && row.expires_at < Date.now()) throw conflict("That invite has expired.");
+    return row;
+  }
+
+  private inviteOut(code: string) {
+    const r = this.inviteRow(code);
+    const user = r.used_by ? this.sql.exec<{ username: string }>("SELECT username FROM users WHERE id = ?", r.used_by).toArray()[0] : undefined;
+    const status = r.used_by || r.used_at ? "used" : r.revoked_at ? "revoked" : r.expires_at && r.expires_at < Date.now() ? "expired" : "open";
+    return {
+      code: r.code,
+      note: r.note,
+      status,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      usedAt: r.used_at,
+      usedBy: user ? { id: r.used_by!, username: user.username } : null,
+    };
+  }
+
   // ======================= the industry game =======================
   // Rules and numbers are in src/game/catalog.ts.
 
@@ -1379,8 +1468,10 @@ export class World extends DurableObject<Env> {
 
   // ======================= users =======================
 
-  createUser(input: NewUserInput) {
+  createUser(input: NewUserInput & { invite?: string }) {
     return guard(() => {
+      // An invite, when given, must be usable now; it's claimed in the same transaction below.
+      const invite = input.invite ? this.usableInvite(input.invite) : null;
       // Players start at home (Berlin). Only admins may choose somewhere else.
       const player = (input.role ?? USER_ROLES.PLAYER) !== USER_ROLES.ADMIN;
       if (input.currentStop) this.stopRow(input.currentStop);
@@ -1415,6 +1506,7 @@ export class World extends DurableObject<Env> {
         );
         for (const i of new Set(interests))
           this.sql.exec("INSERT INTO user_interests (user_id, interest_id) VALUES (?, ?)", id, i);
+        if (invite) this.sql.exec("UPDATE invites SET used_by = ?, used_at = ? WHERE code = ?", id, Date.now(), invite.code);
       });
       return this.privateUserOut(this.userRow(id));
     });

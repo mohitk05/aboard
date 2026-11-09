@@ -1310,3 +1310,21 @@ select.input {
     animation: none;
   }
 }
+
+/* ---------- admin: invites ---------- */
+.invite-link {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.invite-list li {
+  align-items: center;
+}
+.invite-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.invite-main code {
+  font-family: var(--font-sans);
+  letter-spacing: 0.08em;
+}

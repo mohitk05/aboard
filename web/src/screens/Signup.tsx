@@ -1,11 +1,65 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { api, type Interest, type Stop } from "../api";
 import { useSignup } from "../auth";
-import { Button, Card, Check, FormError, Page, TagPicker, TextField } from "../ui";
+import { Button, Card, Check, FormError, Notice, Page, TagPicker, TextField } from "../ui";
 
+/** Aboard is invite-only: the signup form needs a valid invite code (from an admin's link). */
 export function Signup() {
+  const [params] = useSearchParams();
+  const code = params.get("invite")?.trim() ?? "";
+  const check = useQuery({
+    queryKey: ["invite", code],
+    queryFn: () => api<{ valid: true; note: string | null }>("GET", `/invite/${encodeURIComponent(code)}`),
+    enabled: !!code,
+    retry: false,
+  });
+  if (!code || check.isError) return <InviteOnly error={check.error?.message} />;
+  if (check.isPending) {
+    return (
+      <Page>
+        <Card>
+          <p className="muted pulse">Checking your invite…</p>
+        </Card>
+      </Page>
+    );
+  }
+  return <SignupForm invite={code} note={check.data.note} />;
+}
+
+/** No (usable) invite: explain, and take a code typed or pasted by hand. */
+function InviteOnly({ error }: { error?: string }) {
+  const navigate = useNavigate();
+  const [code, setCode] = useState("");
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const c = code.trim().replace(/^.*invite=/, ""); // a whole link pasted in works too
+    if (c) navigate(`/signup?invite=${encodeURIComponent(c)}`);
+  };
+  return (
+    <Page>
+      <Card className="form-card">
+        <form className="form" onSubmit={submit}>
+          <h1>Aboard is invite-only</h1>
+          <p className="muted">
+            To get a ticket, you need an invite from an admin. Open the link they sent you, or paste your invite code here.
+          </p>
+          {error && <Notice tone="warning">{error}</Notice>}
+          <TextField label="Invite code" hint="12 letters and numbers, or the whole link." required autocomplete="off" value={code} onValue={setCode} />
+          <Button kind="primary" type="submit">
+            Continue
+          </Button>
+          <p className="muted small">
+            Already aboard? <Link to="/login">Log in</Link>
+          </p>
+        </form>
+      </Card>
+    </Page>
+  );
+}
+
+function SignupForm({ invite, note }: { invite: string; note: string | null }) {
   const signup = useSignup();
   const stops = useQuery({ queryKey: ["stops"], queryFn: () => api<Stop[]>("GET", "/stop") });
   const interests = useQuery({ queryKey: ["interests"], queryFn: () => api<Interest[]>("GET", "/interest") });
@@ -28,6 +82,7 @@ export function Signup() {
       age: Number(age),
       interests: picked,
       profileMode: isPrivate ? "PRIVATE" : "PUBLIC",
+      invite,
     });
   };
 
@@ -47,6 +102,7 @@ export function Signup() {
       <Card className="form-card">
         <form className="form" onSubmit={submit}>
           <h1>Get a ticket</h1>
+          <Notice tone="successful">{note ? `You're invited: ${note}.` : "You're invited."} Welcome aboard.</Notice>
 
           <div className="start-station" role="group" aria-label="Starting station">
             <span className="field-label">Your home base</span>

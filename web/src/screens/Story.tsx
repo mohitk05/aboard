@@ -172,7 +172,7 @@ export function Story() {
           </ButtonLink>
         ) : (
           <ButtonLink to="/signup" kind="primary">
-            Get a ticket
+            I have an invite
           </ButtonLink>
         )}
       </footer>

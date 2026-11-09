@@ -35,7 +35,7 @@ export function Landing() {
         </p>
         <div className="row">
           <ButtonLink to="/signup" kind="primary">
-            Get a ticket
+            I have an invite
           </ButtonLink>
           <ButtonLink to="/login">I already travel with Aboard</ButtonLink>
         </div>

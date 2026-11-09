@@ -43,7 +43,10 @@ export async function tick(request: APIRequestContext, adminToken: string, n = 1
  */
 export async function signUp(page: Page, station = "Berlin, Germany", interests: string[] = []) {
   const username = unique("t");
-  await page.goto("/signup");
+  // Aboard is invite-only: the admin makes an invite, and the player opens its link.
+  await page.goto("/"); // (an origin for the admin's requests)
+  const code = await adminInvite(page);
+  await page.goto(`/signup?invite=${code}`);
   await expect(page.getByRole("group", { name: "Starting station" })).toContainText("Berlin");
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Email", { exact: true }).fill(`${username}@e2e.test`);
@@ -55,6 +58,17 @@ export async function signUp(page: Page, station = "Berlin, Germany", interests:
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible({ timeout: 15_000 });
   if (station !== "Berlin, Germany") await placeAt(page, station);
   return { username, email: `${username}@e2e.test` };
+}
+
+/** As the admin (in a separate context, so the page's session isn't touched), make an invite code. */
+export async function adminInvite(page: Page, note?: string): Promise<string> {
+  const admin = await request.newContext({ baseURL: new URL(page.url()).origin });
+  const token = (await (await admin.post("/api/user/login", { data: { user: ADMIN } })).json()).data.authToken;
+  const r = await admin.post("/api/admin/invites", { headers: { Authorization: `Bearer ${token}` }, data: { invite: { note } } });
+  expect(r.status()).toBe(201);
+  const code = (await r.json()).data.code as string;
+  await admin.dispose();
+  return code;
 }
 
 /** As the admin, move the signed-in player to `station` ("Paris, France"), then reload. */

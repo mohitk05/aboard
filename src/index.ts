@@ -76,10 +76,12 @@ const schemas = {
       email: z.string().email().max(254),
       password: z.string().min(8).max(256),
       age: z.number().int().min(13).max(120),
-      /** Optional: without it you start at the station nearest to you. */
+      /** Admins creating an account may place it; players always start at home (Berlin). */
       currentStop: id.optional(),
-      /** The browser's coordinates, if the person shared them. */
+      /** Ignored (players start at home); accepted so older clients don't fail. */
       near: latLng.optional(),
+      /** An invite code from an admin. Required to sign up yourself. */
+      invite: z.string().trim().min(4).max(64).optional(),
       interests: z.array(id).max(50).optional(),
       image: z.string().url().max(2048).optional(),
       profileMode: z.enum(PROFILE_MODES).optional(),
@@ -264,6 +266,8 @@ app.post("/route/autogenerate", admin, async (c) =>
 // User
 app.post("/user/signup", async (c) => {
   const { user } = await body(c, schemas.signup);
+  // Aboard is invite-only: signing up needs an invite code from an admin.
+  if (!user.invite) return fail(c, 403, "Aboard is invite-only. Ask an admin for an invite.");
   // Everyone starts at home (Berlin): where they ask to start, or where they are, doesn't matter.
   const { password, near: _near, currentStop: _stop, ...rest } = user;
   const res = await world(c.env).createUser({ ...rest, passwordHash: await hashPassword(password) });
@@ -409,6 +413,18 @@ app.post("/admin/tick", admin, async (c) => {
   return ok(c, summary);
 });
 /** Build the demo Lisbon → Vladivostok line and start a train on it. Safe to repeat. */
+// Invites: signing up needs one.
+/** Public: is this invite code usable? */
+app.get("/invite/:code", (c) => send(c, world(c.env).checkInvite(c.req.param("code"))));
+app.get("/admin/invites", admin, (c) => world(c.env).listInvites().then((list) => ok(c, list)));
+app.post("/admin/invites", admin, async (c) => {
+  const { invite } = await body(
+    c,
+    z.object({ invite: z.object({ note: z.string().max(120).optional(), days: z.number().int().min(1).max(365).optional() }).default({}) }).default({ invite: {} }),
+  );
+  return send(c, world(c.env).createInvite(c.var.user.id, invite), 201);
+});
+app.delete("/admin/invites/:code", admin, (c) => send(c, world(c.env).revokeInvite(c.req.param("code"))));
 app.post("/admin/seed", admin, (c) => send(c, changed(c.env, world(c.env).seedDemo()), 201));
 
 /**

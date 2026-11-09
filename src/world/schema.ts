@@ -193,6 +193,21 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX ledger_by_user ON ledger(user_id, at);
   `,
+
+  /* 5: invite-only signup */ `
+  -- Signup needs an invite. An admin makes one (optionally noting who it's for); it works once,
+  -- until it expires or is revoked.
+  CREATE TABLE invites (
+    code TEXT PRIMARY KEY,
+    note TEXT,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    used_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    used_at INTEGER,
+    revoked_at INTEGER
+  );
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

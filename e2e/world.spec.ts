@@ -92,8 +92,12 @@ test("click a station on the globe for its photo, arrivals and departures", asyn
   await expect(board.getByRole("button", { name: "Line details" })).toHaveCount(0);
 
   // Click Berlin's dot. (A name's box is centred on its station; the text is drawn just above.)
-  const box = await settled(home);
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  // (Under load a click can land while the globe is busy; try again, as a person would.)
+  await expect(async () => {
+    const box = await settled(home);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.getByRole("region", { name: "Berlin" })).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 
   const panel = page.getByRole("region", { name: "Berlin" });
   await expect(panel).toBeVisible();

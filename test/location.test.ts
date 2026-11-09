@@ -1,6 +1,6 @@
 import { SELF, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BASE, api, buildWorld } from "./helpers";
+import { BASE, api, buildWorld, invite } from "./helpers";
 
 let admin: string;
 let stops: { id: string; name: string }[];
@@ -20,9 +20,9 @@ function from(lat: number, lng: number, path: string, init: RequestInit = {}) {
 }
 
 let n = 0;
-const newUser = (extra: object = {}) => {
+const newUser = async (extra: object = {}) => {
   const u = `loc${Date.now().toString(36)}${++n}`;
-  return { user: { username: u, email: `${u}@t.test`, password: "password123", age: 30, ...extra } };
+  return { user: { username: u, email: `${u}@t.test`, password: "password123", age: 30, invite: await invite(), ...extra } };
 };
 
 describe("where you start", () => {
@@ -40,7 +40,7 @@ describe("where you start", () => {
   });
 
   it("starts every player at home in Berlin, wherever they are", async () => {
-    const res = await from(55.75, 37.6, "/user/signup", { method: "POST", body: JSON.stringify(newUser()) }); // Moscow
+    const res = await from(55.75, 37.6, "/user/signup", { method: "POST", body: JSON.stringify(await newUser()) }); // Moscow
     expect(res.status).toBe(201);
     const me = ((await res.json()) as any).data.user;
     expect(me.currentStop).toBe(stops.find((s) => s.name === "Berlin")!.id);
@@ -50,7 +50,7 @@ describe("where you start", () => {
   it("ignores a station a player asks to start at", async () => {
     const res = await from(55.75, 37.6, "/user/signup", {
       method: "POST",
-      body: JSON.stringify(newUser({ currentStop: stops[0]!.id, near: { lat: 38.7, lng: -9.1 } })),
+      body: JSON.stringify(await newUser({ currentStop: stops[0]!.id, near: { lat: 38.7, lng: -9.1 } })),
     });
     expect(((await res.json()) as any).data.user.currentStop).toBe(stops.find((s) => s.name === "Berlin")!.id);
   });
@@ -67,7 +67,7 @@ describe("where you start", () => {
   });
 
   it("doesn't let players relocate themselves", async () => {
-    const signup = await from(38.7, -9.1, "/user/signup", { method: "POST", body: JSON.stringify(newUser()) });
+    const signup = await from(38.7, -9.1, "/user/signup", { method: "POST", body: JSON.stringify(await newUser()) });
     const token = ((await signup.json()) as any).data.authToken;
     const res = await from(43.1, 131.9, "/user/me/locate", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: "{}" });
     expect(res.status).toBe(403);
