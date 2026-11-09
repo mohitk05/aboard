@@ -81,6 +81,12 @@ Admins don't need a `currentStop`. Then create stops, routes and trips with the 
 - **Ten more lines** (`scripts/seed-routes.sh`): each runs through three Nexus stations and 4–6 new ones (50 new stations), from the Great Lakes Express to Cape to Bosphorus, with a train on each. Run it after the Nexus seed, the same way (`ADMIN_TOKEN=… ./scripts/seed-routes.sh` also works). It runs once.
 - **Intercontinental lines** (`scripts/seed-intercontinental.sh`): six long-distance routes joining the continents through imagined tunnels (Darién Gap, South Atlantic, Southern Ocean, North Atlantic, Bering Strait, Pacific), four of them through South America, with 27 new stations and a 320–600 km/h train on each. Run it after the two seeds above.
 - **Lines out of Berlin** (`scripts/seed-berlin.sh`): six express lines from Berlin Hauptbahnhof, the players' home base, straight out to where the raw materials are (São Paulo, Tokyo, Cape Town, Santiago, Yakutsk, Delhi), using existing stations, with two trains each: one leaving Berlin and one on its way back. Run it after the three seeds above.
+- **Top up the timetable** (`scripts/fill-trains.mjs`, Node 18+): makes sure every line has trains running both ways, two per direction (three on lines over 15,000 km), placed where the gaps between existing trains are largest, at the line's usual speed. Safe to repeat; `DRY_RUN=1` prints the plan without changing anything.
+
+  ```sh
+  DRY_RUN=1 ADMIN_TOKEN=… node scripts/fill-trains.mjs   # see what it would add
+  ADMIN_TOKEN=… node scripts/fill-trains.mjs             # add them
+  ```
 
 `POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
