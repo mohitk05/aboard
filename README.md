@@ -98,6 +98,8 @@ Admins don't need a `currentStop`. Then create stops, routes and trips with the 
 
 `POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
+`GET /api/admin/sql-stats` (admin only) shows which SQL statements read the most rows. The free plan allows 5M rows read a day, so check it if that number climbs. The rail network is kept in the World's memory, and the web app polls only while its live connection is down.
+
 ### Deploy
 
 Deploys happen automatically through [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/): every push to `master` builds, tests and deploys the Worker.
@@ -185,6 +187,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/live` | anyone | WebSocket: `tick`, `world` and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
+| GET | `/admin/sql-stats?limit=25` | admin | rows read per SQL statement since the world last woke (Cloudflare bills Durable Object SQLite by rows read) |
 | GET | `/admin/invites` | admin | every invite, with its status and who used it |
 | POST | `/admin/invites` | admin | `{ invite: { note?, days? } }`: a one-time signup code; share it as `/signup?invite=CODE` |
 | DELETE | `/admin/invites/:code` | admin | withdraw an unused invite |

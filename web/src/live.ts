@@ -24,6 +24,15 @@ export function useLiveStatus(): LiveState {
   );
 }
 
+/**
+ * How often a query should poll: every `ms` while the live connection is down, and not at all
+ * while it's open, since then each world tick refreshes it (useLiveUpdates). Saves the server
+ * (billed by rows read) from re-answering the same question every minute in every open tab.
+ */
+export function usePollWhileOffline(ms: number): number | false {
+  return useLiveStatus() === "OPEN" ? false : ms;
+}
+
 type LiveEvent =
   | { type: "hello"; at: number }
   | { type: "tick"; at: number }

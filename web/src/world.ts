@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { api, type Stop } from "./api";
+import { usePollWhileOffline } from "./live";
 import type { TripMotion } from "./lib/motion";
 
 export interface RouteStop extends Stop {
@@ -38,7 +39,7 @@ export interface Vehicle {
   activeTrips: string[];
 }
 
-/** How often to re-check the world. The server only moves trains every 5 minutes. */
+/** How often to re-check the world when the live connection is down. The server only moves trains every 5 minutes. */
 const WORLD_REFRESH_MS = 60_000;
 
 export const worldKeys = {
@@ -56,10 +57,11 @@ export function useRoutes() {
 }
 
 export function useActiveTrips() {
+  const poll = usePollWhileOffline(WORLD_REFRESH_MS);
   return useQuery({
     queryKey: worldKeys.trips,
     queryFn: () => api<Trip[]>("GET", "/trip?active=1"),
-    refetchInterval: WORLD_REFRESH_MS,
+    refetchInterval: poll,
   });
 }
 
@@ -143,10 +145,11 @@ export interface StopPhoto {
 }
 
 export function useStationBoard(id: string) {
+  const poll = usePollWhileOffline(60_000);
   return useQuery({
     queryKey: ["departures", "board", id], // refreshed on every world tick (live.ts)
     queryFn: () => api<StationBoard>("GET", `/stop/${id}/board`),
-    refetchInterval: 60_000,
+    refetchInterval: poll,
   });
 }
 

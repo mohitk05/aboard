@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { SqlStats } from "./sqlStats";
 import {
   COST_PER_KM,
   DEFAULT_DWELL_MINUTES,
@@ -177,6 +178,13 @@ const newId = () => crypto.randomUUID();
  */
 export class World extends DurableObject<Env> {
   private sql: SqlStorage;
+  /** Rows read per statement, for GET /api/admin/sql-stats. */
+  private sqlStats = new SqlStats();
+  /**
+   * The rail network (each line's stations, and home) kept in memory: every board, trip list and
+   * tick reads it, and it only changes when an admin adds a station or a line (forgetNetwork).
+   */
+  private network = { routeStops: new Map<string, readonly RouteStopRow[]>(), home: undefined as Stop | null | undefined };
   /** Notifications waiting to be sent after the current change commits. */
   private outbox: { user: string; msg: PushMessage }[] = [];
   /** Swappable in tests so no real push service is called. */
@@ -184,11 +192,16 @@ export class World extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.sql = ctx.storage.sql;
+    this.sql = this.sqlStats.wrap(ctx.storage.sql);
     ctx.blockConcurrencyWhile(async () => {
       migrate(ctx.storage);
       await this.ensureClockRunning(); // e.g. trains a migration turned around
     });
+  }
+
+  /** Which SQL statements read the most rows since this object woke (admin only). */
+  sqlReport(limit?: number) {
+    return this.sqlStats.report(limit);
   }
 
   // ======================= world clock =======================
@@ -252,7 +265,7 @@ export class World extends DurableObject<Env> {
       )
       .toArray();
 
-    const tripCache = new Map<string, { trip: TripRow; stops: string[]; rows: RouteStopRow[] }>();
+    const tripCache = new Map<string, { trip: TripRow; stops: string[]; rows: readonly RouteStopRow[] }>();
     const load = (tripId: string) => {
       let v = tripCache.get(tripId);
       if (!v) {
@@ -545,6 +558,7 @@ export class World extends DurableObject<Env> {
         "INSERT INTO stops (id, name, country, lat, lng, dwell_minutes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         ...Object.values(row),
       );
+      this.forgetNetwork();
       return stopOut(row);
     });
   }
@@ -591,14 +605,16 @@ export class World extends DurableObject<Env> {
   getDepartures(stopId: string, limit = 10) {
     return guard(() => {
       this.stopRow(stopId);
+      // CROSS JOIN keeps SQLite starting from the station's few lines (route_stops_by_stop), then
+      // their trains (trips_by_route), instead of reading every active train. Same in the boards below.
       const candidates = this.sql
         .exec<TripRow & { pos: number; route_name: string; vehicle_name: string | null }>(
           `SELECT t.*, rs.position AS pos, r.name AS route_name, v.name AS vehicle_name
-           FROM trips t
-           JOIN route_stops rs ON rs.route_id = t.route_id AND rs.stop_id = ?
+           FROM route_stops rs
+           CROSS JOIN trips t ON t.route_id = rs.route_id AND t.active = 1
            JOIN routes r ON r.id = t.route_id
            LEFT JOIN vehicles v ON v.id = t.vehicle_id
-           WHERE t.active = 1`,
+           WHERE rs.stop_id = ?`,
           stopId,
         )
         .toArray();
@@ -652,11 +668,11 @@ export class World extends DurableObject<Env> {
       const candidates = this.sql
         .exec<TripRow & { pos: number; route_name: string; vehicle_name: string | null }>(
           `SELECT t.*, rs.position AS pos, r.name AS route_name, v.name AS vehicle_name
-           FROM trips t
-           JOIN route_stops rs ON rs.route_id = t.route_id AND rs.stop_id = ?
+           FROM route_stops rs
+           CROSS JOIN trips t ON t.route_id = rs.route_id AND t.active = 1
            JOIN routes r ON r.id = t.route_id
            LEFT JOIN vehicles v ON v.id = t.vehicle_id
-           WHERE t.active = 1`,
+           WHERE rs.stop_id = ?`,
           stopId,
         )
         .toArray();
@@ -701,9 +717,9 @@ export class World extends DurableObject<Env> {
       const now = Date.now();
       const candidates = this.sql
         .exec<TripRow & { pos: number }>(
-          `SELECT t.*, rs.position AS pos FROM trips t
-           JOIN route_stops rs ON rs.route_id = t.route_id AND rs.stop_id = ?
-           WHERE t.active = 1`,
+          `SELECT t.*, rs.position AS pos FROM route_stops rs
+           CROSS JOIN trips t ON t.route_id = rs.route_id AND t.active = 1
+           WHERE rs.stop_id = ?`,
           stopId,
         )
         .toArray();
@@ -730,6 +746,7 @@ export class World extends DurableObject<Env> {
       const routeId = newId();
       const twinId = `${routeId}~r`;
       const kms = stops.map((s, i) => (i === 0 ? 0 : railKm(stops[i - 1]!, s)));
+      this.forgetNetwork();
       this.ctx.storage.transactionSync(() => {
         const now = Date.now();
         this.sql.exec("INSERT INTO routes (id, name, created_at) VALUES (?, ?, ?)", routeId, input.name, now);
@@ -747,6 +764,7 @@ export class World extends DurableObject<Env> {
           );
         });
       });
+      this.forgetNetwork();
       return this.routeOut(routeId);
     });
   }
@@ -1100,11 +1118,16 @@ export class World extends DurableObject<Env> {
 
   /** Home: where every player starts and keeps their warehouse and factories (Berlin). */
   homeStop(): Stop | null {
+    if (this.network.home !== undefined) return this.network.home;
+    let home: Stop | null = null;
     for (const name of HOME_STOP_NAMES) {
       const row = this.sql.exec<StopRow>("SELECT * FROM stops WHERE name = ?", name).toArray()[0];
-      if (row) return stopOut(row);
+      if (row) {
+        home = stopOut(row);
+        break;
+      }
     }
-    return null;
+    return (this.network.home = home);
   }
 
   /** Admin: put a player at a station (they can't be holding a ticket). */
@@ -1778,14 +1801,26 @@ export class World extends DurableObject<Env> {
   private userRow = (id: string) => this.one<UserRow>("SELECT * FROM users WHERE id = ?", id, "User");
   private interestRow = (id: string) => this.one<{ id: string }>("SELECT id FROM interests WHERE id = ?", id, "Interest");
 
-  private routeStops(routeId: string): RouteStopRow[] {
-    return this.sql
-      .exec<RouteStopRow>(
-        `SELECT s.*, rs.position, rs.km FROM route_stops rs JOIN stops s ON s.id = rs.stop_id
-         WHERE rs.route_id = ? ORDER BY rs.position`,
-        routeId,
-      )
-      .toArray();
+  /** A line's stations in order, from memory after the first read (see `network`). */
+  private routeStops(routeId: string): readonly RouteStopRow[] {
+    let stops = this.network.routeStops.get(routeId);
+    if (!stops) {
+      stops = this.sql
+        .exec<RouteStopRow>(
+          `SELECT s.*, rs.position, rs.km FROM route_stops rs JOIN stops s ON s.id = rs.stop_id
+           WHERE rs.route_id = ? ORDER BY rs.position`,
+          routeId,
+        )
+        .toArray();
+      // An unknown line isn't remembered, so it's found once it's created.
+      if (stops.length) this.network.routeStops.set(routeId, stops);
+    }
+    return stops;
+  }
+
+  /** Stations or lines changed: read them from the database again. */
+  private forgetNetwork() {
+    this.network = { routeStops: new Map(), home: undefined };
   }
 
   private interestIds(userId: string): string[] {
@@ -1804,7 +1839,7 @@ export class World extends DurableObject<Env> {
   }
 
   /** Track km and time (ms) until `trip` reaches route position `pos`. */
-  private remainingTo(trip: TripRow, stops: RouteStopRow[], pos: number): { km: number; ms: number } {
+  private remainingTo(trip: TripRow, stops: readonly RouteStopRow[], pos: number): { km: number; ms: number } {
     let km = 0;
     let minutes = 0;
     if (trip.state === "STATIONARY") {

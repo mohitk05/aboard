@@ -208,6 +208,11 @@ export const MIGRATIONS: string[] = [
     revoked_at INTEGER
   );
   `,
+  /* 6: indexes for reading less (Cloudflare bills a Durable Object's SQLite by rows read) */ `
+  -- A station's boards find its lines first (route_stops_by_stop), then each line's trains.
+  CREATE INDEX trips_by_route ON trips(route_id, active);
+  CREATE INDEX trips_by_vehicle ON trips(vehicle_id, active);
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

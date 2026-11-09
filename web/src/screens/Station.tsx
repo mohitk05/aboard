@@ -4,6 +4,7 @@ import { api, type Departure, type Me, type Stop } from "../api";
 import { meKey } from "../auth";
 import { clockParts, formatClock, formatIn, formatKm, formatPrice } from "../lib/format";
 import { grantedCoords } from "../lib/location";
+import { usePollWhileOffline } from "../live";
 import { useNow } from "../lib/useNow";
 import { Board, Button, ButtonLink, Card, FormError, SelectField } from "../ui";
 import { MarketCard } from "./Business";
@@ -90,11 +91,12 @@ function AtStation({ me, stop }: { me: Me; stop: Stop | undefined }) {
     center: stop?.coordinates ?? null,
     distance: 2.2,
   });
+  const poll = usePollWhileOffline(60_000);
   const departures = useQuery({
     queryKey: ["departures", me.currentStop],
     queryFn: () => api<Departure[]>("GET", `/stop/${me.currentStop}/departures`),
     enabled: !!me.currentStop,
-    refetchInterval: 60_000,
+    refetchInterval: poll,
   });
   const [open, setOpen] = useState<string | null>(null);
 
