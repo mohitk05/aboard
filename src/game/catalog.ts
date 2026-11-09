@@ -74,21 +74,21 @@ export const INDUSTRIES: Record<IndustryId, Industry> = {
   chocolate: {
     id: "chocolate",
     name: "Chocolate factory",
-    blurb: "Cocoa from West Africa, sugar from Brazil, milk from the Netherlands and vanilla from Tahiti.",
+    blurb: "Cocoa from West Africa, sugar from Brazil or Mexico, milk from the Netherlands and vanilla from India or Tahiti.",
     build: { credits: 2000, materials: { cocoa: 8, sugar: 6, milk: 4, vanilla: 2 } },
     recipe: { inputs: { cocoa: 4, sugar: 2, milk: 2, vanilla: 1 }, output: "chocolate", quantity: 24, hours: 4 },
   },
   batteries: {
     id: "batteries",
     name: "Battery works",
-    blurb: "Lithium from the Andes, cobalt from the Copperbelt, nickel from Siberia and graphite from China.",
+    blurb: "Lithium from the Andes, cobalt from the Copperbelt, nickel from Siberia or Canada and graphite from China or India.",
     build: { credits: 6000, materials: { lithium: 6, cobalt: 4, nickel: 4, graphite: 6 } },
     recipe: { inputs: { lithium: 3, cobalt: 2, nickel: 2, graphite: 3 }, output: "batteries", quantity: 6, hours: 8 },
   },
   chips: {
     id: "chips",
     name: "Semiconductor fab",
-    blurb: "Polysilicon from Xinjiang, copper from Chile, photoresist from Japan and neon from Russia.",
+    blurb: "Polysilicon from Xinjiang, copper from Chile or Zambia, photoresist from Japan or Dubai and neon from Siberia.",
     build: { credits: 12000, materials: { polysilicon: 8, copper: 4, photoresist: 4, neon: 4 } },
     recipe: { inputs: { polysilicon: 4, copper: 2, photoresist: 2, neon: 2 }, output: "chips", quantity: 16, hours: 12 },
   },
@@ -104,7 +104,8 @@ export const MARKETS: Record<string, { sells?: Partial<Record<GoodId, number>>; 
   "Ürümqi South": { sells: { polysilicon: 40, graphite: 18 } },
   "Santiago Estación Central": { sells: { copper: 30, lithium: 34 } },
   "Tokyo Central Station": { sells: { photoresist: 60 }, buys: { chips: 55, batteries: 70, chocolate: 14 } },
-  "Saint Petersburg Moskovsky": { sells: { neon: 25 } },
+  // Neon is deep in Siberia, so the fab (the most ambitious industry) needs the longest haul.
+  "Irkutsk Passazhirsky": { sells: { neon: 25 } },
   "La Paz Central": { sells: { lithium: 28 } },
   "Lusaka Central": { sells: { cobalt: 50, copper: 26 } },
   "Yakutsk Central": { sells: { nickel: 35 } },
@@ -112,7 +113,12 @@ export const MARKETS: Record<string, { sells?: Partial<Record<GoodId, number>>; 
   "Dakar Central": { sells: { cocoa: 14 } },
   "São Paulo Luz": { sells: { sugar: 6, cocoa: 18 } },
   "Amsterdam Centraal": { sells: { milk: 9 }, buys: { chocolate: 15 } },
-  "Papeete Central": { sells: { vanilla: 38 } },
+  "Papeete Central": { sells: { vanilla: 38 } }, // the cheapest vanilla, but the furthest
+  // India, the Gulf and North America: closer second sources for the scarcest materials.
+  "Mumbai Terminus": { sells: { vanilla: 46 } },
+  "New Delhi Central": { sells: { graphite: 20 } },
+  "Toronto Union Station": { sells: { nickel: 40 } },
+  "Mexico City Central Station": { sells: { sugar: 8 } },
   // Buyers of finished products
   "Seoul Station": { buys: { chips: 60, batteries: 72 } },
   "Hong Kong West Kowloon": { buys: { chips: 58 } },
@@ -122,7 +128,7 @@ export const MARKETS: Record<string, { sells?: Partial<Record<GoodId, number>>; 
   "Paris Gare du Nord": { buys: { chocolate: 16, batteries: 66 } },
   "London King's Cross": { buys: { chocolate: 15 } },
   "New York Central Terminal": { buys: { chocolate: 17, chips: 58 } },
-  "Dubai Central Station": { buys: { chocolate: 18, batteries: 70 } },
+  "Dubai Central Station": { sells: { photoresist: 72 }, buys: { chocolate: 18, batteries: 70 } }, // pricier than Tokyo's
   "Moscow Belorussky Station": { buys: { chocolate: 14, batteries: 64 } },
 };
 

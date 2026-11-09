@@ -23,9 +23,9 @@ Lines run both ways. A train that reaches the end of its line waits, turns aroun
 
 | Industry | Build | Each batch | Materials (where) | Best markets |
 | --- | --- | --- | --- | --- |
-| Chocolate factory | 2,000 cr, plus 8 cocoa, 6 sugar, 4 milk powder and 2 vanilla | 4 cocoa, 2 sugar, 2 milk and 1 vanilla make 24 cases in 4 h | Cocoa: Dakar, São Paulo. Sugar: São Paulo. Milk powder: Amsterdam. Vanilla: Papeete (Tahiti). | Dubai, New York, Paris, London, Amsterdam, LA, Tokyo |
-| Battery works | 6,000 cr, plus 6 lithium, 4 cobalt, 4 nickel and 6 graphite | 3 lithium, 2 cobalt, 2 nickel and 3 graphite make 6 cases in 8 h | Lithium: La Paz, Santiago. Cobalt: Lusaka. Nickel: Yakutsk. Graphite: Beijing, Ürümqi. | Shanghai, Seoul, Tokyo, Dubai, Chicago, Paris |
-| Semiconductor fab | 12,000 cr, plus 8 polysilicon, 4 copper, 4 photoresist and 4 neon | 4 polysilicon, 2 copper, 2 photoresist and 2 neon make 16 cases in 12 h | Polysilicon: Ürümqi. Copper: Santiago, Lusaka. Photoresist: Tokyo. Neon: Saint Petersburg. | LA, Seoul, Hong Kong, New York, Tokyo, Shanghai |
+| Chocolate factory | 2,000 cr, plus 8 cocoa, 6 sugar, 4 milk powder and 2 vanilla | 4 cocoa, 2 sugar, 2 milk and 1 vanilla make 24 cases in 4 h | Cocoa: Dakar, São Paulo. Sugar: São Paulo, Mexico City. Milk powder: Amsterdam. Vanilla: Mumbai, or cheaper but much further, Papeete (Tahiti). | Dubai, New York, Paris, London, Amsterdam, LA, Tokyo |
+| Battery works | 6,000 cr, plus 6 lithium, 4 cobalt, 4 nickel and 6 graphite | 3 lithium, 2 cobalt, 2 nickel and 3 graphite make 6 cases in 8 h | Lithium: La Paz, Santiago. Cobalt: Lusaka. Nickel: Yakutsk, Toronto. Graphite: Beijing, Ürümqi, Delhi. | Shanghai, Seoul, Tokyo, Dubai, Chicago, Paris |
+| Semiconductor fab | 12,000 cr, plus 8 polysilicon, 4 copper, 4 photoresist and 4 neon | 4 polysilicon, 2 copper, 2 photoresist and 2 neon make 16 cases in 12 h | Polysilicon: Ürümqi. Copper: Santiago, Lusaka. Photoresist: Tokyo, or pricier, Dubai. Neon: Irkutsk. | LA, Seoul, Hong Kong, New York, Tokyo, Shanghai |
 
 The chocolate factory is the cheapest place to start. The semiconductor fab costs more than you start with, so you have to earn your way to it.
 

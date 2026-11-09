@@ -137,7 +137,7 @@ route B2 "Berlin–Tokyo Express"      BER WAW MOW TAS ALA URC XIY PEK SHE SEL P
 route B3 "Berlin–Cape Town Express"  BER MIL ROM ATH CAI KRT ADD NBO DAR LUN JNB CPT
 # Lithium (La Paz, Santiago) and copper (Santiago), by way of London and New York.
 route B4 "Berlin–Santiago Express"   BER AMS LON DUB KEF YYT YHZ NYC MEX PTY BOG UIO LIM LPB SCL
-# Neon (Saint Petersburg) and nickel (Yakutsk), through Scandinavia.
+# Neon (Irkutsk) and nickel (Yakutsk), through Scandinavia.
 route B5 "Berlin–Yakutsk Express"    BER CPH STO HEL LED MOW IKT YKS
 # The Gulf and India: products sell in Dubai.
 route B6 "Berlin–Delhi Express"      BER WAW IST ANK THR DXB MCT KHI BOM DEL

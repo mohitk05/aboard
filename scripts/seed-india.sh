@@ -91,11 +91,11 @@ route() { # route KEY "Name" STOP_KEY...
   ROUTE[$key]=$(id <<<"${ROUTE_JSON[$key]}")
   echo "  $name: $(jq -r '[.stops[].name] | join(" → ")' <<<"${ROUTE_JSON[$key]}") ($(jq -r '.totalKm | floor' <<<"${ROUTE_JSON[$key]}") km)"
 }
-# Mumbai across the Indian Ocean to East and southern Africa (cobalt and copper at Lusaka).
+# Mumbai (vanilla) across the Indian Ocean to East and southern Africa (cobalt and copper at Lusaka).
 route N23 "Nexus-23: Indian Ocean Crossing"  BOM NBO DAR LUN JNB CPT
 # Mumbai to the Far East by way of the Straits.
 route N24 "Nexus-24: Spice Route"            BOM SIN HKG SHA PEK SEL
-# Mumbai and Delhi north through Central Asia to Russia and the Baltic (neon at Saint Petersburg).
+# Mumbai and Delhi north through Central Asia to Russia and the Baltic.
 route N25 "Nexus-25: Frontier Mail"          BOM DEL TAS MOW LED HEL
 # Delhi over the roof of the world to Siberia (polysilicon at Ürümqi, nickel at Yakutsk).
 route N26 "Nexus-26: Himalayan Express"      DEL URC ULN IKT YKS
