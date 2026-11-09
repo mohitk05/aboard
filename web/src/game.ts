@@ -39,6 +39,8 @@ export interface Factory {
   industry: IndustryId;
   builtAt: number;
   batches: number;
+  /** See the factory state machine (src/machines/factory.ts). */
+  state: Exclude<import("../../src/machines/factory").FactoryState, "UNBUILT">;
   batch: { startedAt: number; readyAt: number } | null;
 }
 export interface GameState {

@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router";
 import { ADMIN_ROLE } from "../api";
 import { useMe } from "../auth";
+import { useLiveStatus } from "../live";
 import { Page } from "../ui";
 
 /** Layout for signed-in screens: brand and navigation (a bottom tab bar on phones). */
@@ -34,6 +35,18 @@ export function Shell({ children, wide }: { children: ReactNode; wide?: boolean 
       }
     >
       {children}
+      <LiveNote />
     </Page>
+  );
+}
+
+/** Only when live updates have dropped: say so (the app keeps polling meanwhile). */
+function LiveNote() {
+  const status = useLiveStatus();
+  if (status !== "WAITING") return null;
+  return (
+    <p className="live-note" role="status">
+      Reconnecting… times may lag a minute
+    </p>
   );
 }

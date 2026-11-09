@@ -21,11 +21,9 @@ export const RAIL_DETOUR_FACTOR = 1.25;
 
 export const COST_PER_KM = 0.01;
 
-export const TRIP_STATES = ["MOVING", "STATIONARY", "IDLE"] as const;
-export type TripState = (typeof TRIP_STATES)[number];
-
-export const USER_STATES = ["ATSTATION", "READYTOGO", "ONBOARD"] as const;
-export type UserState = (typeof USER_STATES)[number];
+// A train's and a traveller's states are defined by their state machines (src/machines/).
+export { TRAIN_STATES as TRIP_STATES, type TrainState as TripState } from "../machines/train";
+export { TRAVELLER_STATES as USER_STATES, type TravellerState as UserState } from "../machines/traveller";
 
 export const USER_ROLES = { ADMIN: 1, PLAYER: 2 } as const;
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];

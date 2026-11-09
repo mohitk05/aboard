@@ -10,6 +10,7 @@ import { greatCircle, trainPosition } from "../lib/motion";
 import type { Route, Trip } from "../world";
 import { createEarth, loadStarfield } from "./earth";
 import { createTileLayer } from "./tiles";
+import { camera as cameraMachine, SETTLE_BUSY_MS, SETTLE_MS, type CameraEvent, type CameraState } from "../../../src/machines/camera";
 import type { WorldFocus } from "./focus";
 import { subsolarPoint, toLatLng, toVec3, type LatLng } from "./geo";
 import { select, type Selection } from "./selection";
@@ -277,24 +278,28 @@ export default function World3D({ stops, routes, allRoutes, trips, home, focus, 
     }
 
     // ---------- camera ----------
+    // Its mode only changes through the camera machine (src/machines/camera.ts).
+    let mode: CameraState = cameraMachine.def.initial;
+    let modeSince = -Infinity; // when the current mode began
+    const go = (event: CameraEvent) => {
+      const to = cameraMachine.next(mode, event);
+      if (to === null) return;
+      mode = to;
+      modeSince = performance.now();
+    };
     let flight: { from: THREE.Vector3; to: THREE.Vector3; t0: number; ms: number } | null = null;
-    let lastInteraction = -Infinity;
-    let interacting = false;
     let waitingForTarget = false;
     controls.addEventListener("start", () => {
-      lastInteraction = performance.now();
-      interacting = true;
       flight = null;
+      go("grab");
     });
-    controls.addEventListener("end", () => {
-      lastInteraction = performance.now();
-      interacting = false;
-    });
+    controls.addEventListener("end", () => go("release"));
     function flyTo(at: LatLng, distance: number | null) {
       const d = distance ?? camera.position.length();
       const to = new THREE.Vector3(...toVec3(at, d));
       if (reduceMotion) return void camera.position.copy(to);
       flight = { from: camera.position.clone(), to, t0: performance.now(), ms: 1400 };
+      go("fly");
     }
     function followTarget(): LatLng | null {
       const { focus, trips } = latest.current;
@@ -450,21 +455,26 @@ export default function World3D({ stops, routes, allRoutes, trips, home, focus, 
       const now = performance.now();
       // Full frame rate while the camera moves or you're touching the globe; otherwise 15 fps
       // is plenty for trains crawling across a planet, and saves a lot of battery.
-      const busy = !!flight || interacting || now - lastInteraction < 1500 || pendingMove !== null;
+      if (mode === "SETTLING" && now - modeSince > SETTLE_MS) go("settle");
+      const busy =
+        mode === "FLYING" || mode === "HELD" || (mode === "SETTLING" && now - modeSince < SETTLE_BUSY_MS) || pendingMove !== null;
       if (!busy && now - lastFrame < 66) return;
       lastFrame = now;
       timer.update();
       const dt = Math.min(Math.max(timer.getDelta(), 0), 0.1);
 
       if (waitingForTarget && followTarget()) refocus();
-      if (flight) {
+      if (mode === "FLYING" && flight) {
         const k = Math.min(1, (now - flight.t0) / flight.ms);
         const dir = flight.from.clone().normalize().lerp(flight.to.clone().normalize(), ease(k)).normalize();
         camera.position.copy(dir.multiplyScalar(THREE.MathUtils.lerp(flight.from.length(), flight.to.length(), ease(k))));
-        if (k >= 1) flight = null;
+        if (k >= 1) {
+          flight = null;
+          go("land");
+        }
       } else {
         const target = followTarget();
-        const idle = now - lastInteraction > 6000;
+        const idle = mode === "IDLE";
         if (target && idle) {
           const want = new THREE.Vector3(...toVec3(target, camera.position.length()));
           camera.position.lerp(want, Math.min(1, dt * 1.5)).setLength(want.length());

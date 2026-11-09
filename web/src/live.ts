@@ -1,6 +1,28 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { live, type LiveEvent as ConnectionEvent, type LiveState } from "../../src/machines/live";
 import { useMe } from "./auth";
+
+// The connection's state, for the rest of the app (e.g. the "Reconnecting" note). It only ever
+// changes through the live machine (src/machines/live.ts).
+let connection: LiveState = live.def.initial;
+let dropped = false; // has it gone down since the app started? (then the next "hello" refetches)
+const watchers = new Set<() => void>();
+function step(event: ConnectionEvent) {
+  const to = live.next(connection, event);
+  if (to === null) return; // not meaningful in this state (e.g. a late close after stopping)
+  connection = to;
+  if (to === "WAITING") dropped = true;
+  watchers.forEach((w) => w());
+}
+
+/** CONNECTING, OPEN, WAITING (dropped, retrying) or STOPPED. */
+export function useLiveStatus(): LiveState {
+  return useSyncExternalStore(
+    (w) => (watchers.add(w), () => watchers.delete(w)),
+    () => connection,
+  );
+}
 
 type LiveEvent =
   | { type: "hello"; at: number }
@@ -18,8 +40,8 @@ export function useLiveUpdates() {
 
   useEffect(() => {
     let ws: WebSocket | null = null;
-    let retry = 0;
-    let stopped = false;
+    let stopped = false; // this run is over (sockets from it must not touch the shared state)
+    let retry = 0; // consecutive failures, for the backoff
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let pingTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -28,8 +50,9 @@ export function useLiveUpdates() {
     const onEvent = (e: LiveEvent) => {
       switch (e.type) {
         case "hello":
-          // Fresh connection: we may have missed events while away.
-          if (retry > 0) refetch("trips", "me", "departures", "fellow", "conversations");
+          // Back after a drop: we may have missed events while away.
+          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations");
+          dropped = false;
           retry = 0;
           break;
         case "tick":
@@ -47,33 +70,44 @@ export function useLiveUpdates() {
 
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/api/live`);
-      ws.onmessage = (m) => {
-        if (m.data === "pong") return;
+      const socket = new WebSocket(`${proto}://${location.host}/api/live`);
+      ws = socket;
+      socket.onmessage = (m) => {
+        if (stopped || m.data === "pong") return;
         try {
           onEvent(JSON.parse(m.data));
         } catch {
           /* ignore malformed */
         }
       };
-      ws.onopen = () => {
-        clearInterval(pingTimer);
-        pingTimer = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send("ping"), 30_000);
-      };
-      ws.onclose = () => {
-        clearInterval(pingTimer);
+      socket.onopen = () => {
         if (stopped) return;
+        step("opened");
+        clearInterval(pingTimer);
+        pingTimer = setInterval(() => socket.readyState === WebSocket.OPEN && socket.send("ping"), 30_000);
+      };
+      socket.onclose = () => {
+        clearInterval(pingTimer);
+        if (stopped || ws !== socket) return; // stopped on purpose, or an old socket
+        step("closed");
         retry++;
         const wait = Math.min(30_000, 1000 * 2 ** Math.min(retry, 5)) * (0.75 + Math.random() * 0.5);
-        reconnectTimer = setTimeout(connect, wait);
+        reconnectTimer = setTimeout(() => {
+          step("retry");
+          connect();
+        }, wait);
       };
     };
 
+    // (Re)start: a new user, or the app mounting.
+    connection = "CONNECTING";
+    watchers.forEach((w) => w());
     connect();
     // Reconnect promptly when the tab comes back, rather than waiting out the backoff.
     const onVisible = () => {
-      if (document.visibilityState === "visible" && ws?.readyState === WebSocket.CLOSED) {
+      if (document.visibilityState === "visible" && connection === "WAITING") {
         clearTimeout(reconnectTimer);
+        step("wake");
         connect();
       }
     };
@@ -81,6 +115,7 @@ export function useLiveUpdates() {
 
     return () => {
       stopped = true;
+      step("stop");
       clearTimeout(reconnectTimer);
       clearInterval(pingTimer);
       document.removeEventListener("visibilitychange", onVisible);

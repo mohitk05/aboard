@@ -29,7 +29,9 @@ export async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: 
 
 // ---------- shapes returned by the API ----------
 
-export type UserState = "ATSTATION" | "READYTOGO" | "ONBOARD";
+/** Where a player is in a journey: see the traveller state machine (src/machines/traveller.ts). */
+import type { TravellerState } from "../../src/machines/traveller";
+export type UserState = TravellerState;
 
 export interface Stop {
   id: string;

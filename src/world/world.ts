@@ -15,6 +15,10 @@ import { haversineKm, railKm, type LatLng } from "../lib/geo";
 import { sendPush, type PushMessage, type PushSubscription, type VapidKeys } from "../lib/webpush";
 import { badRequest, conflict, forbidden, guard, notFound, type Result } from "../lib/result";
 import { migrate } from "./schema";
+import { factory, factoryState } from "../machines/factory";
+import { invite as inviteMachine, inviteState } from "../machines/invite";
+import { dueAt, kmIntoSegment, minutesWaited, positionStatus, stationStatus, train } from "../machines/train";
+import { canTrade, traveller } from "../machines/traveller";
 import {
   CARGO_CAPACITY,
   GOODS,
@@ -268,8 +272,9 @@ export class World extends DurableObject<Env> {
       const here = stops[trip.stop_index]!;
 
       if (u.state === "READYTOGO") {
-        if (trip.active && trip.state === "STATIONARY" && trip.stop_index === fromIdx) {
-          this.sql.exec("UPDATE users SET state = 'ONBOARD', current_stop_id = ? WHERE id = ?", here, u.id);
+        const where = positionStatus(trip, fromIdx);
+        if (trip.active && where === "at-platform") {
+          this.sql.exec("UPDATE users SET state = ?, current_stop_id = ? WHERE id = ?", traveller.expect(u.state, "board"), here, u.id);
           summary.boarded++;
           this.notify(u.id, {
             title: "You're on board",
@@ -277,9 +282,9 @@ export class World extends DurableObject<Env> {
             url: "/",
             tag: `trip-${u.ticket_id}`,
           });
-        } else if (trip.stop_index > fromIdx || (trip.stop_index === fromIdx && trip.state === "MOVING")) {
+        } else if (where === "departed") {
           // The train left without them.
-          this.sql.exec("UPDATE users SET state = 'ATSTATION', ticket_id = NULL WHERE id = ?", u.id);
+          this.sql.exec("UPDATE users SET state = ?, ticket_id = NULL WHERE id = ?", traveller.expect(u.state, "miss_train"), u.id);
           summary.missed++;
           this.notify(u.id, {
             title: "Your train left without you",
@@ -293,7 +298,8 @@ export class World extends DurableObject<Env> {
         const lineEnded = trip.state === "IDLE";
         if (arrived || lineEnded) {
           this.sql.exec(
-            "UPDATE users SET state = 'ATSTATION', ticket_id = NULL, current_stop_id = ? WHERE id = ?",
+            "UPDATE users SET state = ?, ticket_id = NULL, current_stop_id = ? WHERE id = ?",
+            traveller.expect(u.state, arrived ? "arrive" : "line_ended"),
             here,
             u.id,
           );
@@ -319,25 +325,29 @@ export class World extends DurableObject<Env> {
       const last = stops.length - 1;
       summary.tripsAdvanced++;
 
+      // Every change of state goes through the train machine (src/machines/train.ts).
       if (trip.state === "MOVING") {
         const segmentKm = stops[trip.stop_index + 1]!.km;
-        const progress = trip.progress + (trip.speed_kmh * WORLD_INTERVAL_MINUTES) / 60;
-        if (progress >= segmentKm) {
+        const km = kmIntoSegment(trip) + (trip.speed_kmh * WORLD_INTERVAL_MINUTES) / 60;
+        if (km >= segmentKm) {
           this.sql.exec(
-            "UPDATE trips SET state = 'STATIONARY', stop_index = stop_index + 1, progress = 0, stop_at = ? WHERE id = ?",
+            "UPDATE trips SET state = ?, stop_index = stop_index + 1, progress = 0, stop_at = ? WHERE id = ?",
+            train.expect(trip.state, "arrive"),
             now,
             trip.id,
           );
           summary.arrivals++;
         } else {
-          this.sql.exec("UPDATE trips SET progress = ? WHERE id = ?", progress, trip.id);
+          train.expect(trip.state, "travel");
+          this.sql.exec("UPDATE trips SET progress = ? WHERE id = ?", km, trip.id);
         }
       } else if (trip.state === "STATIONARY") {
-        const waited = trip.progress + WORLD_INTERVAL_MINUTES;
+        const waited = minutesWaited(trip) + WORLD_INTERVAL_MINUTES;
         if (waited < stops[trip.stop_index]!.dwell_minutes) {
+          train.expect(trip.state, "dwell");
           this.sql.exec("UPDATE trips SET progress = ? WHERE id = ?", waited, trip.id);
         } else if (trip.stop_index < last) {
-          this.sql.exec("UPDATE trips SET state = 'MOVING', progress = 0, stop_at = ? WHERE id = ?", now, trip.id);
+          this.sql.exec("UPDATE trips SET state = ?, progress = 0, stop_at = ? WHERE id = ?", train.expect(trip.state, "depart"), now, trip.id);
           summary.departures++;
         } else {
           // End of the line: everyone for here has got off during the dwell. Turn around onto
@@ -346,13 +356,14 @@ export class World extends DurableObject<Env> {
           const twin = route.return_of ?? `${route.id}~r`;
           if (this.sql.exec("SELECT 1 FROM routes WHERE id = ?", twin).toArray().length) {
             this.sql.exec(
-              "UPDATE trips SET route_id = ?, stop_index = 0, progress = 0, state = 'STATIONARY', stop_at = ? WHERE id = ?",
+              "UPDATE trips SET route_id = ?, stop_index = 0, progress = 0, state = ?, stop_at = ? WHERE id = ?",
               twin,
+              train.expect(trip.state, "turn_around"),
               now,
               trip.id,
             );
           } else {
-            this.sql.exec("UPDATE trips SET state = 'IDLE', active = 0, progress = 0 WHERE id = ?", trip.id);
+            this.sql.exec("UPDATE trips SET state = ?, active = 0, progress = 0 WHERE id = ?", train.expect(trip.state, "retire"), trip.id);
           }
         }
       }
@@ -594,7 +605,7 @@ export class World extends DurableObject<Env> {
 
       const out = [];
       for (const trip of candidates) {
-        const due = trip.stop_index < trip.pos || (trip.stop_index === trip.pos && trip.state === "STATIONARY");
+        const due = dueAt(trip, trip.pos);
         const stops = this.routeStops(trip.route_id);
         if (!due || trip.pos === stops.length - 1) continue; // gone, or this is the end of the line
         const asOf = this.tripAsOf(trip);
@@ -652,8 +663,8 @@ export class World extends DurableObject<Env> {
       const arrivals = [];
       const departures = [];
       for (const trip of candidates) {
-        const atPlatform = trip.stop_index === trip.pos && trip.state === "STATIONARY";
-        if (!(trip.stop_index < trip.pos || atPlatform)) continue; // already gone
+        const atPlatform = stationStatus(trip, trip.pos) === "at-platform";
+        if (!dueAt(trip, trip.pos)) continue; // already gone
         const stops = this.routeStops(trip.route_id);
         const asOf = this.tripAsOf(trip);
         const arrivalTime = atPlatform ? (trip.stop_at ?? asOf) : Math.max(now, asOf + this.remainingTo(trip, stops, trip.pos).ms);
@@ -699,8 +710,7 @@ export class World extends DurableObject<Env> {
 
       const incoming = [];
       for (const trip of candidates) {
-        const due =
-          trip.stop_index < trip.pos || (trip.stop_index === trip.pos && trip.state === "STATIONARY");
+        const due = dueAt(trip, trip.pos);
         if (!due) continue;
         const { km, ms } = this.remainingTo(trip, this.routeStops(trip.route_id), trip.pos);
         incoming.push({ trip: this.tripOut(trip), distanceKm: km, arrivalTime: Math.max(now, this.tripAsOf(trip) + ms) });
@@ -827,7 +837,7 @@ export class World extends DurableObject<Env> {
         id,
         input.vehicle ?? null,
         input.route,
-        active ? "STATIONARY" : "IDLE",
+        active ? train.expect(train.def.initial, "start") : train.def.initial,
         active,
         input.speedKmh ?? DEFAULT_SPEED_KMH,
         active ? Date.now() : null,
@@ -866,9 +876,10 @@ export class World extends DurableObject<Env> {
   async startTrip(id: string) {
     const res = guard(() => {
       const trip = this.tripRow(id);
-      if (trip.active) throw conflict("Trip is already running.");
+      const started = train.expect(trip.state, "start");
       this.sql.exec(
-        "UPDATE trips SET active = 1, state = 'STATIONARY', stop_index = 0, progress = 0, stop_at = ? WHERE id = ?",
+        "UPDATE trips SET active = 1, state = ?, stop_index = 0, progress = 0, stop_at = ? WHERE id = ?",
+        started,
         Date.now(),
         id,
       );
@@ -887,7 +898,7 @@ export class World extends DurableObject<Env> {
   setTripPosition(id: string, input: { stopIndex: number; km: number }) {
     return guard(() => {
       const trip = this.tripRow(id);
-      if (!trip.active) throw conflict("Start the trip first.");
+      const placed = train.expect(trip.state, input.km > 0 ? "place_between" : "place_at_station");
       const stops = this.routeStops(trip.route_id);
       if (input.stopIndex < 0 || input.stopIndex >= stops.length) throw badRequest(`stopIndex must be 0–${stops.length - 1}.`);
       const last = input.stopIndex === stops.length - 1;
@@ -899,7 +910,8 @@ export class World extends DurableObject<Env> {
         // As if it left the station long enough ago to have covered `km`.
         const departed = now - (km / trip.speed_kmh) * 3_600_000;
         this.sql.exec(
-          "UPDATE trips SET state = 'MOVING', stop_index = ?, progress = ?, stop_at = ? WHERE id = ?",
+          "UPDATE trips SET state = ?, stop_index = ?, progress = ?, stop_at = ? WHERE id = ?",
+          placed,
           input.stopIndex,
           km,
           Math.round(departed),
@@ -907,7 +919,8 @@ export class World extends DurableObject<Env> {
         );
       } else {
         this.sql.exec(
-          "UPDATE trips SET state = 'STATIONARY', stop_index = ?, progress = 0, stop_at = ? WHERE id = ?",
+          "UPDATE trips SET state = ?, stop_index = ?, progress = 0, stop_at = ? WHERE id = ?",
+          placed,
           input.stopIndex,
           now,
           id,
@@ -928,8 +941,7 @@ export class World extends DurableObject<Env> {
   buyTicket(userId: string, input: TicketInput): Result<Ticket> {
     return guard(() => {
       const user = this.userRow(userId);
-      if (user.ticket_id) throw conflict("You already have a ticket.");
-      if (user.state !== "ATSTATION") throw conflict("You can only buy a ticket at a station.");
+      const ticketed = traveller.expect(user.state, "buy_ticket");
       if (input.from !== user.current_stop_id) throw badRequest("Tickets must start where you are.");
 
       const trip = this.tripRow(input.trip);
@@ -938,7 +950,7 @@ export class World extends DurableObject<Env> {
       const toIdx = stops.findIndex((s) => s.id === input.to);
       if (fromIdx === -1 || toIdx === -1) throw badRequest("This trip doesn't call at those stops.");
       if (toIdx <= fromIdx) throw badRequest("Incorrect order of stops.");
-      if (trip.active && (trip.stop_index > fromIdx || (trip.stop_index === fromIdx && trip.state === "MOVING")))
+      if (stationStatus(trip, fromIdx) === "departed")
         throw conflict("This train has already left your stop.");
 
       const km = stops.slice(fromIdx + 1, toIdx + 1).reduce((sum, s) => sum + s.km, 0);
@@ -955,7 +967,7 @@ export class World extends DurableObject<Env> {
       if (user.balance < ticket.price)
         throw conflict(`This ticket costs ${ticket.price} credits and you have ${Math.floor(user.balance)}.`);
       // Already standing at the platform while the train waits? Board straight away.
-      const boardNow = trip.active === 1 && trip.state === "STATIONARY" && trip.stop_index === fromIdx;
+      const boardNow = stationStatus(trip, fromIdx) === "at-platform";
       this.ctx.storage.transactionSync(() => {
         this.charge(userId, ticket.price, "fare", `Ticket ${stops[fromIdx]!.name} → ${stops[toIdx]!.name}`);
         this.sql.exec(
@@ -966,7 +978,7 @@ export class World extends DurableObject<Env> {
         this.sql.exec(
           "UPDATE users SET ticket_id = ?, state = ? WHERE id = ?",
           ticket.id,
-          boardNow ? "ONBOARD" : "READYTOGO",
+          boardNow ? traveller.expect(ticketed, "board") : ticketed,
           userId,
         );
       });
@@ -978,14 +990,13 @@ export class World extends DurableObject<Env> {
   cancelTicket(userId: string): Result<{ cancelled: string }> {
     return guard(() => {
       const user = this.userRow(userId);
-      if (!user.ticket_id) throw notFound("Ticket");
-      if (user.state !== "READYTOGO") throw conflict("You can only cancel before boarding.");
+      const free = traveller.expect(user.state, "cancel_ticket");
       const t = this.sql.exec<TicketRow>("SELECT * FROM tickets WHERE id = ?", user.ticket_id).toArray()[0];
       this.ctx.storage.transactionSync(() => {
-        this.sql.exec("UPDATE users SET ticket_id = NULL, state = 'ATSTATION' WHERE id = ?", userId);
+        this.sql.exec("UPDATE users SET ticket_id = NULL, state = ? WHERE id = ?", free, userId);
         if (t && t.price > 0) this.charge(userId, -t.price, "refund", "Ticket refunded");
       });
-      return { cancelled: user.ticket_id };
+      return { cancelled: user.ticket_id! }; // READYTOGO always holds a ticket (see the traveller machine)
     });
   }
 
@@ -1032,7 +1043,7 @@ export class World extends DurableObject<Env> {
   revokeInvite(code: string) {
     return guard(() => {
       const row = this.inviteRow(code);
-      if (row.used_by) throw conflict("That invite has already been used.");
+      inviteMachine.expect(inviteState(row, Date.now()), "revoke");
       this.sql.exec("UPDATE invites SET revoked_at = ? WHERE code = ? AND revoked_at IS NULL", Date.now(), row.code);
       return this.inviteOut(row.code);
     });
@@ -1065,16 +1076,14 @@ export class World extends DurableObject<Env> {
         throw badRequest("That invite code isn't valid.");
       }
     })();
-    if (row.used_by) throw conflict("That invite has already been used.");
-    if (row.revoked_at) throw conflict("That invite has been withdrawn.");
-    if (row.expires_at && row.expires_at < Date.now()) throw conflict("That invite has expired.");
+    inviteMachine.expect(inviteState(row, Date.now()), "claim");
     return row;
   }
 
   private inviteOut(code: string) {
     const r = this.inviteRow(code);
     const user = r.used_by ? this.sql.exec<{ username: string }>("SELECT username FROM users WHERE id = ?", r.used_by).toArray()[0] : undefined;
-    const status = r.used_by || r.used_at ? "used" : r.revoked_at ? "revoked" : r.expires_at && r.expires_at < Date.now() ? "expired" : "open";
+    const status = inviteState(r, Date.now()).toLowerCase() as "open" | "used" | "revoked" | "expired";
     return {
       code: r.code,
       note: r.note,
@@ -1103,7 +1112,7 @@ export class World extends DurableObject<Env> {
     return guard(() => {
       const u = this.userRow(userId);
       this.stopRow(stopId);
-      if (u.state !== "ATSTATION") throw conflict("They have a ticket; they can't be moved now.");
+      traveller.expect(u.state, "move");
       this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", stopId, userId);
       return this.privateUserOut(this.userRow(userId));
     });
@@ -1228,7 +1237,8 @@ export class World extends DurableObject<Env> {
       const user = this.atHome(userId);
       const industry = INDUSTRIES[industryId as IndustryId];
       if (!industry) throw badRequest("Unknown industry.");
-      if (this.factory(userId, industry.id)) throw conflict(`You already have a ${industry.name.toLowerCase()}.`);
+      const already = `You already have a ${industry.name.toLowerCase()}.`;
+      factory.expect(factoryState(this.factory(userId, industry.id), Date.now()), "build", { IDLE: already, PRODUCING: already, READY: already });
       if (user.balance < industry.build.credits)
         throw conflict(`Building it costs ${industry.build.credits} credits and you have ${Math.floor(user.balance)}.`);
       this.requireMaterials(userId, industry.build.materials);
@@ -1248,9 +1258,10 @@ export class World extends DurableObject<Env> {
       const industry = INDUSTRIES[industryId as IndustryId];
       if (!industry) throw badRequest("Unknown industry.");
       this.settleFactories(Date.now(), userId);
-      const f = this.factory(userId, industry.id);
-      if (!f) throw conflict(`Build a ${industry.name.toLowerCase()} first.`);
-      if (f.batch_ready_at) throw conflict("A batch is already in production.");
+      // (Any finished batch was just collected, so this is UNBUILT, IDLE or PRODUCING.)
+      factory.expect(factoryState(this.factory(userId, industry.id), Date.now()), "start_batch", {
+        UNBUILT: `Build a ${industry.name.toLowerCase()} first.`,
+      });
       this.requireMaterials(userId, industry.recipe.inputs);
       const now = Date.now();
       this.ctx.storage.transactionSync(() => {
@@ -1277,6 +1288,7 @@ export class World extends DurableObject<Env> {
       .toArray();
     for (const f of due) {
       const { recipe, name } = INDUSTRIES[f.industry];
+      factory.expect(factoryState(f, now), "collect"); // the batch is READY
       this.ctx.storage.transactionSync(() => {
         this.addHolding(f.user_id, "base", recipe.output, recipe.quantity);
         this.sql.exec(
@@ -1305,6 +1317,8 @@ export class World extends DurableObject<Env> {
         industry: f.industry,
         builtAt: f.built_at,
         batches: f.batches,
+        /** IDLE, PRODUCING or READY (see src/machines/factory.ts). */
+        state: factoryState(f, Date.now()),
         batch: f.batch_ready_at ? { startedAt: f.batch_started_at!, readyAt: f.batch_ready_at } : null,
       }));
     const ledger = this.sql
@@ -1316,7 +1330,7 @@ export class World extends DurableObject<Env> {
     return {
       balance: Math.round(u.balance * 100) / 100,
       home,
-      atHome: !!home && u.current_stop_id === home.id && u.state !== "ONBOARD",
+      atHome: !!home && u.current_stop_id === home.id && canTrade(u.state),
       cargo: this.holdings(userId, "cargo"),
       cargoCapacity: CARGO_CAPACITY,
       warehouse: this.holdings(userId, "base"),
@@ -1328,7 +1342,8 @@ export class World extends DurableObject<Env> {
   /** You must be standing at a station (not on a train) to trade. */
   private atMarket(userId: string) {
     const user = this.userRow(userId);
-    if (user.state === "ONBOARD" || !user.current_stop_id) throw conflict("You can only trade at a station, not on the train.");
+    traveller.expect(user.state, "trade");
+    if (!user.current_stop_id) throw conflict("You can only trade at a station, not on the train.");
     return { user, stop: this.stopRow(user.current_stop_id) };
   }
 
@@ -1524,7 +1539,7 @@ export class World extends DurableObject<Env> {
         // Choosing where to start is for people who aren't anywhere yet (e.g. a new admin).
         // Admins may also move themselves to any station. Players travel by train.
         if (u.current_stop_id && u.role !== USER_ROLES.ADMIN) throw forbidden("You can only change station by taking a train.");
-        if (u.state !== "ATSTATION") throw conflict("You can't change station while you have a ticket.");
+        traveller.expect(u.state, "choose_station");
         this.stopRow(input.currentStop);
       }
       this.ctx.storage.transactionSync(() => {
@@ -1794,10 +1809,10 @@ export class World extends DurableObject<Env> {
     let minutes = 0;
     if (trip.state === "STATIONARY") {
       if (trip.stop_index === pos) return { km: 0, ms: 0 };
-      minutes += Math.max(0, stops[trip.stop_index]!.dwell_minutes - trip.progress);
+      minutes += Math.max(0, stops[trip.stop_index]!.dwell_minutes - minutesWaited(trip));
     }
     for (let i = trip.stop_index + 1; i <= pos; i++) {
-      const segment = stops[i]!.km - (i === trip.stop_index + 1 && trip.state === "MOVING" ? trip.progress : 0);
+      const segment = stops[i]!.km - (i === trip.stop_index + 1 ? kmIntoSegment(trip) : 0);
       km += segment;
       minutes += (segment / trip.speed_kmh) * 60;
       if (i < pos) minutes += stops[i]!.dwell_minutes;
@@ -1833,7 +1848,7 @@ export class World extends DurableObject<Env> {
     const next = stops[t.stop_index + 1];
     let position = { lat: here.lat, lng: here.lng };
     if (t.state === "MOVING" && next) {
-      const f = Math.min(1, t.progress / next.km);
+      const f = Math.min(1, kmIntoSegment(t) / next.km);
       let dLng = next.lng - here.lng;
       if (Math.abs(dLng) > 180) dLng -= Math.sign(dLng) * 360; // cross the antimeridian the short way
       let lng = here.lng + dLng * f;

@@ -1328,3 +1328,30 @@ select.input {
   font-family: var(--font-sans);
   letter-spacing: 0.08em;
 }
+
+/* ---------- live updates dropped ---------- */
+.live-note {
+  position: fixed;
+  z-index: 11;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--pill);
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  color: var(--label-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  pointer-events: none;
+}
+@media (max-width: 640px) {
+  .live-note {
+    bottom: calc(64px + env(safe-area-inset-bottom)); /* above the tab bar */
+  }
+}

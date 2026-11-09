@@ -19,6 +19,7 @@ client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, in
 - **Live updates:** clients keep a WebSocket to the World (`/api/live`, hibernation API, so idle connections are free). It sends an event on every tick, when an admin changes the world, and to conversation members when a message arrives; the app refetches just what changed. Polling remains as a fallback.
 - **The world clock** is a Durable Object alarm. It is set when a trip starts and runs `World.tick()` every `WORLD_INTERVAL_MINUTES` while any trip is active.
 - **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto). Sessions are HS256 JWTs signed with `JWT_KEY`, sent as an `HttpOnly; Secure; SameSite=Lax` cookie for the web app, or as `Authorization: Bearer` for scripts.
+- **State machines:** travellers, trains, factories, invites, the live connection and the globe's camera are explicit state machines in `src/machines/`, shared by server and app. [docs/StateMachines.md](docs/StateMachines.md) (generated: `npm run machines`) has a diagram of each, with the rules and the exact refusal messages.
 - **Scaling:** one object is plenty for now. When it isn't, split by region (one World per network of connected lines) and give each player their own object for inventory and messages.
 
 ## Interface
@@ -48,6 +49,7 @@ npm test                         # API tests run inside the Workers runtime (wor
 npm run typecheck                # Worker and web app
 npm run build                    # what Workers Builds runs: build the app, typecheck, test
 npm run e2e                      # browser tests (Playwright) against a fresh `wrangler dev` world
+npm run machines                 # regenerate docs/StateMachines.md after changing a state machine
 ```
 
 After changing `wrangler.jsonc`, run `npm run cf-typegen` to regenerate `worker-configuration.d.ts`.

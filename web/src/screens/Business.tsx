@@ -12,6 +12,7 @@ import {
   type GameState,
   type Industry,
 } from "../game";
+import { factoryState } from "../../../src/machines/factory";
 import { formatClock, formatIn } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Board, Button, Card, FormError, Notice } from "../ui";
@@ -130,8 +131,15 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
       ) : factory.batch ? (
         <div className="trip-progress">
           <div className="trip-ends">
-            <span>In production</span>
-            <span>Ready {formatClock(factory.batch.readyAt, now)}</span>
+            {/* The same rule as the server (src/machines/factory.ts), re-judged as time passes. */}
+            {factoryState({ batch_ready_at: factory.batch.readyAt }, now) === "READY" ? (
+              <span>Ready: arriving in your warehouse</span>
+            ) : (
+              <>
+                <span>In production</span>
+                <span>Ready {formatClock(factory.batch.readyAt, now)}</span>
+              </>
+            )}
           </div>
           <div
             className="bar"

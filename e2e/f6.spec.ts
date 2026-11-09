@@ -46,3 +46,21 @@ test("F6: new trains appear on the map without reloading", async ({ page, reques
   });
   await expect(page.getByText(`${before + 1} trains running now`)).toBeVisible(FAST);
 });
+
+test("F6: says when live updates drop, and stops saying it once they're back", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  await ensureWorld(request);
+  // Refuse the live connection, as a flaky network would.
+  let refuse = true;
+  await page.routeWebSocket(/\/api\/live$/, (ws) => {
+    if (refuse) return ws.close();
+    ws.connectToServer();
+  });
+  await signUp(page);
+  const note = page.getByRole("status").filter({ hasText: "Reconnecting" });
+  await expect(note).toBeVisible({ timeout: 20_000 });
+
+  // The network comes back: the next retry connects and the note goes away.
+  refuse = false;
+  await expect(note).toBeHidden({ timeout: 45_000 });
+});
