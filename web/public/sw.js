@@ -1,6 +1,6 @@
 // Aboard service worker: offline app shell and push notifications.
-const SHELL = "aboard-shell-v4";
-const ASSETS = "aboard-assets-v4";
+const SHELL = "aboard-shell-v5";
+const ASSETS = "aboard-assets-v5"; // bump when icons or textures change (they are cached for good)
 
 /** Cache the page and the scripts and styles it loads, so the offline shell is whole at once. */
 async function cacheShell(res) {

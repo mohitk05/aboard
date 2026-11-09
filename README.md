@@ -50,6 +50,7 @@ npm run typecheck                # Worker and web app
 npm run build                    # what Workers Builds runs: build the app, typecheck, test
 npm run e2e                      # browser tests (Playwright) against a fresh `wrangler dev` world
 npm run machines                 # regenerate docs/StateMachines.md after changing a state machine
+python3 scripts/logo.py && node scripts/icons.mjs   # redraw the logo ("Abo" in Redaction 35 on black) and the app icons
 ```
 
 After changing `wrangler.jsonc`, run `npm run cf-typegen` to regenerate `worker-configuration.d.ts`.
