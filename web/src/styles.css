@@ -1355,3 +1355,107 @@ select.input {
     bottom: calc(64px + env(safe-area-inset-bottom)); /* above the tab bar */
   }
 }
+
+/* ---------- the Story: gameplay ---------- */
+.gameplay {
+  display: grid;
+  gap: clamp(24px, 4vw, 40px);
+  padding-top: clamp(24px, 4vw, 48px);
+  border-top: 1px solid var(--hairline);
+}
+.gameplay h2 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1;
+  margin: 6px 0 12px;
+}
+.gameplay-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* six steps: 3 × 2, 2 × 3, or one column on phones */
+  gap: 1px;
+  background: var(--hairline); /* the gaps draw the hairlines between the steps */
+  border: 1px solid var(--hairline);
+}
+.gameplay-steps li {
+  padding: 20px;
+  background: #000;
+}
+.step-n {
+  display: block;
+  font-family: var(--font-title);
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--label-3);
+}
+.gameplay-steps h3,
+.gameplay-industries h3 {
+  margin: 10px 0 8px;
+}
+.gameplay-steps h3 {
+  font: 400 1.35rem/1.15 var(--font-title);
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--label);
+}
+.industry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.industry-card {
+  padding: 20px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.industry-card h4 {
+  margin: 0 0 4px;
+  font: 400 1.4rem/1.1 var(--font-title);
+}
+.industry-card ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 0.9375rem;
+}
+@media (max-width: 900px) {
+  .gameplay-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .gameplay-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* "Go to the game", floating over the story (above the tab bar on phones). */
+.story-go {
+  position: fixed;
+  z-index: 12;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+.story-go .btn {
+  min-height: 52px;
+  padding: 0 32px;
+  background: var(--tint);
+  color: var(--on-tint);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.6);
+}
+.story-go .btn:hover {
+  background: #e6e6ee;
+}
+@media (max-width: 640px) {
+  .story-go {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
+.story {
+  padding-bottom: 96px; /* room to scroll the last lines above the floating button */
+}

@@ -1,4 +1,6 @@
+import { createPortal } from "react-dom";
 import { useMe } from "../auth";
+import { goodName, marketsFor, useCatalog, type Catalog } from "../game";
 import { ButtonLink, Page } from "../ui";
 import { useWorldFocus } from "../world3d/focus";
 import { Shell } from "./Shell";
@@ -165,18 +167,85 @@ export function Story() {
           </div>
         </section>
       ))}
-      <footer className="story-end">
-        {me ? (
-          <ButtonLink to="/business" kind="primary">
-            Build your business
-          </ButtonLink>
-        ) : (
+      <Gameplay />
+      {me ? (
+        // Always within reach, so you can skip the story at any point (new players land here first).
+        // Portalled to <body>: a blurred panel (backdrop-filter) would pin a fixed child to itself.
+        createPortal(
+          <div className="story-go">
+            <ButtonLink to="/" kind="primary">
+              Go to the game
+            </ButtonLink>
+          </div>,
+          document.body,
+        )
+      ) : (
+        <footer className="story-end">
           <ButtonLink to="/signup" kind="primary">
             I have an invite
           </ButtonLink>
-        )}
-      </footer>
+        </footer>
+      )}
     </article>
   );
   return me ? <Shell wide>{body}</Shell> : <Page wide>{body}</Page>;
+}
+
+const STEPS = ["Start in Berlin", "Ride out by train", "Buy raw materials", "Bring them home", "Build and produce", "Sell, and grow"];
+
+/** How to play, in titles: the loop, then the three industries and where their materials are. */
+function Gameplay() {
+  const catalog = useCatalog().data;
+  return (
+    <section className="gameplay" aria-labelledby="gameplay-title">
+      <header className="story-head">
+        <p className="eyebrow">How to play</p>
+        <h2 id="gameplay-title">Gameplay</h2>
+      </header>
+
+      <ol className="gameplay-steps">
+        {STEPS.map((title, i) => (
+          <li key={title}>
+            <span className="step-n" aria-hidden="true">
+              {i + 1}
+            </span>
+            <h3>{title}</h3>
+          </li>
+        ))}
+      </ol>
+
+      {catalog && <Industries catalog={catalog} />}
+    </section>
+  );
+}
+
+/** "Lusaka Central" → "Lusaka", "New York Central Terminal" → "New York": drop the generic words. */
+const place = (station: string) => station.replace(/\s+(Central|Station|Terminal|Terminus|Railway)\b/g, "").trim();
+
+function Industries({ catalog }: { catalog: Catalog }) {
+  return (
+    <div className="gameplay-industries">
+      <h3>The three industries</h3>
+      <div className="industry-grid">
+        {catalog.industries.map((ind) => {
+          return (
+            <article key={ind.id} className="industry-card">
+              <h4>{ind.name}</h4>
+              <ul>
+                {Object.keys(ind.recipe.inputs).map((good) => {
+                  const where = marketsFor(catalog, good, "sells").map((m) => place(m.stop.name));
+                  return (
+                    <li key={good}>
+                      <strong>{goodName(catalog.goods, good)}</strong>{" "}
+                      <span className="muted">{where.length ? where.join(", ") : "not sold anywhere yet"}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

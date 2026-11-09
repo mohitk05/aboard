@@ -55,8 +55,11 @@ export async function signUp(page: Page, station = "Berlin, Germany", interests:
   await page.getByLabel("Age", { exact: true }).fill("28");
   for (const i of interests) await checkTag(page, i);
   await page.getByRole("button", { name: "Start travelling" }).click();
-  // Slow when several software-rendered 3D worlds run at once.
-  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible({ timeout: 15_000 });
+  // New players start with the story, then go on to the game.
+  // (Slow when several software-rendered 3D worlds run at once.)
+  await expect(page.getByRole("heading", { name: "How the world came to ride the rails" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("link", { name: "Go to the game" }).click();
+  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Journey" })).toHaveClass(/active/);
   if (station !== "Berlin, Germany") await placeAt(page, station);
   return { username, email: `${username}@e2e.test` };
 }

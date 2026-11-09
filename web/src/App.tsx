@@ -38,7 +38,8 @@ function RouteError() {
 const routes = [
   { path: "/", element: <Gate signedIn={<Home />} signedOut={<Landing />} /> },
   { path: "/login", element: <Gate signedIn={home} signedOut={<Login />} /> },
-  { path: "/signup", element: <Gate signedIn={home} signedOut={<Signup />} /> },
+  // Once signed up (the only way to be signed in on this page), start with the story.
+  { path: "/signup", element: <Gate signedIn={<Navigate to="/story" replace />} signedOut={<Signup />} /> },
   { path: "/story", element: <Gate signedIn={<Story />} signedOut={<Story />} /> },
   { path: "/business", element: <Gate signedIn={<Business />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/people", element: <Gate signedIn={<People />} signedOut={<Navigate to="/login" replace />} /> },
