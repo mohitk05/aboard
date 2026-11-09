@@ -14,6 +14,7 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "off",
+    screenshot: "only-on-failure", // in test-results/, next to the error report
   },
   // Software WebGL (SwiftShader) so the three.js world renders in headless Chromium.
   projects: [

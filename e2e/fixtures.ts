@@ -47,7 +47,8 @@ export async function signUp(page: Page, station = "Berlin, Germany", interests:
   await page.goto("/"); // (an origin for the admin's requests)
   const code = await adminInvite(page);
   await page.goto(`/signup?invite=${code}`);
-  await expect(page.getByRole("group", { name: "Starting station" })).toContainText("Berlin");
+  // (The invite is checked first; slow when several software-rendered 3D worlds are open.)
+  await expect(page.getByRole("group", { name: "Starting station" })).toContainText("Berlin", { timeout: 20_000 });
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Email", { exact: true }).fill(`${username}@e2e.test`);
   await page.getByLabel("Password", { exact: true }).fill("password123");

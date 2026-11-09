@@ -310,12 +310,21 @@ export default function World3D({ stops, routes, allRoutes, trips, home, focus, 
       el!.setAttribute("aria-label", focus.label);
       rebuild();
     }
-    // Selecting a train or a line flies the camera to it.
+    // Selecting a train or a line flies the camera to it; closing the details flies back to what
+    // the screen is about (your station, your train…).
+    let hadSelection = false;
     function reselect() {
       highlightRoutes();
       highlightStops();
       resize(); // the details panel takes space on the right; re-centre the view
-      const { selection, routes, trips } = latest.current;
+      const { selection, routes, trips, focus } = latest.current;
+      if (!selection) {
+        const target = followTarget() ?? focus.center;
+        if (hadSelection && target) flyTo(target, focus.distance);
+        hadSelection = false;
+        return;
+      }
+      hadSelection = true;
       if (selection?.kind === "train") {
         const t = trips.find((x) => x.id === selection.id);
         if (t) flyTo(trainPosition(t, Date.now()), Math.min(camera.position.length(), 2.4));

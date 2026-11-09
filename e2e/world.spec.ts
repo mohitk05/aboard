@@ -128,27 +128,22 @@ test("hovering a station's dot names it (mouse)", async ({ browser }) => {
   const page = await ctx.newPage();
   await signUp(page, "Paris, France");
   const moscow = page.locator(".world-label", { hasText: /^Moscow$/ });
+  await expect(moscow).toBeHidden();
 
-  // Find Moscow's dot: open the line (which names its stations), note where Moscow is, close it.
+  // Open a line (which names its stations), then hover Moscow's dot: its name lights up.
   const board = page.getByRole("region", { name: "Departures" });
   await board.getByRole("button", { name: /The Long Way/ }).first().click();
   await board.getByRole("button", { name: "Line details" }).click();
   await expect(moscow).toBeVisible({ timeout: 20_000 });
-  await page.waitForTimeout(2500); // let the camera settle
-  const home = page.locator(".world-label.is-home"); // always named: a reference point
-  const box = (await moscow.boundingBox())!;
-  const before = (await home.boundingBox())!;
-  await page.getByRole("button", { name: "Close details" }).click();
-  await board.getByRole("button", { name: /The Long Way/ }).first().click(); // fold the departure away
-  await expect(moscow).toBeHidden();
-  await page.waitForTimeout(2500);
-  // Closing the panel re-centres the view (a sideways shift of everything); follow it.
-  const after = (await home.boundingBox())!;
-  const [dx, dy] = [after.x - before.x, after.y - before.y];
+  const box = await settled(moscow);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(moscow).toHaveClass(/is-highlight/);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 120); // away again
+  await expect(moscow).not.toHaveClass(/is-highlight/);
 
-  await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
-  await expect(moscow).toBeVisible();
-  await page.mouse.move(5, 400); // away again
+  // Closing the line hides its stations' names, and the view returns to your station.
+  await page.getByRole("button", { name: "Close details" }).click();
   await expect(moscow).toBeHidden();
+  await expect(page.locator(".world-label", { hasText: /^Paris$/ })).toBeVisible();
   await ctx.close();
 });
