@@ -135,9 +135,17 @@ test("hovering a station's dot names it (mouse)", async ({ browser }) => {
   await board.getByRole("button", { name: /The Long Way/ }).first().click();
   await board.getByRole("button", { name: "Line details" }).click();
   await expect(moscow).toBeVisible({ timeout: 20_000 });
-  const box = await settled(moscow);
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await expect(moscow).toHaveClass(/is-highlight/);
+  let box = await settled(moscow);
+  try {
+    await expect(async () => {
+      box = await settled(moscow);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(moscow).toHaveClass(/is-highlight/, { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+  } catch (e) {
+    await page.screenshot({ path: test.info().outputPath("hover-failed.png") });
+    throw e;
+  }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 120); // away again
   await expect(moscow).not.toHaveClass(/is-highlight/);
 
@@ -146,4 +154,34 @@ test("hovering a station's dot names it (mouse)", async ({ browser }) => {
   await expect(moscow).toBeHidden();
   await expect(page.locator(".world-label", { hasText: /^Paris$/ })).toBeVisible();
   await ctx.close();
+});
+
+test("on board, opening details keeps the camera on them instead of snapping back to your train", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const { adminToken, seed } = await ensureWorld(request);
+  // A train waiting at Lisbon, so the player boards straight away.
+  const t = await request.post("/api/trip", {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    data: { trip: { route: seed.route, active: true } },
+  });
+  expect(t.status()).toBe(201);
+  await signUp(page, "Lisbon, Portugal");
+  const board = page.getByRole("region", { name: "Departures" });
+  // (Other tests add lines from Lisbon too, e.g. to Porto: pick the one to Vladivostok.)
+  await board.getByRole("button", { name: /Boarding/ }).filter({ hasText: "Vladivostok" }).first().click();
+  await board.getByRole("button", { name: /Buy a ticket to Madrid/ }).click();
+  await expect(page.getByText(/On board/)).toBeVisible();
+
+  // Open the line: the camera flies out to show it, then stays there.
+  await page.getByRole("button", { name: "Line details" }).click();
+  const far = page.locator(".world-label", { hasText: /^Vladivostok$/ });
+  await expect(far).toBeVisible({ timeout: 20_000 });
+  const settledAt = await settled(far);
+  await page.waitForTimeout(6000); // long enough for the old snap-back to your train
+  const later = (await far.boundingBox())!;
+  expect(Math.hypot(later.x - settledAt.x, later.y - settledAt.y)).toBeLessThan(8);
+
+  // Closing the details flies back to your train.
+  await page.getByRole("button", { name: "Close details" }).click();
+  await expect(far).toBeHidden();
 });

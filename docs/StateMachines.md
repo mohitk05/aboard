@@ -212,7 +212,7 @@ stateDiagram-v2
 
 ## Camera
 
-The globe's camera. Screens steer it (useWorldFocus), selecting a train, line or station flies to it, and the player can grab it. When idle it follows your train if there is one, slowly drifts if the screen has no centre, and otherwise rests. The world draws at full frame rate while the camera is held, flying, or just let go; at 15 fps otherwise.
+The globe's camera. Screens steer it (useWorldFocus), selecting a train, line or station flies to it, and the player can grab it. When idle it follows your train if there is one, slowly drifts if the screen has no centre, and otherwise rests; while a details panel is open it stays on what was selected, and closing the panel flies back. The world draws at full frame rate while the camera is held, flying, or just let go; at 15 fps otherwise.
 
 **Stored in:** in memory, in web/src/world3d/World3D.tsx
 
@@ -233,7 +233,7 @@ stateDiagram-v2
 
 | State | Meaning | Accepts |
 | --- | --- | --- |
-| `IDLE` | Following your train, drifting slowly, or resting, depending on the screen. | `grab` → `HELD`, `fly` → `FLYING` |
+| `IDLE` | Following your train, drifting slowly, or resting, depending on the screen. Rests while a details panel is open. | `grab` → `HELD`, `fly` → `FLYING` |
 | `HELD` | The player is dragging or zooming. | `release` → `SETTLING`, `fly` → `FLYING` |
 | `SETTLING` | Just let go: stays where the player left it for 6 s. | `settle` → `IDLE`, `grab` → `HELD`, `fly` → `FLYING` |
 | `FLYING` | Animating to a new view (about 1.4 s). | `land` → `IDLE`, `grab` → `HELD`, `fly` → `FLYING` |

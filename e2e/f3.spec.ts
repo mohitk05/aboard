@@ -12,7 +12,8 @@ test("F3: board at Lisbon, ride to Madrid, and get welcomed on arrival", async (
 
   await signUp(page, "Lisbon, Portugal");
   const board = page.getByRole("region", { name: "Departures" });
-  await board.getByRole("button", { name: /Boarding/ }).first().click();
+  // (Other tests add lines from Lisbon too, e.g. to Porto: pick the one to Vladivostok.)
+  await board.getByRole("button", { name: /Boarding/ }).filter({ hasText: "Vladivostok" }).first().click();
   await board.getByRole("button", { name: /Buy a ticket to Madrid/ }).click();
 
   // The train is at the platform, so you're aboard straight away.

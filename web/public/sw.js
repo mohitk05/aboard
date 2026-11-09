@@ -1,9 +1,29 @@
 // Aboard service worker: offline app shell and push notifications.
-const SHELL = "aboard-shell-v3";
-const ASSETS = "aboard-assets-v3";
+const SHELL = "aboard-shell-v4";
+const ASSETS = "aboard-assets-v4";
+
+/** Cache the page and the scripts and styles it loads, so the offline shell is whole at once. */
+async function cacheShell(res) {
+  const html = await res.clone().text();
+  await (await caches.open(SHELL)).put("/", res);
+  const files = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
+  const assets = await caches.open(ASSETS);
+  const add = async (f) => (await assets.match(f)) || assets.add(f).catch(() => {});
+  await Promise.all(files.map(add));
+  // And the chunks the app loads later (the 3D world), so the globe works offline too.
+  for (const js of files.filter((f) => f.endsWith(".js"))) {
+    const code = await (await assets.match(js))?.text();
+    const lazy = [...(code ?? "").matchAll(/import\([`"']\.\/([\w-]+\.js)[`"']\)/g)].map((m) => `/assets/${m[1]}`);
+    await Promise.all(lazy.map(add));
+  }
+}
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL).then((c) => c.add("/")).then(() => self.skipWaiting()));
+  event.waitUntil(
+    fetch("/")
+      .then((res) => (res.ok ? cacheShell(res) : undefined))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -25,8 +45,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(SHELL).then((c) => c.put("/", copy));
+          // Keep the cached shell current (and finish writing it, even if the page moves on).
+          if (res.ok) event.waitUntil(cacheShell(res.clone()));
           return res;
         })
         .catch(() => caches.match("/")),
@@ -44,7 +64,7 @@ self.addEventListener("fetch", (event) => {
           fetch(req).then((res) => {
             if (res.ok) {
               const copy = res.clone();
-              caches.open(ASSETS).then((c) => c.put(req, copy));
+              event.waitUntil(caches.open(ASSETS).then((c) => c.put(req, copy)));
             }
             return res;
           }),

@@ -217,6 +217,7 @@ export default function World3D({ stops, routes, allRoutes, trips, home, focus, 
         stopLabels.push({ obj, normal: new THREE.Vector3(...p).normalize(), highlight: hi, listed: focus.labels.includes(s.id), onSelected: false, id: s.id, mesh: m });
       }
       highlightRoutes();
+      highlightStops(); // keep the hovered/selected station and the selected line's names after a rebuild
     }
 
     // A line glows when hovered, and stays lit while its details are open.
@@ -474,7 +475,9 @@ export default function World3D({ stops, routes, allRoutes, trips, home, focus, 
         }
       } else {
         const target = followTarget();
-        const idle = mode === "IDLE";
+        // While a details panel is open, stay on what was selected: don't follow your train or
+        // drift away from it. (Closing the panel flies back; see reselect.)
+        const idle = mode === "IDLE" && !latest.current.selection;
         if (target && idle) {
           const want = new THREE.Vector3(...toVec3(target, camera.position.length()));
           camera.position.lerp(want, Math.min(1, dt * 1.5)).setLength(want.length());
