@@ -92,6 +92,7 @@ const schemas = {
   },
   login: z.object({ user: z.object({ email: z.string().email(), password: z.string().min(1).max(256) }) }),
   ticket: z.object({ ticket: z.object({ trip: id, from: id, to: id }) }),
+  interestActive: z.object({ interest: z.object({ active: z.boolean() }) }),
   interest: z.object({
     interest: z.object({
       name: z.string().min(1).max(100),
@@ -360,6 +361,10 @@ app.get("/ticket/:id", admin, (c) => send(c, world(c.env).getTicket(param(c, "id
 app.get("/interest", (c) => world(c.env).listInterests().then((list) => ok(c, list)));
 app.post("/interest", admin, async (c) =>
   send(c, world(c.env).createInterest((await body(c, schemas.interest)).interest), 201),
+);
+/** Stop offering an interest ({ interest: { active: false } }), or offer it again. */
+app.patch("/interest/:id", admin, async (c) =>
+  send(c, world(c.env).setInterestActive(param(c, "id"), (await body(c, schemas.interestActive)).interest.active)),
 );
 
 // Messaging

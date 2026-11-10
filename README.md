@@ -164,8 +164,9 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/ticket/buy` | player | `{ ticket: { trip, from, to } }`: costs 0.01 credits per km |
 | DELETE | `/ticket` | player | cancel your ticket before boarding (refunded) |
 | GET | `/ticket/:id` | admin | |
-| GET | `/interest` | anyone | |
+| GET | `/interest` | anyone | the interests on offer (active ones) |
 | POST | `/interest` | admin | `{ interest: { name, description?, image? } }` |
+| PATCH | `/interest/:id` | admin | `{ interest: { active } }`: stop offering an interest (left out of `GET /interest`; travellers who picked it keep it), or offer it again |
 | GET | `/conversation` | player | your conversations, newest activity first, with the last message |
 | POST | `/conversation` | player | `{ conversation: { members: [userId, …] } }` (one-to-one chats are reused) |
 | GET | `/conversation/:id/messages` | member | |

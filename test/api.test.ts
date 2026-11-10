@@ -213,6 +213,26 @@ describe("fellow travellers", () => {
   });
 });
 
+describe("interests", () => {
+  it("an admin can stop offering one; travellers who picked it keep it", async () => {
+    const mk = async (name: string) => (await api("POST", "/interest", { token: admin, body: { interest: { name } } })).data.id;
+    const [trains, biz] = [await mk("Trains"), await mk("Business & Networking")];
+    const picked = await signup(stops[0]!.id, { interests: [trains, biz] });
+    const offered = async () => (await api("GET", "/interest")).data.map((i: { name: string }) => i.name);
+
+    const off = { body: { interest: { active: false } } };
+    expect((await api("PATCH", `/interest/${biz}`, off)).status).toBe(401);
+    expect((await api("PATCH", `/interest/${picked.user.id}`, { token: admin, ...off })).status).toBe(404);
+    expect((await api("PATCH", `/interest/${biz}`, { token: admin, ...off })).data).toMatchObject({ active: 0 });
+    expect(await offered()).toEqual(["Trains"]);
+    const me = (await api("GET", "/user/me", { token: picked.token })).data;
+    expect(me.interests.map((i: { name: string }) => i.name)).toEqual(["Business & Networking", "Trains"]);
+
+    await api("PATCH", `/interest/${biz}`, { token: admin, body: { interest: { active: true } } });
+    expect(await offered()).toEqual(["Business & Networking", "Trains"]);
+  });
+});
+
 describe("messaging", () => {
   it("lets members talk and keeps others out", async () => {
     const a = await signup(stops[0]!.id);

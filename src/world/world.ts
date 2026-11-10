@@ -1667,8 +1667,18 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  /** The interests on offer (inactive ones are left out). */
   listInterests() {
-    return this.sql.exec("SELECT id, name, description, image FROM interests ORDER BY name").toArray();
+    return this.sql.exec("SELECT id, name, description, image FROM interests WHERE active = 1 ORDER BY name").toArray();
+  }
+
+  /** Admin: offer an interest, or stop offering it. Travellers who picked it keep it. */
+  setInterestActive(id: string, active: boolean) {
+    return guard(() => {
+      this.interestRow(id);
+      this.sql.exec("UPDATE interests SET active = ? WHERE id = ?", active ? 1 : 0, id);
+      return this.sql.exec("SELECT id, name, description, image, active FROM interests WHERE id = ?", id).one();
+    });
   }
 
   // ======================= messaging =======================

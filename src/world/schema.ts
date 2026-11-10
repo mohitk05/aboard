@@ -213,6 +213,11 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX trips_by_route ON trips(route_id, active);
   CREATE INDEX trips_by_vehicle ON trips(vehicle_id, active);
   `,
+  /* 7: retire interests */ `
+  -- An inactive interest isn't offered any more (GET /interest leaves it out), but travellers who
+  -- already picked it keep it. Admins switch it with PATCH /interest/:id.
+  ALTER TABLE interests ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {
