@@ -260,6 +260,11 @@ app.get("/stop/:id/incoming-vehicles", anyone, (c) => {
 app.get("/route", (c) => world(c.env).listRoutes().then((list) => ok(c, list)));
 app.get("/route/:id", anyone, (c) => send(c, world(c.env).getRoute(param(c, "id", routeId))));
 app.post("/route", admin, async (c) => send(c, changed(c.env, world(c.env).createRoute((await body(c, schemas.route)).route)), 201));
+/** Change a line's stations (its return run follows) and optionally its name. Its trains stay on it. */
+app.put("/route/:id", admin, async (c) => {
+  const { route } = await body(c, z.object({ route: z.object({ name: z.string().min(1).max(100).optional(), stops: z.array(id).min(2).max(100) }) }));
+  return send(c, changed(c.env, world(c.env).updateRoute(param(c, "id", routeId), route)));
+});
 app.post("/route/autogenerate", admin, async (c) =>
   send(c, changed(c.env, world(c.env).autogenerateRoutes((await body(c, schemas.autogenerate)).config)), 201),
 );

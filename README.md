@@ -152,6 +152,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/route` | anyone | all lines with their stations, and each line's return twin (`returnOf`; id + `~r`), which trains switch to at the end of the line |
 | GET | `/route/:id` | player | |
 | POST | `/route` | admin | `{ route: { name, stops: [stopId, …] } }` |
+| PUT | `/route/:id` | admin | `{ route: { stops: [stopId, …], name? } }`: change a line's stations (its return run follows). Its trains stay on it, at the same share of the way along; refused (409) while anyone holds a ticket on them |
 | POST | `/route/autogenerate` | admin | `{ config: { count?, minLength?, maxLength? } }` |
 | GET | `/vehicle` | admin | |
 | GET | `/vehicle/:id` | player | |

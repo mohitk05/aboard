@@ -740,32 +740,101 @@ export class World extends DurableObject<Env> {
 
   createRoute(input: RouteInput) {
     return guard(() => {
-      if (input.stops.length < 2) throw badRequest("A route needs at least two stops.");
-      if (new Set(input.stops).size !== input.stops.length) throw badRequest("A route can't visit a stop twice.");
-      const stops = input.stops.map((id) => this.stopRow(id));
+      const stops = this.routeInputStops(input.stops);
       const routeId = newId();
       const twinId = `${routeId}~r`;
-      const kms = stops.map((s, i) => (i === 0 ? 0 : railKm(stops[i - 1]!, s)));
       this.forgetNetwork();
       this.ctx.storage.transactionSync(() => {
         const now = Date.now();
         this.sql.exec("INSERT INTO routes (id, name, created_at) VALUES (?, ?, ?)", routeId, input.name, now);
         // The return twin: same stations, reversed, so trains can turn around at the end.
         this.sql.exec("INSERT INTO routes (id, name, created_at, return_of) VALUES (?, ?, ?, ?)", twinId, input.name, now, routeId);
-        stops.forEach((s, i) => {
-          this.sql.exec("INSERT INTO route_stops (route_id, position, stop_id, km) VALUES (?, ?, ?, ?)", routeId, i, s.id, kms[i]);
-          const r = stops.length - 1 - i; // position i of the twin is position r of the line
-          this.sql.exec(
-            "INSERT INTO route_stops (route_id, position, stop_id, km) VALUES (?, ?, ?, ?)",
-            twinId,
-            i,
-            stops[r]!.id,
-            i === 0 ? 0 : kms[r + 1]!,
-          );
-        });
+        this.writeRouteStops(routeId, stops);
       });
       this.forgetNetwork();
       return this.routeOut(routeId);
+    });
+  }
+
+  /**
+   * Admin: change a line's stations (and its return run's), and optionally its name. Its trains
+   * stay on it, each moved to the same share of the way along its direction as before. Refused
+   * while anyone holds a ticket on one of them, since their stations could disappear.
+   */
+  updateRoute(id: string, input: { stops: string[]; name?: string }) {
+    return guard(() => {
+      const line = this.routeRow(id);
+      if (line.return_of) throw badRequest("That's a line's return run: change the line itself.");
+      const stops = this.routeInputStops(input.stops);
+      const twinId = `${id}~r`;
+      const trips = this.sql.exec<TripRow>("SELECT * FROM trips WHERE route_id IN (?, ?)", id, twinId).toArray();
+      const ticketed = trips.length
+        ? this.sql.exec(`SELECT 1 FROM tickets WHERE trip_id IN (${trips.map(() => "?").join(",")}) LIMIT 1`, ...trips.map((t) => t.id)).toArray()
+        : [];
+      if (ticketed.length) throw conflict("Travellers hold tickets on this line's trains. Change it once they've arrived.");
+
+      // Where each train is, as a share of the way along its direction (0 at the start, 1 at the end).
+      const along = (rows: readonly RouteStopRow[]) => {
+        const at: number[] = [];
+        rows.reduce((km, s) => (at.push(km + s.km), km + s.km), 0);
+        return at;
+      };
+      const share = new Map<string, number>();
+      for (const t of trips) {
+        const at = along(this.routeStops(t.route_id));
+        share.set(t.id, (at[t.stop_index]! + kmIntoSegment(t)) / at.at(-1)!);
+      }
+
+      this.forgetNetwork();
+      this.ctx.storage.transactionSync(() => {
+        if (input.name) this.sql.exec("UPDATE routes SET name = ? WHERE id IN (?, ?)", input.name, id, twinId);
+        this.sql.exec("DELETE FROM route_stops WHERE route_id IN (?, ?)", id, twinId);
+        this.writeRouteStops(id, stops);
+        this.forgetNetwork();
+        const now = Date.now();
+        for (const t of trips) {
+          const at = along(this.routeStops(t.route_id));
+          const target = share.get(t.id)! * at.at(-1)!;
+          const last = at.length - 1;
+          if (t.state === "MOVING") {
+            let i = 0;
+            while (i < last - 1 && at[i + 1]! <= target) i++;
+            const km = Math.min(Math.max(0, target - at[i]!), Math.max(0, at[i + 1]! - at[i]! - 0.1));
+            const departed = now - (km / t.speed_kmh) * 3_600_000;
+            this.sql.exec("UPDATE trips SET stop_index = ?, progress = ?, stop_at = ? WHERE id = ?", i, km, Math.round(departed), t.id);
+          } else {
+            // Standing (or not running): at the station nearest that point, starting its wait afresh.
+            const i = at.reduce((best, km, j) => (Math.abs(km - target) < Math.abs(at[best]! - target) ? j : best), 0);
+            this.sql.exec("UPDATE trips SET stop_index = ?, progress = 0, stop_at = ? WHERE id = ?", t.state === "IDLE" ? 0 : i, now, t.id);
+          }
+        }
+      });
+      this.forgetNetwork();
+      return this.routeOut(id);
+    });
+  }
+
+  /** A new line's stations, checked: at least two, none twice, all real. */
+  private routeInputStops(ids: string[]) {
+    if (ids.length < 2) throw badRequest("A route needs at least two stops.");
+    if (new Set(ids).size !== ids.length) throw badRequest("A route can't visit a stop twice.");
+    return ids.map((id) => this.stopRow(id));
+  }
+
+  /** Write a line's stations, and its return twin's (the same, reversed), with rail km between them. */
+  private writeRouteStops(routeId: string, stops: StopRow[]) {
+    const twinId = `${routeId}~r`;
+    const kms = stops.map((s, i) => (i === 0 ? 0 : railKm(stops[i - 1]!, s)));
+    stops.forEach((s, i) => {
+      this.sql.exec("INSERT INTO route_stops (route_id, position, stop_id, km) VALUES (?, ?, ?, ?)", routeId, i, s.id, kms[i]);
+      const r = stops.length - 1 - i; // position i of the twin is position r of the line
+      this.sql.exec(
+        "INSERT INTO route_stops (route_id, position, stop_id, km) VALUES (?, ?, ?, ?)",
+        twinId,
+        i,
+        stops[r]!.id,
+        i === 0 ? 0 : kms[r + 1]!,
+      );
     });
   }
 

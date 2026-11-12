@@ -213,6 +213,57 @@ describe("fellow travellers", () => {
   });
 });
 
+describe("changing a line", () => {
+  it("re-routes it and its return run, keeping its trains on it at the same share of the way", async () => {
+    const out = await newTrip(true);
+    // Halfway along Paris → Berlin (stations 2 → 3), out of 9 segments.
+    await api("POST", `/trip/${out.id}/position`, { token: admin, body: { stopIndex: 2, km: 400 } });
+    const back = await newTrip(true);
+    await api("POST", `/trip/${back.id}/position`, { token: admin, body: { stopIndex: stops.length - 1, km: 0 } }); // at the end
+    const w = worldStub();
+    for (let i = 0; i < 40 && (await api("GET", `/trip/${back.id}`, { token: admin })).data.route.id === route.id; i++) await w.tick(Date.now());
+    expect((await api("GET", `/trip/${back.id}`, { token: admin })).data.route.id).toBe(`${route.id}~r`); // turned around
+
+    const before = (await api("GET", `/trip/${out.id}`, { token: admin })).data;
+    // Lisbon → Madrid → Paris → Berlin → Moscow only, renamed.
+    const shorter = stops.slice(0, 5).map((s) => s.id);
+    const r = await api("PUT", `/route/${route.id}`, { token: admin, body: { route: { name: "Iberia–Moscow", stops: shorter } } });
+    expect(r.status).toBe(200);
+    expect(r.data.name).toBe("Iberia–Moscow");
+    expect(r.data.stops.map((s: { id: string }) => s.id)).toEqual(shorter);
+    const twin = (await api("GET", `/route/${route.id}~r`, { token: admin })).data;
+    expect(twin.stops.map((s: { id: string }) => s.id)).toEqual([...shorter].reverse());
+    expect(twin.name).toBe("Iberia–Moscow");
+
+    const after = (await api("GET", `/trip/${out.id}`, { token: admin })).data;
+    expect(after.route.id).toBe(route.id);
+    expect(after.state).toBe(before.state);
+    expect(after.currentStopIndex).toBeLessThan(4); // still on the line, nearer its (new) end
+    expect((await api("GET", `/trip/${back.id}`, { token: admin })).data.route.id).toBe(`${route.id}~r`);
+
+    // The world keeps running on the new line, both ways.
+    for (let i = 0; i < 50; i++) await w.tick(Date.now());
+    const trains = (await api("GET", "/trip?active=1")).data;
+    expect(trains).toHaveLength(2);
+    for (const t of trains) expect(t.currentStopIndex).toBeLessThan(5);
+    const board = (await api("GET", `/stop/${stops[4]!.id}/board`)).data;
+    expect(board.stop.name).toBe(stops[4]!.name);
+    expect((await api("GET", `/stop/${stops[9]!.id}/board`)).data.departures).toEqual([]); // Vladivostok: off the line now
+  });
+
+  it("is refused while travellers hold tickets on its trains, and for a return run", async () => {
+    const trip = await newTrip(true);
+    const { token } = await signup(stops[0]!.id);
+    await api("POST", "/ticket/buy", { token, body: { ticket: { trip: trip.id, from: stops[0]!.id, to: stops[2]!.id } } });
+    const shorter = { route: { stops: stops.slice(0, 3).map((s) => s.id) } };
+    expect((await api("PUT", `/route/${route.id}`, { body: shorter })).status).toBe(401);
+    const busy = await api("PUT", `/route/${route.id}`, { token: admin, body: shorter });
+    expect(busy.status).toBe(409);
+    expect(busy.error).toBe("Travellers hold tickets on this line's trains. Change it once they've arrived.");
+    expect((await api("PUT", `/route/${route.id}~r`, { token: admin, body: shorter })).status).toBe(400);
+  });
+});
+
 describe("interests", () => {
   it("an admin can stop offering one; travellers who picked it keep it", async () => {
     const mk = async (name: string) => (await api("POST", "/interest", { token: admin, body: { interest: { name } } })).data.id;
