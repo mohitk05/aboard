@@ -6,6 +6,8 @@ export interface PublicUser {
   id: string;
   username: string;
   image: string | null;
+  /** Run by the game, not a person: it won't answer messages. */
+  bot: boolean;
   interests: { id: string; name: string }[];
   state: string | null;
   currentStop: string | null;

@@ -76,6 +76,8 @@ export interface Standing {
   username: string | null;
   image: string | null;
   you: boolean;
+  /** Run by the game, not a person. */
+  bot: boolean;
   netWorth: number;
   /** Earned trading this week: sales, less materials and fares. */
   week: number;

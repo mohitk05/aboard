@@ -41,6 +41,7 @@ import {
   type IndustryId,
 } from "../game/catalog";
 import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
+import { NO_TRAIN_WAIT_MS, chooseDeparture, plan as planBot, shortestPaths, type BotMarket, type Step } from "../game/bot";
 
 // ---------- row types (as stored) ----------
 
@@ -80,6 +81,9 @@ type UserRow = {
   profile_mode: ProfileMode;
   created_at: number;
   balance: number;
+  bot: number;
+  bot_next_at: number | null;
+  bot_note: string | null;
 };
 type FactoryRow = {
   user_id: string;
@@ -249,6 +253,7 @@ export class World extends DurableObject<Env> {
       );
     });
     this.settleFactories(now); // finished production batches, with a notification
+    this.tickBots(now);
     this.broadcast({ type: "tick", at: now, summary });
     return summary;
   }
@@ -1247,6 +1252,17 @@ export class World extends DurableObject<Env> {
     return { sells: list("sells"), buys: list("buys") };
   }
 
+  /** Every market in the world, with its prices right now. Pass the stations if you already have them. */
+  private allMarkets(now: number, stops?: StopRow[]) {
+    const markets = [];
+    const loads = this.marketLoads(now);
+    for (const row of stops ?? this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray()) {
+      const m = this.marketAt(row, now, loads);
+      if (m) markets.push({ stop: stopOut(row), ...m });
+    }
+    return markets;
+  }
+
   /** Recent trading at every market (or one station's), faded to `now`, by "stopId:good". */
   private marketLoads(now: number, stopId?: string): Map<string, number> {
     const rows = this.sql
@@ -1272,13 +1288,7 @@ export class World extends DurableObject<Env> {
 
   /** Everything players need to plan: goods, industries, and every market with today's prices. */
   catalog() {
-    const now = Date.now();
-    const markets = [];
-    const loads = this.marketLoads(now);
-    for (const row of this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray()) {
-      const m = this.marketAt(row, now, loads);
-      if (m) markets.push({ stop: stopOut(row), ...m });
-    }
+    const markets = this.allMarkets(Date.now());
     return {
       home: this.homeStop(),
       cargoCapacity: CARGO_CAPACITY,
@@ -1298,8 +1308,8 @@ export class World extends DurableObject<Env> {
     return guard(() => {
       this.userRow(viewerId);
       const players = this.sql
-        .exec<Pick<UserRow, "id" | "username" | "image" | "profile_mode" | "balance">>(
-          "SELECT id, username, image, profile_mode, balance FROM users WHERE role = ?",
+        .exec<Pick<UserRow, "id" | "username" | "image" | "profile_mode" | "balance" | "bot">>(
+          "SELECT id, username, image, profile_mode, balance, bot FROM users WHERE role = ?",
           USER_ROLES.PLAYER,
         )
         .toArray();
@@ -1336,6 +1346,7 @@ export class World extends DurableObject<Env> {
         username: shown(p) ? p.username : null,
         image: shown(p) ? p.image : null,
         you: p.id === viewerId,
+        bot: !!p.bot,
         netWorth: round(worth.get(p.id)!),
         week: round(thisWeek.get(p.id) ?? 0),
         factories: built.get(p.id) ?? [],
@@ -1634,6 +1645,145 @@ export class World extends DurableObject<Env> {
       amount,
       note,
     );
+  }
+
+  // ======================= bots =======================
+  // Players the World runs itself. The brain is src/game/bot.ts; here we show it the world, carry
+  // out its steps through the same methods a player's requests use, and find it trains.
+
+  /** Admin: make players bots (or people again), by username. Returns who changed. */
+  setBots(usernames: string[], bot: boolean) {
+    return guard(() => {
+      const changed: string[] = [];
+      for (const name of usernames) {
+        const u = this.sql.exec<UserRow>("SELECT * FROM users WHERE username = ?", name).toArray()[0];
+        if (!u) throw notFound(`No player called ${name}.`);
+        if (u.role !== USER_ROLES.PLAYER) throw badRequest(`${u.username} is an admin; only players can be bots.`);
+        this.sql.exec("UPDATE users SET bot = ?, bot_next_at = NULL, bot_note = NULL WHERE id = ?", bot ? 1 : 0, u.id);
+        changed.push(u.username);
+      }
+      return { changed, bots: this.listBots() };
+    });
+  }
+
+  /** Admin: every bot, where it is and what it's up to. */
+  listBots() {
+    return this.sql
+      .exec<UserRow>("SELECT * FROM users WHERE bot = 1 ORDER BY username")
+      .toArray()
+      .map((u) => ({
+        id: u.id,
+        username: u.username,
+        state: u.state,
+        currentStop: u.current_stop_id,
+        balance: Math.round(u.balance),
+        note: u.bot_note,
+        nextAt: u.bot_next_at,
+      }));
+  }
+
+  /** Each bot that's free at a station and awake decides what to do, and does it. */
+  private tickBots(now: number) {
+    const due = this.sql
+      .exec<UserRow>("SELECT * FROM users WHERE bot = 1 AND ticket_id IS NULL AND (bot_next_at IS NULL OR bot_next_at <= ?)", now)
+      .toArray();
+    if (!due.length) return;
+    const track = this.runningTrack();
+    // Stations with markets: read once for every bot (their prices are read fresh for each, since
+    // each bot's trades move them).
+    const home = this.homeStop();
+    const marketStops = this.sql
+      .exec<StopRow>("SELECT * FROM stops ORDER BY name")
+      .toArray()
+      .filter((s) => s.id === home?.id || MARKETS[s.name]);
+    for (const u of due) {
+      try {
+        this.runBot(u, now, track, marketStops);
+      } catch (e) {
+        // One confused bot mustn't stop the world. Try again in a while.
+        console.error(`bot ${u.username}:`, e);
+        this.sql.exec("UPDATE users SET bot_next_at = ? WHERE id = ?", now + NO_TRAIN_WAIT_MS, u.id);
+      }
+    }
+  }
+
+  /**
+   * Track a train can take you along: each pair of consecutive stations on a line with a running
+   * train, both ways round (`ahead`), and the same reversed (`back`), for distances *to* a station.
+   */
+  private runningTrack() {
+    const ahead = new Map<string, { to: string; km: number }[]>();
+    const back = new Map<string, { to: string; km: number }[]>();
+    const link = (m: typeof ahead, from: string, to: string, km: number) => m.set(from, [...(m.get(from) ?? []), { to, km }]);
+    for (const { route_id } of this.sql.exec<{ route_id: string }>("SELECT DISTINCT route_id FROM trips WHERE active = 1").toArray()) {
+      const stops = this.routeStops(route_id);
+      for (let i = 1; i < stops.length; i++) {
+        link(ahead, stops[i - 1]!.id, stops[i]!.id, stops[i]!.km);
+        link(back, stops[i]!.id, stops[i - 1]!.id, stops[i]!.km);
+      }
+    }
+    return { ahead, back };
+  }
+
+  private runBot(u: UserRow, now: number, track: ReturnType<World["runningTrack"]>, marketStops: StopRow[]) {
+    const home = this.homeStop();
+    if (!home || !u.current_stop_id || !traveller.can(u.state, "buy_ticket")) return;
+    this.settleFactories(now, u.id);
+    const game = this.gameState(u.id);
+    const { dist } = shortestPaths(track.ahead, u.current_stop_id);
+    const markets: BotMarket[] = this.allMarkets(now, marketStops).map((m) => ({ stopId: m.stop.id, sells: m.sells, buys: m.buys }));
+    const { steps, note } = planBot({
+      now,
+      here: u.current_stop_id,
+      home: home.id,
+      balance: game.balance,
+      cargo: game.cargo,
+      warehouse: game.warehouse,
+      cargoCapacity: game.cargoCapacity,
+      factories: game.factories.map((f) => ({ industry: f.industry, readyAt: f.batch?.readyAt ?? null })),
+      markets,
+      km: (stopId) => dist.get(stopId) ?? null,
+      quirk: u.id,
+    });
+    let nextAt: number | null = null; // next tick, unless a step says otherwise
+    let said = note;
+    for (const step of steps) {
+      const r = this.botStep(u.id, step, now, track.back);
+      if (r === "no-train") {
+        nextAt = now + NO_TRAIN_WAIT_MS;
+        said = `${note} (waiting for a train)`;
+      } else if (typeof r === "number") nextAt = r;
+      else if (r && !r.ok) console.warn(`bot ${u.username}: ${step.do} refused: ${r.error}`);
+    }
+    this.sql.exec("UPDATE users SET bot_next_at = ?, bot_note = ? WHERE id = ?", nextAt, said, u.id);
+  }
+
+  /** Carry out one step. Returns a refusal, a time to wait until, or "no-train". */
+  private botStep(userId: string, step: Step, now: number, back: Map<string, { to: string; km: number }[]>) {
+    switch (step.do) {
+      case "unload":
+        return this.unload(userId);
+      case "build":
+        return this.build(userId, step.industry);
+      case "produce":
+        return this.produce(userId, step.industry);
+      case "load":
+        return this.load(userId, step.good, step.qty);
+      case "sell":
+        return this.sell(userId, step.good, step.qty);
+      case "buy":
+        return this.buy(userId, step.good, step.qty);
+      case "wait":
+        return step.until;
+      case "travel": {
+        const here = this.userRow(userId).current_stop_id!;
+        const departures = this.getDepartures(here, 30);
+        if (!departures.ok) return departures;
+        const pick = chooseDeparture(departures.data, shortestPaths(back, step.to).dist, here, now);
+        if (!pick) return "no-train" as const;
+        return this.buyTicket(userId, { trip: pick.departure.trip.id, from: here, to: pick.to });
+      }
+    }
   }
 
   // ======================= demo world =======================
@@ -2138,6 +2288,8 @@ export class World extends DurableObject<Env> {
       id: u.id,
       username: u.username,
       image: u.image,
+      /** Run by the World, not a person (src/game/bot.ts). */
+      bot: !!u.bot,
       interests: this.interestsOf(u.id),
       state: visible ? u.state : null,
       currentStop: visible ? u.current_stop_id : null,

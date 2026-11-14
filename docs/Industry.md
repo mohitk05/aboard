@@ -68,6 +68,20 @@ All of the numbers are in `src/game/catalog.ts`. A market belongs to a station b
   - The station screen has a **Market** panel wherever there's a market.
   - The station details on the globe list what each market buys and sells.
 
+## Bots
+
+Some players are bots: the World runs them itself (the brain is `src/game/bot.ts`). Admins choose which players are bots (`POST /api/admin/bots`, or `scripts/seed-bots.sh`). Everyone can tell who's a bot: they're marked on the Standings and the People screen, and they don't chat.
+
+Bots play by the same rules as people. Every step goes through the same World methods a player's request does, so they pay fares, move markets and wait for trains like anyone else. On each world tick, every bot that's free at a station and awake looks at what it can see and plays the way a sensible person would:
+
+1. **At home:** unload, build the next factory on the ladder (chocolate, then batteries, then chips) once it can afford the factory and its materials with some to spare, and start a batch in every idle factory that has its inputs.
+2. **Selling:** carrying products, it sells where it is if that pays at least 90% of the best trip elsewhere. "Best" counts the trip: what the sale would fetch (with the market reacting to it) less a cost for the km. It sells at home only when broke.
+3. **Buying:** it keeps enough materials for three batches of each factory, plus whatever the next factory needs. It buys what it can here, keeping its fares and the next factory's price aside.
+4. **Where next:** to the best market for what it carries; otherwise to the nearest station selling what it still needs; otherwise home. When there's nothing to do at home, it waits for the next batch (or an hour).
+5. **Getting there:** it takes the departure that leaves the least to do, counting the km ridden, the rail distance still to go from where it gets off, the wait, and another wait if it has to change. If no train brings it closer, it tries again in half an hour.
+
+Each bot has its own temperament, worked out from its id: it minds long trips anywhere from half to twice as much as the next bot, and has its own taste for stations (within 15%). So bots spread out instead of all making the same choice. What each bot is up to is shown to admins (`GET /api/admin/bots`).
+
 ## Next
 
 - **Couriers.** Other players carry goods between stations for you, for a fee, so you can stay home and run your factories.

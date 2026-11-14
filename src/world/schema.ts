@@ -232,6 +232,13 @@ export const MIGRATIONS: string[] = [
   -- The weekly leaderboard sums everyone's trading since Monday.
   CREATE INDEX ledger_by_time ON ledger(at);
   `,
+  /* 9: bots */ `
+  -- Players the World runs itself (src/game/bot.ts). bot_next_at: when a bot next looks at what
+  -- to do (null: on the next tick). bot_note: what it's up to, for admins.
+  ALTER TABLE users ADD COLUMN bot INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN bot_next_at INTEGER;
+  ALTER TABLE users ADD COLUMN bot_note TEXT;
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

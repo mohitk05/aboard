@@ -19,7 +19,7 @@ import {
 import { factoryState } from "../../../src/machines/factory";
 import { formatClock, formatIn } from "../lib/format";
 import { useNow } from "../lib/useNow";
-import { Board, Button, Card, FormError, Notice } from "../ui";
+import { Badge, Board, Button, Card, FormError, Notice } from "../ui";
 import { useWorldFocus } from "../world3d/focus";
 import { Shell } from "./Shell";
 
@@ -296,6 +296,7 @@ function Standings({ catalog }: { catalog: Catalog }) {
               <span>
                 <span className="standing-rank">{n + 1}</span> {p.username ?? "A private player"}
                 {p.you && <span className="muted small"> · you</span>}
+                {p.bot && <Badge>Bot</Badge>}
                 <span className="muted small standing-factories">
                   {p.factories.length ? p.factories.map(industry).join(", ") : "No factories yet"}
                 </span>

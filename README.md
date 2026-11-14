@@ -95,6 +95,11 @@ Admins don't need a `currentStop`. Then create stops, routes and trips with the 
   DRY_RUN=1 ADMIN_TOKEN=… node scripts/fill-trains.mjs   # see what it would add
   ADMIN_TOKEN=… node scripts/fill-trains.mjs             # add them
   ```
+- **Bots** (`scripts/seed-bots.sh`): marks the Nexus travellers as bots and adds five new bot players in Berlin. Bots are players the World runs itself: they build businesses the way people do (see [docs/Industry.md](docs/Industry.md#bots)). Safe to repeat.
+
+  ```sh
+  ADMIN_TOKEN=… ./scripts/seed-bots.sh
+  ```
 
 `POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
@@ -187,6 +192,8 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/game/produce` | player | `{ industry }`: start a batch (inputs from the warehouse, output after some hours) |
 | POST | `/user/:id/place` | admin | `{ stop }`: move a player to a station |
 | POST | `/user/:id/grant` | admin | `{ credits }`: give (or take) credits |
+| GET | `/admin/bots` | admin | every bot: where it is, its credits, and what it's up to |
+| POST | `/admin/bots` | admin | `{ usernames, bot? }`: make players bots (or, with `bot: false`, people again) |
 | GET | `/live` | anyone | WebSocket: `tick`, `world`, `market` (someone traded) and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |

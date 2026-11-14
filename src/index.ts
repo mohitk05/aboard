@@ -439,6 +439,12 @@ app.post("/admin/invites", admin, async (c) => {
   return send(c, world(c.env).createInvite(c.var.user.id, invite), 201);
 });
 app.delete("/admin/invites/:code", admin, (c) => send(c, world(c.env).revokeInvite(c.req.param("code"))));
+/** Admin: the bots (players the World runs itself), and making players bots or people again. */
+app.get("/admin/bots", admin, (c) => world(c.env).listBots().then((data) => ok(c, data)));
+app.post("/admin/bots", admin, async (c) => {
+  const i = await body(c, z.object({ usernames: z.array(z.string().min(1)).min(1).max(100), bot: z.boolean().default(true) }));
+  return send(c, world(c.env).setBots(i.usernames, i.bot));
+});
 app.post("/admin/seed", admin, (c) => send(c, changed(c.env, world(c.env).seedDemo()), 201));
 
 /**
