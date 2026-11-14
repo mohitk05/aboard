@@ -10,6 +10,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  // Signing up through the app takes ~20 s on its own with software WebGL, so Playwright's default
+  // 30 s per test is too tight for anything that signs up and then does something.
+  timeout: 90_000,
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${PORT}`,

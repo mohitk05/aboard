@@ -59,7 +59,7 @@ export const GOODS: Record<GoodId, Good> = {
   milk: { id: "milk", name: "Milk powder", unit: "sack", kind: "raw", depth: 400 },
   vanilla: { id: "vanilla", name: "Vanilla", unit: "box", kind: "raw", depth: 60 },
   chips: { id: "chips", name: "Microchips", unit: "case", kind: "product", depth: 100 },
-  batteries: { id: "batteries", name: "Battery packs", unit: "case", kind: "product", depth: 60 },
+  batteries: { id: "batteries", name: "Battery packs", unit: "case", kind: "product", depth: 100 },
   chocolate: { id: "chocolate", name: "Chocolate", unit: "case", kind: "product", depth: 150 },
 };
 
@@ -89,7 +89,7 @@ export const INDUSTRIES: Record<IndustryId, Industry> = {
     name: "Battery works",
     blurb: "Lithium from the Andes, cobalt from the Copperbelt, nickel from Siberia or Canada and graphite from China or India.",
     build: { credits: 6000, materials: { lithium: 6, cobalt: 4, nickel: 4, graphite: 6 } },
-    recipe: { inputs: { lithium: 3, cobalt: 2, nickel: 2, graphite: 3 }, output: "batteries", quantity: 6, hours: 8 },
+    recipe: { inputs: { lithium: 3, cobalt: 2, nickel: 2, graphite: 3 }, output: "batteries", quantity: 8, hours: 8 },
   },
   chips: {
     id: "chips",
