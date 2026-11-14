@@ -1,6 +1,6 @@
 import { reset, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { CARGO_CAPACITY, INDUSTRIES, MARKETS, priceAt } from "../src/game/catalog";
+import { CARGO_CAPACITY, GOODS, INDUSTRIES, MARKETS, MARKET_HALF_LIFE_HOURS, goodValue, priceAt, tradeTotal, weekStart } from "../src/game/catalog";
 import type { World } from "../src/world/world";
 import { api, buildWorld, signup, worldStub } from "./helpers";
 
@@ -26,6 +26,9 @@ beforeEach(async () => {
 
 const price = (stop: string, good: string, side: "sells" | "buys") =>
   priceAt((MARKETS[stop] as any)[side][good], stop, good as any, Date.now());
+/** What `qty` units cost or fetch in a market nobody has traded in lately. */
+const fresh = (stop: string, good: string, side: "sells" | "buys", qty: number) =>
+  tradeTotal(price(stop, good, side), side, 0, GOODS[good as keyof typeof GOODS].depth, qty);
 const moveTo = (userId: string, stop: string) => api("POST", `/user/${userId}/place`, { token: admin, body: { stop } });
 const game = (token: string) => api("GET", "/game", { token }).then((r) => r.data);
 
@@ -64,7 +67,7 @@ describe("the industry game", () => {
     const r = await api("POST", "/game/buy", { token, body: { good: "cocoa", qty: 10 } });
     expect(r.status).toBe(200);
     expect(r.data.cargo).toEqual({ cocoa: 10 });
-    expect(r.data.balance).toBe(5000 - 10 * price("Dakar Central", "cocoa", "sells"));
+    expect(r.data.balance).toBe(5000 - fresh("Dakar Central", "cocoa", "sells", 10));
     expect(r.data.ledger[0]).toMatchObject({ kind: "buy", note: "10 × Cocoa beans at Dakar Central" });
     expect(r.data.atHome).toBe(false);
 
@@ -139,7 +142,7 @@ describe("the industry game", () => {
     const homePrice = home.buys.find((b: any) => b.good === "chocolate").price;
     const soldHome = await api("POST", "/game/sell", { token, body: { good: "chocolate", qty: 4 } });
     expect(soldHome.status).toBe(200);
-    expect(soldHome.data.balance).toBe(g.balance + 4 * homePrice);
+    expect(soldHome.data.balance).toBe(g.balance + tradeTotal(homePrice, "buys", 0, GOODS.chocolate.depth, 4));
 
     // …and take the rest to Amsterdam, which pays more.
     expect((await api("POST", "/game/load", { token, body: { good: "chocolate", qty: 20 } })).data.cargo).toEqual({ chocolate: 20 });
@@ -149,7 +152,7 @@ describe("the industry game", () => {
     const sold = await api("POST", "/game/sell", { token, body: { good: "chocolate", qty: 20 } });
     expect(sold.status).toBe(200);
     expect(sold.data.cargo).toEqual({});
-    expect(sold.data.balance).toBe(soldHome.data.balance + 20 * amsterdam);
+    expect(sold.data.balance).toBe(soldHome.data.balance + fresh("Amsterdam Centraal", "chocolate", "buys", 20));
     expect((await api("POST", "/game/sell", { token, body: { good: "chocolate", qty: 1 } })).status).toBe(409);
   });
 
@@ -173,5 +176,96 @@ describe("the industry game", () => {
     const g = await game(token);
     expect(g.balance).toBeCloseTo(5000, 2);
     expect(g.ledger.map((l: any) => l.kind)).toEqual(["refund", "fare"]);
+  });
+
+  it("moves prices as people trade: the first buyer pays least, and markets recover", async () => {
+    const a = await signup();
+    const b = await signup();
+    const dakar = at["Dakar Central"]!;
+    const base = price("Dakar Central", "cocoa", "sells");
+    const cocoaAt = async () =>
+      (await api("GET", "/game/catalog")).data.markets.find((m: any) => m.stop.name === "Dakar Central").sells.find((o: any) => o.good === "cocoa");
+
+    await moveTo(a.user.id, dakar);
+    await moveTo(b.user.id, dakar);
+    const first = await api("POST", "/game/buy", { token: a.token, body: { good: "cocoa", qty: 60 } });
+    expect(first.data.balance).toBe(5000 - tradeTotal(base, "sells", 0, GOODS.cocoa.depth, 60));
+    // A big buy costs more than 60 at the first price…
+    expect(5000 - first.data.balance).toBeGreaterThan(60 * base);
+
+    // …and leaves the price up for whoever comes next.
+    const after = await cocoaAt();
+    expect(after).toMatchObject({ base, load: 60 });
+    expect(after.price).toBeGreaterThan(base);
+    const second = await api("POST", "/game/buy", { token: b.token, body: { good: "cocoa", qty: 10 } });
+    expect(5000 - second.data.balance).toBe(tradeTotal(base, "sells", 60, GOODS.cocoa.depth, 10));
+    expect(5000 - second.data.balance).toBeGreaterThan(fresh("Dakar Central", "cocoa", "sells", 10));
+
+    // A market recovers half of the way every half-life.
+    await runInDurableObject(worldStub(), (w: World) => {
+      (w as any).ctx.storage.sql.exec("UPDATE market_load SET at = at - ?", MARKET_HALF_LIFE_HOURS * 3_600_000);
+    });
+    expect((await cocoaAt()).load).toBeCloseTo(35, 1);
+  });
+
+  it("pays less for products the more of them have just been sold there", async () => {
+    const a = await signup();
+    const b = await signup();
+    await runInDurableObject(worldStub(), (w: World) => {
+      for (const u of [a.user.id, b.user.id])
+        (w as any).ctx.storage.sql.exec("INSERT INTO holdings (user_id, place, good, qty) VALUES (?, 'cargo', 'chocolate', 30)", u);
+    });
+    const amsterdam = at["Amsterdam Centraal"]!;
+    await moveTo(a.user.id, amsterdam);
+    await moveTo(b.user.id, amsterdam);
+    const one = await api("POST", "/game/sell", { token: a.token, body: { good: "chocolate", qty: 30 } });
+    const two = await api("POST", "/game/sell", { token: b.token, body: { good: "chocolate", qty: 30 } });
+    const earnedA = one.data.balance - 5000;
+    const earnedB = two.data.balance - 5000;
+    expect(earnedA).toBe(fresh("Amsterdam Centraal", "chocolate", "buys", 30));
+    expect(earnedB).toBeLessThan(earnedA);
+    const offer = (await api("GET", "/game/catalog")).data.markets
+      .find((m: any) => m.stop.name === "Amsterdam Centraal")
+      .buys.find((o: any) => o.good === "chocolate");
+    expect(offer.load).toBe(60);
+    expect(offer.price).toBeLessThan(offer.base);
+  });
+
+  it("ranks players by what they earned trading this week, and by net worth", async () => {
+    const trader = await signup();
+    const idle = await signup();
+    const hidden = await signup(undefined, { profileMode: "PRIVATE" });
+    expect((await api("GET", "/game/leaderboard")).status).toBe(401);
+
+    await runInDurableObject(worldStub(), (w: World) => {
+      (w as any).ctx.storage.sql.exec("INSERT INTO holdings (user_id, place, good, qty) VALUES (?, 'cargo', 'chocolate', 20)", trader.user.id);
+    });
+    await moveTo(trader.user.id, at["Amsterdam Centraal"]!);
+    const sold = await api("POST", "/game/sell", { token: trader.token, body: { good: "chocolate", qty: 20 } });
+    const earned = Math.round(sold.data.balance - 5000);
+    // The hidden player bought materials: they're down this week, but still own the goods.
+    await moveTo(hidden.user.id, at["Dakar Central"]!);
+    const bought = await api("POST", "/game/buy", { token: hidden.token, body: { good: "cocoa", qty: 10 } });
+    const spent = Math.round(5000 - bought.data.balance);
+
+    const board = (await api("GET", "/game/leaderboard", { token: idle.token })).data;
+    expect(board.weekStart).toBe(weekStart(Date.now()));
+    expect(board.players).toHaveLength(3); // the admin isn't a player
+    expect(board.players[0]).toMatchObject({ username: trader.user.username, you: false, week: earned, netWorth: 5000 + earned });
+    expect(board.players[1]).toMatchObject({ username: idle.user.username, you: true, week: 0, netWorth: 5000, factories: [] });
+    expect(board.players[2]).toMatchObject({ id: null, username: null, week: -spent, netWorth: Math.round(5000 - spent + 10 * goodValue("cocoa")) });
+    expect(board.lastWeek).toBeNull();
+
+    // You always see yourself, even with a private profile.
+    const own = (await api("GET", "/game/leaderboard", { token: hidden.token })).data;
+    expect(own.players.find((p: any) => p.you)).toMatchObject({ username: hidden.user.username });
+
+    // Last week's sales count for last week, not this one.
+    await runInDurableObject(worldStub(), (w: World) => {
+      (w as any).ctx.storage.sql.exec("UPDATE ledger SET at = at - ? WHERE kind = 'sell'", 7 * 86_400_000);
+    });
+    const next = (await api("GET", "/game/leaderboard", { token: idle.token })).data;
+    expect(next.players.find((p: any) => p.username === trader.user.username).week).toBe(0);
+    expect(next.lastWeek).toMatchObject({ username: trader.user.username, you: false, earned });
   });
 });

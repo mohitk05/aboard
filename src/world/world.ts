@@ -27,8 +27,16 @@ import {
   INDUSTRIES,
   MARKETS,
   STARTING_BALANCE,
+  TRADING_KINDS,
+  decayedLoad,
+  goodValue,
   homeBuys,
+  marketPrice,
+  previousWeekStart,
   priceAt,
+  tradeTotal,
+  weekEnd,
+  weekStart,
   type GoodId,
   type IndustryId,
 } from "../game/catalog";
@@ -1219,22 +1227,56 @@ export class World extends DurableObject<Env> {
     });
   }
 
-  /** Today's prices at a station's market, or null if there's no market there. */
-  private marketAt(stop: StopRow, now: number) {
+  /**
+   * Prices at a station's market right now, or null if there's no market there. Each offer has
+   * `price` (the next unit, with recent trading), `base` (today's price before it) and `load`
+   * (units recently traded there), so a client can work out a whole trade with tradeTotal.
+   * Pass every market's load (marketLoads) when pricing many stations at once.
+   */
+  private marketAt(stop: StopRow, now: number, loads = this.marketLoads(now, stop.id)) {
     const home = this.homeStop();
     const def = stop.id === home?.id ? { buys: homeBuys() } : MARKETS[stop.name];
     if (!def) return null;
-    const list = (m?: Partial<Record<GoodId, number>>) =>
-      Object.entries(m ?? {}).map(([good, base]) => ({ good: good as GoodId, price: priceAt(base!, stop.name, good as GoodId, now) }));
-    return { sells: list(def.sells), buys: list(def.buys) };
+    const list = (side: "sells" | "buys") =>
+      Object.entries(def[side] ?? {}).map(([id, b]) => {
+        const good = id as GoodId;
+        const base = priceAt(b!, stop.name, good, now);
+        const load = loads.get(`${stop.id}:${good}`) ?? 0;
+        return { good, price: marketPrice(base, side, load, GOODS[good].depth), base, load: Math.round(load * 100) / 100 };
+      });
+    return { sells: list("sells"), buys: list("buys") };
+  }
+
+  /** Recent trading at every market (or one station's), faded to `now`, by "stopId:good". */
+  private marketLoads(now: number, stopId?: string): Map<string, number> {
+    const rows = this.sql
+      .exec<{ stop_id: string; good: string; load: number; at: number }>(
+        `SELECT * FROM market_load${stopId ? " WHERE stop_id = ?" : ""}`,
+        ...(stopId ? [stopId] : []),
+      )
+      .toArray();
+    return new Map(rows.map((r) => [`${r.stop_id}:${r.good}`, decayedLoad(r.load, r.at, now)]));
+  }
+
+  /** A trade leaves its mark on the market: add `qty` to what's recently been traded there. */
+  private addMarketLoad(stopId: string, good: GoodId, load: number, qty: number, now: number) {
+    this.sql.exec(
+      `INSERT INTO market_load (stop_id, good, load, at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (stop_id, good) DO UPDATE SET load = excluded.load, at = excluded.at`,
+      stopId,
+      good,
+      load + qty,
+      now,
+    );
   }
 
   /** Everything players need to plan: goods, industries, and every market with today's prices. */
   catalog() {
     const now = Date.now();
     const markets = [];
+    const loads = this.marketLoads(now);
     for (const row of this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray()) {
-      const m = this.marketAt(row, now);
+      const m = this.marketAt(row, now, loads);
       if (m) markets.push({ stop: stopOut(row), ...m });
     }
     return {
@@ -1244,6 +1286,72 @@ export class World extends DurableObject<Env> {
       industries: Object.values(INDUSTRIES),
       markets,
     };
+  }
+
+  /**
+   * The leaderboard: every player's net worth (credits, factories at what they cost to build,
+   * and goods at what they're worth: see goodValue), and what they earned trading this week
+   * (sales, less materials and fares; see TRADING_KINDS). Private profiles are listed without a
+   * name, except to themselves. Also names last week's top earner.
+   */
+  leaderboard(viewerId: string, now = Date.now()) {
+    return guard(() => {
+      this.userRow(viewerId);
+      const players = this.sql
+        .exec<Pick<UserRow, "id" | "username" | "image" | "profile_mode" | "balance">>(
+          "SELECT id, username, image, profile_mode, balance FROM users WHERE role = ?",
+          USER_ROLES.PLAYER,
+        )
+        .toArray();
+      const worth = new Map(players.map((p) => [p.id, p.balance]));
+      const built = new Map<string, IndustryId[]>();
+      for (const f of this.sql.exec<{ user_id: string; industry: IndustryId }>("SELECT user_id, industry FROM factories ORDER BY built_at").toArray()) {
+        if (!worth.has(f.user_id)) continue;
+        worth.set(f.user_id, worth.get(f.user_id)! + INDUSTRIES[f.industry].build.credits);
+        built.set(f.user_id, [...(built.get(f.user_id) ?? []), f.industry]);
+      }
+      for (const h of this.sql.exec<{ user_id: string; good: GoodId; qty: number }>("SELECT user_id, good, SUM(qty) AS qty FROM holdings GROUP BY user_id, good").toArray()) {
+        if (worth.has(h.user_id) && h.good in GOODS) worth.set(h.user_id, worth.get(h.user_id)! + h.qty * goodValue(h.good));
+      }
+      const earned = (from: number, to: number) =>
+        new Map(
+          this.sql
+            .exec<{ user_id: string; earned: number }>(
+              `SELECT user_id, SUM(amount) AS earned FROM ledger
+               WHERE at >= ? AND at < ? AND kind IN (${TRADING_KINDS.map(() => "?").join(", ")}) GROUP BY user_id`,
+              from,
+              to,
+              ...TRADING_KINDS,
+            )
+            .toArray()
+            .map((r) => [r.user_id, r.earned]),
+        );
+      const thisWeek = earned(weekStart(now), weekEnd(now));
+      const lastWeek = earned(previousWeekStart(now), weekStart(now));
+
+      const shown = (p: (typeof players)[number]) => p.id === viewerId || p.profile_mode === "PUBLIC";
+      const round = (n: number) => Math.round(n);
+      const rows = players.map((p) => ({
+        id: shown(p) ? p.id : null,
+        username: shown(p) ? p.username : null,
+        image: shown(p) ? p.image : null,
+        you: p.id === viewerId,
+        netWorth: round(worth.get(p.id)!),
+        week: round(thisWeek.get(p.id) ?? 0),
+        factories: built.get(p.id) ?? [],
+      }));
+      rows.sort((a, b) => b.week - a.week || b.netWorth - a.netWorth);
+      const best = players
+        .map((p) => ({ p, earned: lastWeek.get(p.id) ?? 0 }))
+        .filter((x) => x.earned > 0)
+        .sort((a, b) => b.earned - a.earned)[0];
+      return {
+        weekStart: weekStart(now),
+        weekEnds: weekEnd(now),
+        players: rows,
+        lastWeek: best ? { username: shown(best.p) ? best.p.username : null, you: best.p.id === viewerId, earned: round(best.earned) } : null,
+      };
+    });
   }
 
   /** Your money, goods and factories. Finished production batches land in the warehouse first. */
@@ -1258,16 +1366,20 @@ export class World extends DurableObject<Env> {
   buy(userId: string, good: string, qty: number) {
     return guard(() => {
       const { user, stop } = this.atMarket(userId);
-      const offer = this.marketAt(stop, Date.now())?.sells.find((o) => o.good === good);
+      const now = Date.now();
+      const offer = this.marketAt(stop, now)?.sells.find((o) => o.good === good);
       if (!offer) throw badRequest(`${stop.name} doesn't sell that.`);
       const space = CARGO_CAPACITY - this.cargoCount(userId);
       if (qty > space) throw conflict(`You can carry ${space} more ${space === 1 ? "unit" : "units"}.`);
-      const cost = offer.price * qty;
+      // The price climbs as you buy (see tradeTotal), and stays up for the next buyer.
+      const cost = tradeTotal(offer.base, "sells", offer.load, GOODS[offer.good].depth, qty);
       if (user.balance < cost) throw conflict(`That costs ${cost} credits and you have ${Math.floor(user.balance)}.`);
       this.ctx.storage.transactionSync(() => {
         this.charge(userId, cost, "buy", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
         this.addHolding(userId, "cargo", offer.good, qty);
+        this.addMarketLoad(stop.id, offer.good, offer.load, qty, now);
       });
+      this.broadcast({ type: "market", at: now, stop: stop.id, good: offer.good });
       return this.gameState(userId);
     });
   }
@@ -1276,17 +1388,22 @@ export class World extends DurableObject<Env> {
   sell(userId: string, good: string, qty: number) {
     return guard(() => {
       const { stop } = this.atMarket(userId);
-      const offer = this.marketAt(stop, Date.now())?.buys.find((o) => o.good === good);
+      const now = Date.now();
+      const offer = this.marketAt(stop, now)?.buys.find((o) => o.good === good);
       if (!offer) throw badRequest(`Nobody at ${stop.name} buys that.`);
       const atHome = stop.id === this.homeStop()?.id;
       const fromCargo = Math.min(qty, this.holding(userId, "cargo", offer.good));
       const fromBase = atHome ? Math.min(qty - fromCargo, this.holding(userId, "base", offer.good)) : 0;
       if (fromCargo + fromBase < qty) throw conflict(`You only have ${fromCargo + fromBase} to sell here.`);
+      // The price falls as you sell (see tradeTotal), and stays down for the next seller.
+      const earned = tradeTotal(offer.base, "buys", offer.load, GOODS[offer.good].depth, qty);
       this.ctx.storage.transactionSync(() => {
         this.addHolding(userId, "cargo", offer.good, -fromCargo);
         this.addHolding(userId, "base", offer.good, -fromBase);
-        this.charge(userId, -offer.price * qty, "sell", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
+        this.charge(userId, -earned, "sell", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
+        this.addMarketLoad(stop.id, offer.good, offer.load, qty, now);
       });
+      this.broadcast({ type: "market", at: now, stop: stop.id, good: offer.good });
       return this.gameState(userId);
     });
   }

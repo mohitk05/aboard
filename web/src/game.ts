@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Stop } from "./api";
 
 // The industry game: build a business from Berlin. Rules are in src/game/catalog.ts.
+export { MARKET_HALF_LIFE_HOURS, tradeTotal } from "../../src/game/catalog";
 
 export type GoodId = string;
 export type IndustryId = "chocolate" | "batteries" | "chips";
@@ -11,6 +12,8 @@ export interface Good {
   name: string;
   unit: string;
   kind: "raw" | "product";
+  /** Trading this many units in one place doubles (raw) or halves (products) the price. */
+  depth: number;
 }
 export interface Industry {
   id: IndustryId;
@@ -21,7 +24,12 @@ export interface Industry {
 }
 export interface Offer {
   good: GoodId;
+  /** The next unit, with recent trading. */
   price: number;
+  /** Today's price before recent trading. */
+  base: number;
+  /** Units recently traded here (fading). */
+  load: number;
 }
 export interface Market {
   stop: Stop;
@@ -54,9 +62,35 @@ export interface GameState {
   ledger: { at: number; kind: string; amount: number; note: string }[];
 }
 
-/** Goods, industries and today's prices everywhere. Prices change daily, so this is cached a while. */
+/**
+ * Goods, industries and prices everywhere. Trades move prices, and a live "market" event says
+ * when anyone trades (see live.ts), so it doesn't need refetching otherwise for a while.
+ */
 export function useCatalog() {
   return useQuery({ queryKey: ["catalog"], queryFn: () => api<Catalog>("GET", "/game/catalog"), staleTime: 10 * 60_000 });
+}
+
+export interface Standing {
+  /** null for a private profile (other than yours). */
+  id: string | null;
+  username: string | null;
+  image: string | null;
+  you: boolean;
+  netWorth: number;
+  /** Earned trading this week: sales, less materials and fares. */
+  week: number;
+  factories: IndustryId[];
+}
+export interface Leaderboard {
+  weekStart: number;
+  weekEnds: number;
+  players: Standing[];
+  lastWeek: { username: string | null; you: boolean; earned: number } | null;
+}
+
+/** Everyone's standing. Refreshed when anyone trades (live.ts). */
+export function useLeaderboard() {
+  return useQuery({ queryKey: ["leaderboard"], queryFn: () => api<Leaderboard>("GET", "/game/leaderboard"), staleTime: 60_000 });
 }
 
 /** Your business. Under "me", so every world tick refreshes it (see live.ts). */
@@ -72,6 +106,8 @@ export function useGameAction<I = void>(path: string) {
     onSuccess: (state) => {
       qc.setQueryData(["me", "game"], state);
       qc.invalidateQueries({ queryKey: ["me"], exact: true }); // balance on your profile
+      qc.invalidateQueries({ queryKey: ["catalog"] }); // your trade moved the price
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
     },
   });
 }
@@ -92,6 +128,8 @@ export const goodName = (goods: Good[] | undefined, id: GoodId) => goods?.find((
 
 /** Where each good is sold (raw) or bought (products), cheapest/best first. */
 export function marketsFor(catalog: Catalog | undefined, good: GoodId, side: "sells" | "buys") {
-  const list = (catalog?.markets ?? []).flatMap((m) => m[side].filter((o) => o.good === good).map((o) => ({ stop: m.stop, price: o.price })));
+  const list = (catalog?.markets ?? []).flatMap((m) =>
+    m[side].filter((o) => o.good === good).map((o) => ({ stop: m.stop, price: o.price, moved: o.price - o.base })),
+  );
   return list.sort((a, b) => (side === "sells" ? a.price - b.price : b.price - a.price));
 }

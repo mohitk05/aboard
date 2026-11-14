@@ -37,6 +37,7 @@ type LiveEvent =
   | { type: "hello"; at: number }
   | { type: "tick"; at: number }
   | { type: "world"; at: number }
+  | { type: "market"; at: number; stop: string; good: string }
   | { type: "message"; conversation: string; from: string };
 
 /**
@@ -60,12 +61,16 @@ export function useLiveUpdates() {
       switch (e.type) {
         case "hello":
           // Back after a drop: we may have missed events while away.
-          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations");
+          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations", "catalog", "leaderboard");
           dropped = false;
           retry = 0;
           break;
         case "tick":
           refetch("trips", "me", "departures", "fellow");
+          break;
+        case "market":
+          // Someone traded: prices there moved, and so did the standings.
+          refetch("catalog", "leaderboard");
           break;
         case "world":
           refetch("stops", "routes", "trips", "vehicles", "departures");

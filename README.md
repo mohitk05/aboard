@@ -16,7 +16,7 @@ client ──HTTP /api──▶ Worker (src/index.ts)      routing, JWT auth, in
 ```
 
 - **One `World` object** holds stops, routes, trips, users, tickets and messages in SQLite (`src/world/schema.ts`). A Durable Object handles one request at a time, so ticket purchases (and, later, trades) are atomic without locks.
-- **Live updates:** clients keep a WebSocket to the World (`/api/live`, hibernation API, so idle connections are free). It sends an event on every tick, when an admin changes the world, and to conversation members when a message arrives; the app refetches just what changed. Polling remains as a fallback.
+- **Live updates:** clients keep a WebSocket to the World (`/api/live`, hibernation API, so idle connections are free). It sends an event on every tick, when an admin changes the world, when anyone trades, and to conversation members when a message arrives; the app refetches just what changed. Polling remains as a fallback.
 - **The world clock** is a Durable Object alarm. It is set when a trip starts and runs `World.tick()` every `WORLD_INTERVAL_MINUTES` while any trip is active.
 - **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto). Sessions are HS256 JWTs signed with `JWT_KEY`, sent as an `HttpOnly; Secure; SameSite=Lax` cookie for the web app, or as `Authorization: Bearer` for scripts.
 - **State machines:** travellers, trains, factories, invites, the live connection and the globe's camera are explicit state machines in `src/machines/`, shared by server and app. [docs/StateMachines.md](docs/StateMachines.md) (generated: `npm run machines`) has a diagram of each, with the rules and the exact refusal messages.
@@ -176,8 +176,9 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/push/subscription` | player | how many devices you've turned notifications on for |
 | POST | `/push/subscription` | player | `{ subscription }` from `PushManager.subscribe().toJSON()` |
 | DELETE | `/push/subscription` | player | `{ subscription: { endpoint } }` |
-| GET | `/game/catalog` | anyone | goods, industries, home station and every market with today's prices |
+| GET | `/game/catalog` | anyone | goods, industries, home station and every market's prices: each offer has `price` (the next unit), `base` (today's price before recent trading) and `load` (units recently traded there) |
 | GET | `/game` | player | your credits, cargo, warehouse, factories and ledger (finished batches are delivered first) |
+| GET | `/game/leaderboard` | player | every player's net worth and what they earned trading this week (private profiles unnamed), and last week's top earner |
 | POST | `/game/buy` | player | `{ good, qty }` at a station that sells it, into your cargo (60 units max) |
 | POST | `/game/sell` | player | `{ good, qty }` at a station that buys it, from your cargo (in Berlin, also from your warehouse) |
 | POST | `/game/unload` | player | in Berlin: move your cargo into the warehouse |
@@ -186,7 +187,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/game/produce` | player | `{ industry }`: start a batch (inputs from the warehouse, output after some hours) |
 | POST | `/user/:id/place` | admin | `{ stop }`: move a player to a station |
 | POST | `/user/:id/grant` | admin | `{ credits }`: give (or take) credits |
-| GET | `/live` | anyone | WebSocket: `tick`, `world` and (for you) `message` events |
+| GET | `/live` | anyone | WebSocket: `tick`, `world`, `market` (someone traded) and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
 | GET | `/admin/sql-stats?limit=25` | admin | rows read per SQL statement since the world last woke (Cloudflare bills Durable Object SQLite by rows read) |

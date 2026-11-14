@@ -37,24 +37,30 @@ export interface Good {
   /** Units are crates (raw materials) or cases (products). */
   unit: string;
   kind: "raw" | "product";
+  /**
+   * How deep a market for it is: trading this many units in one place doubles the price you pay
+   * (raw materials) or halves the price you get (products), until the market recovers. Rare
+   * goods have shallow markets. See marketPrice.
+   */
+  depth: number;
 }
 
 export const GOODS: Record<GoodId, Good> = {
-  polysilicon: { id: "polysilicon", name: "Polysilicon", unit: "crate", kind: "raw" },
-  copper: { id: "copper", name: "Copper", unit: "crate", kind: "raw" },
-  photoresist: { id: "photoresist", name: "Photoresist", unit: "drum", kind: "raw" },
-  neon: { id: "neon", name: "Neon gas", unit: "cylinder", kind: "raw" },
-  lithium: { id: "lithium", name: "Lithium carbonate", unit: "crate", kind: "raw" },
-  cobalt: { id: "cobalt", name: "Cobalt", unit: "crate", kind: "raw" },
-  nickel: { id: "nickel", name: "Nickel", unit: "crate", kind: "raw" },
-  graphite: { id: "graphite", name: "Graphite", unit: "crate", kind: "raw" },
-  cocoa: { id: "cocoa", name: "Cocoa beans", unit: "sack", kind: "raw" },
-  sugar: { id: "sugar", name: "Cane sugar", unit: "sack", kind: "raw" },
-  milk: { id: "milk", name: "Milk powder", unit: "sack", kind: "raw" },
-  vanilla: { id: "vanilla", name: "Vanilla", unit: "box", kind: "raw" },
-  chips: { id: "chips", name: "Microchips", unit: "case", kind: "product" },
-  batteries: { id: "batteries", name: "Battery packs", unit: "case", kind: "product" },
-  chocolate: { id: "chocolate", name: "Chocolate", unit: "case", kind: "product" },
+  polysilicon: { id: "polysilicon", name: "Polysilicon", unit: "crate", kind: "raw", depth: 200 },
+  copper: { id: "copper", name: "Copper", unit: "crate", kind: "raw", depth: 200 },
+  photoresist: { id: "photoresist", name: "Photoresist", unit: "drum", kind: "raw", depth: 100 },
+  neon: { id: "neon", name: "Neon gas", unit: "cylinder", kind: "raw", depth: 100 },
+  lithium: { id: "lithium", name: "Lithium carbonate", unit: "crate", kind: "raw", depth: 200 },
+  cobalt: { id: "cobalt", name: "Cobalt", unit: "crate", kind: "raw", depth: 120 },
+  nickel: { id: "nickel", name: "Nickel", unit: "crate", kind: "raw", depth: 150 },
+  graphite: { id: "graphite", name: "Graphite", unit: "crate", kind: "raw", depth: 300 },
+  cocoa: { id: "cocoa", name: "Cocoa beans", unit: "sack", kind: "raw", depth: 300 },
+  sugar: { id: "sugar", name: "Cane sugar", unit: "sack", kind: "raw", depth: 400 },
+  milk: { id: "milk", name: "Milk powder", unit: "sack", kind: "raw", depth: 400 },
+  vanilla: { id: "vanilla", name: "Vanilla", unit: "box", kind: "raw", depth: 60 },
+  chips: { id: "chips", name: "Microchips", unit: "case", kind: "product", depth: 100 },
+  batteries: { id: "batteries", name: "Battery packs", unit: "case", kind: "product", depth: 60 },
+  chocolate: { id: "chocolate", name: "Chocolate", unit: "case", kind: "product", depth: 150 },
 };
 
 export type IndustryId = "chocolate" | "batteries" | "chips";
@@ -162,3 +168,70 @@ export function priceAt(base: number, stopName: string, good: GoodId, at: number
 
 export const isGood = (id: string): id is GoodId => id in GOODS;
 export const isIndustry = (id: string): id is IndustryId => id in INDUSTRIES;
+
+// ---------- markets that react ----------
+//
+// Every trade leaves a mark on the market where it happens: buying raw materials pushes their
+// price up, selling products pushes it down. The mark (the market's "load": units recently
+// traded) fades by half every MARKET_HALF_LIFE_HOURS, so a market a rival has just emptied
+// recovers over a day or two. Whoever gets there first gets the best price.
+
+export const MARKET_HALF_LIFE_HOURS = 24;
+
+/** What's left of a market's load after some time: it halves every MARKET_HALF_LIFE_HOURS. */
+export function decayedLoad(load: number, since: number, now: number): number {
+  if (load <= 0) return 0;
+  const hours = Math.max(0, now - since) / 3_600_000;
+  const left = load * 2 ** (-hours / MARKET_HALF_LIFE_HOURS);
+  return left < 0.01 ? 0 : left;
+}
+
+/**
+ * The price of one more unit, given the market's load: raw materials get dearer the more
+ * that's been bought (one depth's worth doubles it), products cheaper the more that's been sold
+ * (one depth's worth halves it). Not rounded.
+ */
+export function marketFactor(side: "sells" | "buys", load: number, depth: number): number {
+  return side === "sells" ? 1 + load / depth : depth / (depth + load);
+}
+
+/** The price a board shows: today's price with the market's load, in whole credits. */
+export function marketPrice(base: number, side: "sells" | "buys", load: number, depth: number): number {
+  return Math.max(1, Math.round(base * marketFactor(side, load, depth)));
+}
+
+/**
+ * What `qty` units cost (sells) or fetch (buys) in one go: the price moves as you trade, so a
+ * big sale gets less per unit than a small one. Whole credits.
+ */
+export function tradeTotal(base: number, side: "sells" | "buys", load: number, depth: number, qty: number): number {
+  if (qty <= 0) return 0;
+  // The integral of marketFactor from load to load + qty.
+  const units = side === "sells" ? qty + (load * qty + (qty * qty) / 2) / depth : depth * Math.log((depth + load + qty) / (depth + load));
+  return Math.max(qty, Math.round(base * units));
+}
+
+// ---------- the leaderboard ----------
+
+/** Kinds of ledger entry that count as trading: what "earned this week" adds up. */
+export const TRADING_KINDS = ["buy", "sell", "fare", "refund"] as const;
+
+const WEEK_MS = 7 * 86_400_000;
+/** When the current week started: Monday 00:00 UTC. The weekly leaderboard starts afresh then. */
+export function weekStart(now: number): number {
+  const day = new Date(now);
+  const sinceMonday = (day.getUTCDay() + 6) % 7;
+  return Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() - sinceMonday);
+}
+export const weekEnd = (now: number) => weekStart(now) + WEEK_MS;
+export const previousWeekStart = (now: number) => weekStart(now) - WEEK_MS;
+
+/**
+ * What a good is worth for net worth: a product at what Berlin pays for it, a raw material at
+ * its cheapest base price anywhere.
+ */
+export function goodValue(good: GoodId): number {
+  if (GOODS[good].kind === "product") return homeBuys()[good] ?? 0;
+  const prices = Object.values(MARKETS).flatMap((m) => (m.sells?.[good] ? [m.sells[good]!] : []));
+  return prices.length ? Math.min(...prices) : 0;
+}

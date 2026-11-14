@@ -218,6 +218,20 @@ export const MIGRATIONS: string[] = [
   -- already picked it keep it. Admins switch it with PATCH /interest/:id.
   ALTER TABLE interests ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
   `,
+  /* 8: markets that react, and the leaderboard */ `
+  -- How much of a good has recently been traded at a station's market: buying raises the price,
+  -- selling lowers it. The load fades by half every MARKET_HALF_LIFE_HOURS (src/game/catalog.ts),
+  -- worked out when it's read, so the tick doesn't have to touch it. at = when load was stored.
+  CREATE TABLE market_load (
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    good TEXT NOT NULL,
+    load REAL NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (stop_id, good)
+  );
+  -- The weekly leaderboard sums everyone's trading since Monday.
+  CREATE INDEX ledger_by_time ON ledger(at);
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

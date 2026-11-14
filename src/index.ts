@@ -322,6 +322,8 @@ const qty = z.number().int().min(1).max(1000);
 /** Public: goods, industries and every market with today's prices. */
 app.get("/game/catalog", (c) => world(c.env).catalog().then((data) => ok(c, data)));
 app.get("/game", anyone, (c) => send(c, world(c.env).getGame(c.var.user.id)));
+/** Everyone's net worth, and what they've earned trading this week. */
+app.get("/game/leaderboard", anyone, (c) => send(c, world(c.env).leaderboard(c.var.user.id)));
 app.post("/game/buy", anyone, async (c) => {
   const i = await body(c, z.object({ good: z.string(), qty }));
   return send(c, world(c.env).buy(c.var.user.id, i.good, i.qty));

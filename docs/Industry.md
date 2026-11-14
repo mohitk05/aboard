@@ -29,13 +29,31 @@ Lines run both ways. A train that reaches the end of its line waits, turns aroun
 
 The chocolate factory is the cheapest place to start. The semiconductor fab costs more than you start with, so you have to earn your way to it.
 
-**Prices** drift by up to ±15% on a weekly cycle that differs for each station and good, so it pays to check the boards (Business → Markets) before setting off. Supply is unlimited for now.
+**Prices** drift by up to ±15% on a weekly cycle that differs for each station and good, so it pays to check the boards (Business → Markets) before setting off.
+
+**Markets react to trading.** Every trade leaves a mark (a "load": units recently traded) on the market where it happens, shared by every player:
+
+- Buying raw materials makes them dearer: each unit costs `base × (1 + load / depth)`.
+- Selling products makes them cheaper: each unit fetches `base × depth / (depth + load)`.
+- The price moves during a trade too, so selling 60 cases at once gets less per case than selling 10. The whole trade is priced by `tradeTotal`, the integral of the above.
+- The load halves every 24 hours, so a market someone has just flooded or emptied comes back over a day or two.
+
+`depth` is set per good: deep, cheap markets for bulk goods (sugar and milk: 400) and shallow ones for rare goods (vanilla and batteries: 60). Trading one depth's worth doubles a material's price, or halves a product's. If a rival has just sold their chocolate in Dubai, you'll get more in Tokyo. Whoever reaches Papeete first gets the cheapest vanilla. Supply never runs out; it just gets dearer.
+
+## Standings
+
+Business → Standings ranks every player two ways:
+
+- **This week:** what you earned trading since Monday 00:00 UTC, which is sales less materials and fares (ledger kinds `buy`, `sell`, `fare` and `refund`). Building a factory is an investment, not a loss, so it doesn't count. Last week's top earner is named.
+- **Net worth:** credits, plus factories at what they cost to build, plus goods at what they're worth (products at Berlin's base price, materials at their cheapest base price).
+
+Players with private profiles are listed without their name. Admins aren't listed.
 
 All of the numbers are in `src/game/catalog.ts`. A market belongs to a station by name, so a world without that station simply has no market there.
 
 ## Where it's built
 
-- **Server.** `World` in `src/world/world.ts` (the "industry game" section) holds balances, holdings (cargo or warehouse), factories and a ledger (schema v4). It checks every rule: you must be at a station and not on a train to trade, and in Berlin to unload, load or build. Finished batches are delivered on the world tick, or when you next look.
+- **Server.** `World` in `src/world/world.ts` (the "industry game" section) holds balances, holdings (cargo or warehouse), factories and a ledger (schema v4), and each market's recent trading (`market_load`, schema v8). It checks every rule: you must be at a station and not on a train to trade, and in Berlin to unload, load or build. Finished batches are delivered on the world tick, or when you next look.
 - **API.** `/api/game/*` (see the README).
 - **App.**
   - The **Business** tab shows your credits, each industry (what it needs and where to get it, then production), your warehouse and cargo, today's prices everywhere, and your ledger.
@@ -45,6 +63,5 @@ All of the numbers are in `src/game/catalog.ts`. A market belongs to a station b
 ## Next
 
 - **Couriers.** Other players carry goods between stations for you, for a fee, so you can stay home and run your factories.
-- **Markets that react.** Prices respond to what players buy and sell, then recover over days.
 - **Growth.** Bigger warehouses, more cargo space, more factory lines, and more industries, including ones that use other industries' products (batteries plus chips make electric cars).
 - **More of Germany.** Factories in other German cities, with goods moved between them.

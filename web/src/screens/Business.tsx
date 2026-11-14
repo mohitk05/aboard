@@ -4,13 +4,17 @@ import {
   credits,
   goodName,
   marketsFor,
+  MARKET_HALF_LIFE_HOURS,
   total,
+  tradeTotal,
   useCatalog,
   useGame,
   useGameAction,
+  useLeaderboard,
   type Catalog,
   type GameState,
   type Industry,
+  type Leaderboard,
 } from "../game";
 import { factoryState } from "../../../src/machines/factory";
 import { formatClock, formatIn } from "../lib/format";
@@ -42,13 +46,18 @@ export function Business() {
       <FormError message={game.error?.message ?? catalog.error?.message} />
       {g && c && (
         <>
+          <Standings catalog={c} />
           {c.industries.map((i) => (
             <IndustryCard key={i.id} industry={i} game={g} catalog={c} />
           ))}
           <Warehouse game={g} catalog={c} />
           <Card aria-labelledby="where-title" role="region">
             <h2 id="where-title">Markets</h2>
-            <p className="muted small">Today's prices. They drift from day to day, so check before you set off.</p>
+            <p className="muted small">
+              Today's prices. They drift from day to day, and every trade moves them: buying makes materials dearer,
+              selling makes products cheaper, for everyone. A market gets back half of the way every{" "}
+              {MARKET_HALF_LIFE_HOURS} hours. Check before you set off.
+            </p>
             <h3>Buy materials</h3>
             <MarketTable catalog={c} side="sells" />
             <h3>Sell products</h3>
@@ -243,12 +252,68 @@ function MarketTable({ catalog, side }: { catalog: Catalog; side: "sells" | "buy
           <li key={g.id}>
             <span>{g.name}</span>
             <span className="muted small">
-              {places.length ? places.map((p) => `${p.stop.name} ${p.price}`).join(" · ") : "Nowhere in this world yet"}
+              {places.length ? places.map((p) => `${p.stop.name} ${p.price}${moved(p.moved)}`).join(" · ") : "Nowhere in this world yet"}
             </span>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/** How far trading has moved a price: " ↑3", " ↓5", or nothing. */
+const moved = (by: number) => (by > 0 ? ` ↑${by}` : by < 0 ? ` ↓${-by}` : "");
+
+/** Who's winning: what everyone earned trading this week, or everything they're worth. */
+function Standings({ catalog }: { catalog: Catalog }) {
+  const board = useLeaderboard();
+  const [by, setBy] = useState<"week" | "netWorth">("week");
+  const now = useNow(60_000);
+  const b: Leaderboard | undefined = board.data;
+  const rows = b ? [...b.players].sort((x, y) => y[by] - x[by] || y.netWorth - x.netWorth) : [];
+  const industry = (id: string) => catalog.industries.find((i) => i.id === id)?.name.toLowerCase() ?? id;
+  return (
+    <Card aria-labelledby="standings-title" role="region">
+      <h2 id="standings-title">Standings</h2>
+      <p className="muted small">
+        {by === "week"
+          ? `Earned trading this week: sales, less materials and fares. A new week starts ${b ? formatIn(Math.max(0, b.weekEnds - now)) : "on Monday"}.`
+          : "Net worth: credits, factories at what they cost to build, and goods at what they're worth."}
+      </p>
+      <div className="row" role="group" aria-label="Rank by">
+        <Button small kind={by === "week" ? "primary" : "quiet"} aria-pressed={by === "week"} onClick={() => setBy("week")}>
+          This week
+        </Button>
+        <Button small kind={by === "netWorth" ? "primary" : "quiet"} aria-pressed={by === "netWorth"} onClick={() => setBy("netWorth")}>
+          Net worth
+        </Button>
+      </div>
+      <FormError message={board.error?.message} />
+      {rows.length > 0 && (
+        <ol className="list standings">
+          {rows.map((p, n) => (
+            <li key={p.id ?? `private-${n}`} className={p.you ? "is-you" : ""}>
+              <span>
+                <span className="standing-rank">{n + 1}</span> {p.username ?? "A private player"}
+                {p.you && <span className="muted small"> · you</span>}
+                <span className="muted small standing-factories">
+                  {p.factories.length ? p.factories.map(industry).join(", ") : "No factories yet"}
+                </span>
+              </span>
+              <span className={`ledger-amount${by === "week" && p[by] > 0 ? " is-in" : ""}`}>
+                {p[by] < 0 ? "−" : ""}
+                {credits(Math.abs(p[by]))}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {b?.lastWeek && (
+        <p className="muted small">
+          Last week: {b.lastWeek.you ? "you" : (b.lastWeek.username ?? "a private player")} earned the most, {credits(b.lastWeek.earned)}.
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -264,6 +329,7 @@ export function MarketCard({ stopId }: { stopId: string }) {
   if (!market || !g || !catalog.data) return null;
   const space = g.cargoCapacity - total(g.cargo);
   const goods = catalog.data.goods;
+  const depth = (good: string) => goods.find((x) => x.id === good)?.depth ?? 1;
   const want = (good: string) => Math.max(1, Math.floor(Number(qty[good] ?? "1") || 1));
 
   return (
@@ -278,10 +344,14 @@ export function MarketCard({ stopId }: { stopId: string }) {
           <ul className="list market-rows">
             {market.sells.map((o) => {
               const n = want(o.good);
+              const cost = tradeTotal(o.base, "sells", o.load, depth(o.good), n);
               return (
                 <li key={o.good}>
                   <span>
-                    <strong>{goodName(goods, o.good)}</strong> <span className="muted small">{o.price} cr each</span>
+                    <strong>{goodName(goods, o.good)}</strong>{" "}
+                    <span className="muted small">
+                      {o.price} cr each{moved(o.price - o.base)}
+                    </span>
                   </span>
                   <span className="row">
                     <input
@@ -297,9 +367,9 @@ export function MarketCard({ stopId }: { stopId: string }) {
                     <Button
                       small
                       onClick={() => buy.mutate({ good: o.good, qty: n })}
-                      disabled={buy.isPending || n > space || n * o.price > g.balance}
+                      disabled={buy.isPending || n > space || cost > g.balance}
                     >
-                      Buy · {n * o.price} cr
+                      Buy · {cost} cr
                     </Button>
                   </span>
                 </li>
@@ -314,13 +384,17 @@ export function MarketCard({ stopId }: { stopId: string }) {
           <ul className="list market-rows">
             {market.buys.map((o) => {
               const have = (g.cargo[o.good] ?? 0) + (g.atHome ? (g.warehouse[o.good] ?? 0) : 0);
+              const fetches = tradeTotal(o.base, "buys", o.load, depth(o.good), have);
               return (
                 <li key={o.good}>
                   <span>
-                    <strong>{goodName(goods, o.good)}</strong> <span className="muted small">{o.price} cr each · you have {have}</span>
+                    <strong>{goodName(goods, o.good)}</strong>{" "}
+                    <span className="muted small">
+                      {o.price} cr each{moved(o.price - o.base)} · you have {have}
+                    </span>
                   </span>
                   <Button small onClick={() => sell.mutate({ good: o.good, qty: have })} disabled={sell.isPending || have === 0}>
-                    Sell {have || ""}
+                    {have ? `Sell ${have} · ${fetches} cr` : "Sell"}
                   </Button>
                 </li>
               );
@@ -329,6 +403,7 @@ export function MarketCard({ stopId }: { stopId: string }) {
         </>
       )}
       <FormError message={buy.error?.message ?? sell.error?.message} />
+      <p className="muted small">Prices move as you trade: the more you buy or sell at once, the further they move.</p>
       {space === 0 && <Notice tone="warning">You can't carry any more. Head home and unload.</Notice>}
     </Card>
   );
