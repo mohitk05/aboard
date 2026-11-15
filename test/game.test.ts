@@ -250,7 +250,7 @@ describe("the industry game", () => {
 
     const board = (await api("GET", "/game/leaderboard", { token: idle.token })).data;
     expect(board.weekStart).toBe(weekStart(Date.now()));
-    expect(board.players).toHaveLength(3); // the admin isn't a player
+    expect(board.players).toHaveLength(3); // the admin hasn't played, so isn't listed
     expect(board.players[0]).toMatchObject({ username: trader.user.username, you: false, week: earned, netWorth: 5000 + earned });
     expect(board.players[1]).toMatchObject({ username: idle.user.username, you: true, week: 0, netWorth: 5000, factories: [] });
     expect(board.players[2]).toMatchObject({ id: null, username: null, week: -spent, netWorth: Math.round(5000 - spent + 10 * goodValue("cocoa")) });
@@ -267,5 +267,23 @@ describe("the industry game", () => {
     const next = (await api("GET", "/game/leaderboard", { token: idle.token })).data;
     expect(next.players.find((p: any) => p.username === trader.user.username).week).toBe(0);
     expect(next.lastWeek).toMatchObject({ username: trader.user.username, you: false, earned });
+  });
+
+  it("lists admins who play, without saying they're admins", async () => {
+    const { token } = await signup();
+    const board = async () => (await api("GET", "/game/leaderboard", { token })).data.players;
+    const me = (await api("GET", "/user/me", { token: admin })).data;
+    expect((await board()).map((p: any) => p.username)).not.toContain("admin");
+    // A grant isn't playing.
+    await api("POST", `/user/${me.id}/grant`, { token: admin, body: { credits: 10 } });
+    expect((await board()).map((p: any) => p.username)).not.toContain("admin");
+
+    // The admin rides out and buys something: now they're playing.
+    await moveTo(me.id, at["Dakar Central"]!);
+    expect((await api("POST", "/game/buy", { token: admin, body: { good: "cocoa", qty: 2 } })).status).toBe(200);
+    const row = (await board()).find((p: any) => p.username === "admin");
+    expect(row).toBeDefined();
+    // The same fields as anyone else's: nothing says they're an admin.
+    expect(Object.keys(row).sort()).toEqual(["bot", "factories", "id", "image", "netWorth", "username", "week", "you"]);
   });
 });

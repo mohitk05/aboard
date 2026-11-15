@@ -188,6 +188,9 @@ const newId = () => crypto.randomUUID();
  * one request at a time, so every method below is atomic: no two players can buy the
  * last seat (or, later, the last crate) at once.
  */
+/** Ledger entries that mean someone has played the game (an admin who has one is on the leaderboard). */
+const PLAYED_KINDS = ["fare", "buy", "sell", "build"];
+
 export class World extends DurableObject<Env> {
   private sql: SqlStorage;
   /** Rows read per statement, for GET /api/admin/sql-stats. */
@@ -1309,8 +1312,12 @@ export class World extends DurableObject<Env> {
       this.userRow(viewerId);
       const players = this.sql
         .exec<Pick<UserRow, "id" | "username" | "image" | "profile_mode" | "balance" | "bot">>(
-          "SELECT id, username, image, profile_mode, balance, bot FROM users WHERE role = ?",
+          // Players, and admins who play (anyone with a fare, a trade or a factory to their name).
+          // Nothing here says who's an admin.
+          `SELECT id, username, image, profile_mode, balance, bot FROM users u
+           WHERE role = ? OR EXISTS (SELECT 1 FROM ledger l WHERE l.user_id = u.id AND l.kind IN (${PLAYED_KINDS.map(() => "?").join(", ")}))`,
           USER_ROLES.PLAYER,
+          ...PLAYED_KINDS,
         )
         .toArray();
       const worth = new Map(players.map((p) => [p.id, p.balance]));

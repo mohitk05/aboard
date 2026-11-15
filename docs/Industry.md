@@ -55,7 +55,7 @@ Business → Standings ranks every player two ways:
 - **This week:** what you earned trading since Monday 00:00 UTC, which is sales less materials and fares (ledger kinds `buy`, `sell`, `fare` and `refund`). Building a factory is an investment, not a loss, so it doesn't count. Last week's top earner is named.
 - **Net worth:** credits, plus factories at what they cost to build, plus goods at what they're worth (products at Berlin's base price, materials at their cheapest base price).
 
-Players with private profiles are listed without their name. Admins aren't listed.
+Players with private profiles are listed without their name. Admin accounts are listed once they've played (paid a fare, traded or built a factory), and nothing on the board says they're admins; admin accounts that only run the world aren't listed.
 
 All of the numbers are in `src/game/catalog.ts`. A market belongs to a station by name, so a world without that station simply has no market there.
 
