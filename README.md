@@ -195,6 +195,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/game/produce` | player | `{ industry }`: start a batch (inputs from the warehouse, output after some hours) |
 | POST | `/user/:id/place` | admin | `{ stop }`: move a player to a station |
 | POST | `/user/:id/grant` | admin | `{ credits }`: give (or take) credits |
+| POST | `/admin/announce` | admin | `{ title, body, url?, tag?, dryRun? }`: a notification to every person with notifications on (not bots); returns `players`, `devices` and how many were `sent` (dry run: counts only) |
 | GET | `/admin/bots` | admin | every bot: where it is, its credits, and what it's up to |
 | POST | `/admin/bots` | admin | `{ usernames, bot? }`: make players bots (or, with `bot: false`, people again) |
 | GET | `/live` | anyone | WebSocket: `tick`, `world`, `market` (someone traded), `contracts` (the board changed) and (for you) `message` events |

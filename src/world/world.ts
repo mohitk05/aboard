@@ -555,6 +555,21 @@ export class World extends DurableObject<Env> {
     return sent;
   }
 
+  /**
+   * Admin: a notification to every person (not bots) with notifications on, e.g. news of an
+   * update. With dryRun, only counts who would get it. Call flushNotifications() to send.
+   */
+  announce(msg: PushMessage, dryRun: boolean) {
+    const rows = this.sql
+      .exec<{ id: string; devices: number }>(
+        `SELECT u.id, COUNT(*) AS devices FROM push_subscriptions p JOIN users u ON u.id = p.user_id
+         WHERE u.bot = 0 GROUP BY u.id`,
+      )
+      .toArray();
+    if (!dryRun) for (const r of rows) this.notify(r.id, msg);
+    return { configured: !!this.vapid(), players: rows.length, devices: rows.reduce((n, r) => n + r.devices, 0) };
+  }
+
   pushPublicKey(): string | null {
     return this.vapid()?.publicKey ?? null;
   }

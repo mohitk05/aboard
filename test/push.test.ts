@@ -116,4 +116,29 @@ describe("message notifications", () => {
     expect(msg).toMatchObject({ title: a.user.username, body: "Tea at Irkutsk?", url: `/messages/${conv.id}` });
     expect(aBrowser.sub.endpoint).not.toBe(bBrowser.sub.endpoint);
   });
+
+  it("admins can announce to everyone with notifications on, but not to bots", async () => {
+    const a = await signup(stops[0]!.id);
+    const b = await signup(stops[0]!.id);
+    const bot = await signup(stops[0]!.id);
+    await signup(stops[0]!.id); // notifications off
+    const aBrowser = await subscribe(a.token);
+    await subscribe(b.token);
+    await subscribe(b.token); // a second device
+    await subscribe(bot.token);
+    await api("POST", "/admin/bots", { token: admin, body: { usernames: [bot.user.username] } });
+    const sent = await capturePushes();
+    const msg = { title: "New on Aboard", body: "Contracts are here.", url: "/business" };
+
+    expect((await api("POST", "/admin/announce", { token: a.token, body: msg })).status).toBe(401);
+    const dry = await api("POST", "/admin/announce", { token: admin, body: { ...msg, dryRun: true } });
+    expect(dry.data).toEqual({ configured: true, players: 2, devices: 3, dryRun: true, sent: 0 });
+    expect(sent).toEqual([]);
+
+    const real = await api("POST", "/admin/announce", { token: admin, body: msg });
+    expect(real.data).toEqual({ configured: true, players: 2, devices: 3, dryRun: false, sent: 3 });
+    expect(sent).toHaveLength(3);
+    const toA = sent.filter((x) => x.endpoint === aBrowser.sub.endpoint);
+    expect(JSON.parse(await aBrowser.decrypt(toA[0]!.body))).toMatchObject({ title: "New on Aboard", body: "Contracts are here.", url: "/business" });
+  });
 });

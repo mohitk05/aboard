@@ -444,6 +444,26 @@ app.post("/admin/invites", admin, async (c) => {
   return send(c, world(c.env).createInvite(c.var.user.id, invite), 201);
 });
 app.delete("/admin/invites/:code", admin, (c) => send(c, world(c.env).revokeInvite(c.req.param("code"))));
+/**
+ * Admin: send a notification to every person with notifications on (bots aren't sent anything).
+ * dryRun: true only counts them. Returns how many players and devices, and how many accepted it.
+ */
+app.post("/admin/announce", admin, async (c) => {
+  const i = await body(
+    c,
+    z.object({
+      title: z.string().trim().min(1).max(80),
+      body: z.string().trim().min(1).max(240),
+      url: z.string().startsWith("/").max(200).default("/"),
+      tag: z.string().max(60).optional(),
+      dryRun: z.boolean().default(false),
+    }),
+  );
+  const w = world(c.env);
+  const who = await w.announce({ title: i.title, body: i.body, url: i.url, tag: i.tag }, i.dryRun);
+  const sent = i.dryRun ? 0 : await w.flushNotifications();
+  return ok(c, { ...who, dryRun: i.dryRun, sent });
+});
 /** Admin: the bots (players the World runs itself), and making players bots or people again. */
 app.get("/admin/bots", admin, (c) => world(c.env).listBots().then((data) => ok(c, data)));
 app.post("/admin/bots", admin, async (c) => {
