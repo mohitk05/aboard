@@ -132,13 +132,20 @@ describe("message notifications", () => {
 
     expect((await api("POST", "/admin/announce", { token: a.token, body: msg })).status).toBe(401);
     const dry = await api("POST", "/admin/announce", { token: admin, body: { ...msg, dryRun: true } });
-    expect(dry.data).toEqual({ configured: true, players: 2, devices: 3, dryRun: true, sent: 0 });
+    expect(dry.data).toEqual({ configured: true, players: 2, devices: 3, dryRun: true, sent: 0, results: [] });
     expect(sent).toEqual([]);
 
     const real = await api("POST", "/admin/announce", { token: admin, body: msg });
-    expect(real.data).toEqual({ configured: true, players: 2, devices: 3, dryRun: false, sent: 3 });
+    expect(real.data).toMatchObject({ configured: true, players: 2, devices: 3, dryRun: false, sent: 3 });
+    expect(real.data.results).toEqual(Array(3).fill({ host: "push.example.test", status: 201 }));
     expect(sent).toHaveLength(3);
     const toA = sent.filter((x) => x.endpoint === aBrowser.sub.endpoint);
     expect(JSON.parse(await aBrowser.decrypt(toA[0]!.body))).toMatchObject({ title: "New on Aboard", body: "Contracts are here.", url: "/business" });
+
+    // Just to some players (e.g. a test to yourself), by username.
+    const one = await api("POST", "/admin/announce", { token: admin, body: { ...msg, to: [a.user.username.toUpperCase()] } });
+    expect(one.data).toMatchObject({ players: 1, devices: 1, sent: 1 });
+    expect(sent).toHaveLength(4);
+    expect(sent[3]!.endpoint).toBe(aBrowser.sub.endpoint);
   });
 });

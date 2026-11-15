@@ -526,9 +526,16 @@ export class World extends DurableObject<Env> {
   }
 
   /** Send everything in the outbox. Subscriptions the push service says are gone get deleted. */
+  /** What the push services answered in the last flush: each one's host and HTTP status. */
+  private lastPushResults: { host: string; status: number | "error" }[] = [];
+  pushResults() {
+    return this.lastPushResults;
+  }
+
   async flushNotifications(): Promise<number> {
     const pending = this.outbox;
     this.outbox = [];
+    this.lastPushResults = [];
     const keys = this.vapid();
     if (!keys || !pending.length) return 0;
     let sent = 0;
@@ -541,12 +548,15 @@ export class World extends DurableObject<Env> {
           )
           .toArray();
         for (const sub of subs) {
+          const host = new URL(sub.endpoint).host;
           try {
             const status = await sendPush(sub, msg, keys, this.pushFetch);
+            this.lastPushResults.push({ host, status });
             if (status === 404 || status === 410) this.sql.exec("DELETE FROM push_subscriptions WHERE endpoint = ?", sub.endpoint);
             else if (status < 300) sent++;
             else console.warn(`push to ${new URL(sub.endpoint).host} failed: ${status}`);
           } catch (e) {
+            this.lastPushResults.push({ host, status: "error" });
             console.warn("push failed", e);
           }
         }
@@ -557,15 +567,17 @@ export class World extends DurableObject<Env> {
 
   /**
    * Admin: a notification to every person (not bots) with notifications on, e.g. news of an
-   * update. With dryRun, only counts who would get it. Call flushNotifications() to send.
+   * update. `to`: only these usernames (e.g. a test to yourself first). With dryRun, only counts
+   * who would get it. Call flushNotifications() to send.
    */
-  announce(msg: PushMessage, dryRun: boolean) {
+  announce(msg: PushMessage, dryRun: boolean, to?: string[]) {
     const rows = this.sql
-      .exec<{ id: string; devices: number }>(
-        `SELECT u.id, COUNT(*) AS devices FROM push_subscriptions p JOIN users u ON u.id = p.user_id
+      .exec<{ id: string; username: string; devices: number }>(
+        `SELECT u.id, u.username, COUNT(*) AS devices FROM push_subscriptions p JOIN users u ON u.id = p.user_id
          WHERE u.bot = 0 GROUP BY u.id`,
       )
-      .toArray();
+      .toArray()
+      .filter((r) => !to || to.some((name) => name.toLowerCase() === r.username.toLowerCase()));
     if (!dryRun) for (const r of rows) this.notify(r.id, msg);
     return { configured: !!this.vapid(), players: rows.length, devices: rows.reduce((n, r) => n + r.devices, 0) };
   }
