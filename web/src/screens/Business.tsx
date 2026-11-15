@@ -84,21 +84,38 @@ export function Business() {
   );
 }
 
-function Need({ catalog, need, have }: { catalog: Catalog; need: Record<string, number>; have: Record<string, number> }) {
+/**
+ * What a factory needs, and how much of it you have: in the warehouse (what counts for building and
+ * producing), and with you (on its way home: unload it in Berlin).
+ */
+function Need({
+  catalog,
+  need,
+  have,
+  carrying,
+}: {
+  catalog: Catalog;
+  need: Record<string, number>;
+  have: Record<string, number>;
+  carrying: Record<string, number>;
+}) {
   return (
     <ul className="needs">
       {Object.entries(need).map(([good, n]) => {
         const got = have[good] ?? 0;
+        const along = carrying[good] ?? 0;
+        const covered = got < n && got + along >= n; // enough once you unload
         const where = marketsFor(catalog, good, "sells")[0];
         return (
-          <li key={good} className={got >= n ? "is-met" : ""}>
+          <li key={good} className={got >= n ? "is-met" : covered ? "is-coming" : ""}>
             <span>
               <span aria-hidden="true">{got >= n ? "✓ " : ""}</span>
               {amount(catalog.goods, good, n)}
             </span>
             <span className="muted small">
               {Math.min(got, n)}/{n}
-              {got < n && where ? ` · ${where.stop.name}, ${where.price} cr` : ""}
+              {along > 0 ? ` · ${along} with you` : ""}
+              {got + along < n && where ? ` · ${where.stop.name}, ${where.price} cr` : ""}
             </span>
           </li>
         );
@@ -113,6 +130,8 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
   const produce = useGameAction<{ industry: string }>("produce");
   const now = useNow(30_000);
   const has = (need: Record<string, number>) => Object.entries(need).every(([g, n]) => (game.warehouse[g] ?? 0) >= n);
+  const hasWithCargo = (need: Record<string, number>) =>
+    Object.entries(need).every(([g, n]) => (game.warehouse[g] ?? 0) + (game.cargo[g] ?? 0) >= n);
   const titleId = `industry-${industry.id}`;
   const { recipe } = industry;
 
@@ -126,7 +145,7 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
           <p className="small">
             {credits(industry.build.credits)} and these materials in your warehouse in {game.home?.name ?? "Berlin"}:
           </p>
-          <Need catalog={catalog} need={industry.build.materials} have={game.warehouse} />
+          <Need catalog={catalog} need={industry.build.materials} have={game.warehouse} carrying={game.cargo} />
           <FormError message={build.error?.message} />
           <Button
             kind="primary"
@@ -135,7 +154,13 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
           >
             Build the {industry.name.toLowerCase()}
           </Button>
-          {!game.atHome && <p className="muted small">You can build when you're home.</p>}
+          {!game.atHome && (
+            <p className="muted small">
+              {hasWithCargo(industry.build.materials)
+                ? "You're carrying the rest. Unload it at home, then build."
+                : "You can build when you're home."}
+            </p>
+          )}
         </>
       ) : factory.batch ? (
         <div className="trip-progress">
@@ -176,7 +201,7 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
             Running · {factory.batches} {factory.batches === 1 ? "batch" : "batches"} made. Each batch turns these into{" "}
             {amount(catalog.goods, recipe.output, recipe.quantity)} in {recipe.hours} hours:
           </p>
-          <Need catalog={catalog} need={recipe.inputs} have={game.warehouse} />
+          <Need catalog={catalog} need={recipe.inputs} have={game.warehouse} carrying={game.cargo} />
           <FormError message={produce.error?.message} />
           <Button kind="primary" onClick={() => produce.mutate({ industry: industry.id })} disabled={produce.isPending || !has(recipe.inputs)}>
             Start a batch

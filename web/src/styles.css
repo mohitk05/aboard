@@ -1177,6 +1177,10 @@ select.input {
 .needs .is-met {
   color: var(--green);
 }
+/* Covered by what you're carrying, once it's unloaded at home. */
+.needs .is-coming {
+  color: var(--label);
+}
 .ledger-amount {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

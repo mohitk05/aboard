@@ -23,6 +23,8 @@ test("buy materials abroad, bring them home to Berlin, and see what they're for"
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Business" }).click();
   const goods = page.getByRole("region", { name: "Goods" });
   await expect(goods.getByText("6 sacks of milk powder")).toBeVisible();
+  // Before unloading, the factory counts what you're carrying as on its way.
+  await expect(page.getByRole("region", { name: "Chocolate factory" }).getByText("0/4 · 6 with you")).toBeVisible();
   await goods.getByRole("button", { name: "Unload into the warehouse" }).click();
   await expect(goods.getByText("With you · 0/60")).toBeVisible();
   const chocolate = page.getByRole("region", { name: "Chocolate factory" });
