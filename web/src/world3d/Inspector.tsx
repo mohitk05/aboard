@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
-import { clockParts, formatClock, formatDuration, formatIn, formatKm } from "../lib/format";
+import { clockParts, formatAgo, formatClock, formatDuration, formatIn, formatKm } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Button } from "../ui";
 import { DEFAULT_SPEED_KMH, lineHours, lineId, useStationBoard, useStopPhoto, useWorld, type Route, type Trip } from "../world";
 import { select, useSelection } from "./selection";
-import { goodName, useCatalog } from "../game";
+import { goodName, useCatalog, usePrices } from "../game";
+import { useMe } from "../auth";
 
 /** Details of whatever was clicked in the world: a train, a line or a station. */
 export function Inspector() {
@@ -261,26 +262,35 @@ function BoardTime({ at, now, here }: { at: number; now: number; here?: boolean 
   );
 }
 
-/** What a station's market sells and buys today, if it has one. */
+/** What a station's market sells and buys, at the prices you know (live here, last seen, or usual). */
 function StationMarket({ stopId }: { stopId: string }) {
   const catalog = useCatalog().data;
+  const signedIn = !!useMe().data;
+  const known = usePrices(signedIn).data?.markets.find((m) => m.stop === stopId);
   const market = catalog?.markets.find((m) => m.stop.id === stopId);
   if (!catalog || !market) return null;
   const isHome = catalog.home?.id === stopId;
-  const list = (offers: { good: string; price: number }[]) => offers.map((o) => `${goodName(catalog.goods, o.good)} ${o.price} cr`).join(" · ");
+  const list = (side: "sells" | "buys") =>
+    market[side]
+      .map((o) => {
+        const k = known?.[side].find((x) => x.good === o.good);
+        return `${goodName(catalog.goods, o.good)} ${k ? `${k.price} cr` : `usually ${o.usual} cr`}`;
+      })
+      .join(" · ");
   return (
     <div className="station-market">
       <h3>{isHome ? "Home base · market" : "Market"}</h3>
+      {known && <p className="muted small">{known.live ? "Live prices" : `Prices when you last saw them, ${formatAgo(known.seenAt)}`}</p>}
       {market.sells.length > 0 && (
         <p className="small">
           <span className="muted">Sells </span>
-          {list(market.sells)}
+          {list("sells")}
         </p>
       )}
       {market.buys.length > 0 && (
         <p className="small">
           <span className="muted">Buys </span>
-          {list(market.buys)}
+          {list("buys")}
         </p>
       )}
     </div>

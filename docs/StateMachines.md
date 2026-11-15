@@ -140,6 +140,35 @@ Refusals (what the player is told):
 - `start_batch` in `PRODUCING`: "A batch is already in production."
 - `start_batch` in `READY`: "A batch is already in production."
 
+## Contract
+
+An order on the contracts board: a station wants a quantity of a good by a deadline, and pays a premium to whoever delivers it all there first.
+
+**Stored in:** derived from contracts (delivered_at set = DELIVERED; otherwise expires_at past = EXPIRED; else OPEN)
+
+```mermaid
+stateDiagram-v2
+  [*] --> OPEN
+  OPEN --> DELIVERED: deliver
+  OPEN --> EXPIRED: expire
+```
+
+| State | Meaning | Accepts |
+| --- | --- | --- |
+| `OPEN` | Waiting for someone to deliver, until expires_at. | `deliver` → `DELIVERED`, `expire` → `EXPIRED` |
+| `DELIVERED` | Someone delivered it and was paid (delivered_by). | nothing (final) |
+| `EXPIRED` | Nobody delivered in time. | nothing (final) |
+
+| Event | When |
+| --- | --- |
+| `deliver` | A player hands over the goods at the station and is paid |
+| `expire` | The deadline passes |
+
+Refusals (what the player is told):
+
+- `deliver` in `DELIVERED`: "Someone else delivered this one first."
+- `deliver` in `EXPIRED`: "This contract has expired."
+
 ## Invite
 
 A one-time signup code an admin shares as a link. Aboard is invite-only.

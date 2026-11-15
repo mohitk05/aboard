@@ -39,3 +39,12 @@ export function formatDuration(hours: number): string {
   if (hours < 36) return `about ${Math.max(1, Math.round(hours))} hours`;
   return `about ${Math.round(hours / 24)} days`;
 }
+
+/** How long ago: "just now", "12 min ago", "3 h ago", "2 d ago". */
+export function formatAgo(at: number, now = Date.now()): string {
+  const min = Math.floor((now - at) / 60_000);
+  if (min < 2) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  return h < 48 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
+}

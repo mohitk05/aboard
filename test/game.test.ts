@@ -29,6 +29,11 @@ const price = (stop: string, good: string, side: "sells" | "buys") =>
 /** What `qty` units cost or fetch in a market nobody has traded in lately. */
 const fresh = (stop: string, good: string, side: "sells" | "buys", qty: number) =>
   tradeTotal(price(stop, good, side), side, 0, GOODS[good as keyof typeof GOODS].depth, qty);
+/** A live offer, as a player standing at that station sees it (GET /game/prices). */
+async function liveOffer(token: string, stopId: string, good: string) {
+  const m = (await api("GET", "/game/prices", { token })).data.markets.find((x: any) => x.stop === stopId && x.live);
+  return m && [...m.sells, ...m.buys].find((o: any) => o.good === good);
+}
 const moveTo = (userId: string, stop: string) => api("POST", `/user/${userId}/place`, { token: admin, body: { stop } });
 const game = (token: string) => api("GET", "/game", { token }).then((r) => r.data);
 
@@ -138,8 +143,7 @@ describe("the industry game", () => {
     expect(g.factories[0]).toMatchObject({ batches: 1, batch: null });
 
     // Sell some at home, straight from the warehouse…
-    const home = (await api("GET", "/game/catalog")).data.markets.find((m: any) => m.stop.name === "Berlin");
-    const homePrice = home.buys.find((b: any) => b.good === "chocolate").price;
+    const homePrice = (await liveOffer(token, berlin, "chocolate")).price;
     const soldHome = await api("POST", "/game/sell", { token, body: { good: "chocolate", qty: 4 } });
     expect(soldHome.status).toBe(200);
     expect(soldHome.data.balance).toBe(g.balance + tradeTotal(homePrice, "buys", 0, GOODS.chocolate.depth, 4));
@@ -183,8 +187,7 @@ describe("the industry game", () => {
     const b = await signup();
     const dakar = at["Dakar Central"]!;
     const base = price("Dakar Central", "cocoa", "sells");
-    const cocoaAt = async () =>
-      (await api("GET", "/game/catalog")).data.markets.find((m: any) => m.stop.name === "Dakar Central").sells.find((o: any) => o.good === "cocoa");
+    const cocoaAt = () => liveOffer(a.token, dakar, "cocoa");
 
     await moveTo(a.user.id, dakar);
     await moveTo(b.user.id, dakar);
@@ -224,9 +227,7 @@ describe("the industry game", () => {
     const earnedB = two.data.balance - 5000;
     expect(earnedA).toBe(fresh("Amsterdam Centraal", "chocolate", "buys", 30));
     expect(earnedB).toBeLessThan(earnedA);
-    const offer = (await api("GET", "/game/catalog")).data.markets
-      .find((m: any) => m.stop.name === "Amsterdam Centraal")
-      .buys.find((o: any) => o.good === "chocolate");
+    const offer = await liveOffer(a.token, amsterdam, "chocolate");
     expect(offer.load).toBe(60);
     expect(offer.price).toBeLessThan(offer.base);
   });

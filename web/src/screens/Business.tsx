@@ -10,14 +10,21 @@ import {
   useCatalog,
   useGame,
   useGameAction,
+  useContracts,
   useLeaderboard,
+  usePrices,
   type Catalog,
+  type Contract,
   type GameState,
   type Industry,
   type Leaderboard,
+  type PriceKnown,
+  type Prices,
 } from "../game";
+import { useMe } from "../auth";
+import { canTrade } from "../../../src/machines/traveller";
 import { factoryState } from "../../../src/machines/factory";
-import { formatClock, formatIn } from "../lib/format";
+import { formatAgo, formatClock, formatIn } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { Badge, Board, Button, Card, FormError, Notice } from "../ui";
 import { useWorldFocus } from "../world3d/focus";
@@ -27,8 +34,10 @@ import { Shell } from "./Shell";
 export function Business() {
   const game = useGame();
   const catalog = useCatalog();
+  const prices = usePrices();
   const g = game.data;
   const c = catalog.data;
+  const p = prices.data;
   useWorldFocus({
     label: `Map around ${g?.home?.name ?? "Berlin"}, your home base`,
     highlight: g?.home ? [g.home.id] : [],
@@ -47,21 +56,24 @@ export function Business() {
       {g && c && (
         <>
           <Standings catalog={c} />
+          <Contracts catalog={c} game={g} />
           {c.industries.map((i) => (
-            <IndustryCard key={i.id} industry={i} game={g} catalog={c} />
+            <IndustryCard key={i.id} industry={i} game={g} catalog={c} prices={p} />
           ))}
           <Warehouse game={g} catalog={c} />
+          {p && <Telegraph catalog={c} prices={p} />}
           <Card aria-labelledby="where-title" role="region">
             <h2 id="where-title">Markets</h2>
             <p className="muted small">
-              Today's prices. They drift from day to day, and every trade moves them: buying makes materials dearer,
-              selling makes products cheaper, for everyone. A market gets back half of the way every{" "}
-              {MARKET_HALF_LIFE_HOURS} hours. Check before you set off.
+              You only see what's paid right now where you are, and at home. Elsewhere it's what you saw when you last
+              passed through (with how long ago), or the usual price if you've never been. Prices drift through the week,
+              and every trade moves them for everyone: buying makes materials dearer, selling makes products cheaper. A
+              market gets back half of the way every {MARKET_HALF_LIFE_HOURS} hours.
             </p>
             <h3>Buy materials</h3>
-            <MarketTable catalog={c} side="sells" />
+            <MarketTable catalog={c} prices={p} side="sells" />
             <h3>Sell products</h3>
-            <MarketTable catalog={c} side="buys" />
+            <MarketTable catalog={c} prices={p} side="buys" />
           </Card>
           {!!g.ledger.length && (
             <Card aria-labelledby="ledger-title" role="region">
@@ -90,11 +102,13 @@ export function Business() {
  */
 function Need({
   catalog,
+  prices,
   need,
   have,
   carrying,
 }: {
   catalog: Catalog;
+  prices: Prices | undefined;
   need: Record<string, number>;
   have: Record<string, number>;
   carrying: Record<string, number>;
@@ -105,7 +119,7 @@ function Need({
         const got = have[good] ?? 0;
         const along = carrying[good] ?? 0;
         const covered = got < n && got + along >= n; // enough once you unload
-        const where = marketsFor(catalog, good, "sells")[0];
+        const where = marketsFor(catalog, good, "sells", prices)[0];
         return (
           <li key={good} className={got >= n ? "is-met" : covered ? "is-coming" : ""}>
             <span>
@@ -115,7 +129,7 @@ function Need({
             <span className="muted small">
               {Math.min(got, n)}/{n}
               {along > 0 ? ` · ${along} with you` : ""}
-              {got + along < n && where ? ` · ${where.stop.name}, ${where.price} cr` : ""}
+              {got + along < n && where ? ` · ${where.stop.name}, ${priceLabel(where)}` : ""}
             </span>
           </li>
         );
@@ -124,7 +138,7 @@ function Need({
   );
 }
 
-function IndustryCard({ industry, game, catalog }: { industry: Industry; game: GameState; catalog: Catalog }) {
+function IndustryCard({ industry, game, catalog, prices }: { industry: Industry; game: GameState; catalog: Catalog; prices: Prices | undefined }) {
   const factory = game.factories.find((f) => f.industry === industry.id);
   const build = useGameAction<{ industry: string }>("build");
   const produce = useGameAction<{ industry: string }>("produce");
@@ -145,7 +159,7 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
           <p className="small">
             {credits(industry.build.credits)} and these materials in your warehouse in {game.home?.name ?? "Berlin"}:
           </p>
-          <Need catalog={catalog} need={industry.build.materials} have={game.warehouse} carrying={game.cargo} />
+          <Need catalog={catalog} prices={prices} need={industry.build.materials} have={game.warehouse} carrying={game.cargo} />
           <FormError message={build.error?.message} />
           <Button
             kind="primary"
@@ -201,7 +215,7 @@ function IndustryCard({ industry, game, catalog }: { industry: Industry; game: G
             Running · {factory.batches} {factory.batches === 1 ? "batch" : "batches"} made. Each batch turns these into{" "}
             {amount(catalog.goods, recipe.output, recipe.quantity)} in {recipe.hours} hours:
           </p>
-          <Need catalog={catalog} need={recipe.inputs} have={game.warehouse} carrying={game.cargo} />
+          <Need catalog={catalog} prices={prices} need={recipe.inputs} have={game.warehouse} carrying={game.cargo} />
           <FormError message={produce.error?.message} />
           <Button kind="primary" onClick={() => produce.mutate({ industry: industry.id })} disabled={produce.isPending || !has(recipe.inputs)}>
             Start a batch
@@ -267,17 +281,17 @@ function LoadButton({ good, max, name, onLoad }: { good: string; max: number; na
   );
 }
 
-function MarketTable({ catalog, side }: { catalog: Catalog; side: "sells" | "buys" }) {
+function MarketTable({ catalog, prices, side }: { catalog: Catalog; prices: Prices | undefined; side: "sells" | "buys" }) {
   const goods = catalog.goods.filter((g) => (side === "sells" ? g.kind === "raw" : g.kind === "product"));
   return (
     <ul className="list market-list">
       {goods.map((g) => {
-        const places = marketsFor(catalog, g.id, side);
+        const places = marketsFor(catalog, g.id, side, prices);
         return (
           <li key={g.id}>
             <span>{g.name}</span>
             <span className="muted small">
-              {places.length ? places.map((p) => `${p.stop.name} ${p.price}${moved(p.moved)}`).join(" · ") : "Nowhere in this world yet"}
+              {places.length ? places.map((p) => `${p.stop.name} ${priceLabel(p)}`).join(" · ") : "Nowhere in this world yet"}
             </span>
           </li>
         );
@@ -288,6 +302,110 @@ function MarketTable({ catalog, side }: { catalog: Catalog; side: "sells" | "buy
 
 /** How far trading has moved a price: " ↑3", " ↓5", or nothing. */
 const moved = (by: number) => (by > 0 ? ` ↑${by}` : by < 0 ? ` ↓${-by}` : "");
+
+/** A price as you know it: "14 cr ↑2" (live), "14 cr, 3 h ago" (seen), "usually 15 cr" (never seen). */
+function priceLabel(p: PriceKnown, now = Date.now()) {
+  if (p.known === "live") return `${p.price} cr${moved(p.moved)}`;
+  if (p.known === "seen") return `${p.price} cr, ${formatAgo(p.seenAt!, now)}`;
+  return `usually ${p.usual} cr`;
+}
+
+const stopName = (catalog: Catalog, id: string) => catalog.markets.find((m) => m.stop.id === id)?.stop.name ?? "somewhere";
+
+/** Orders at a premium, for whoever delivers first. */
+function Contracts({ catalog, game }: { catalog: Catalog; game: GameState }) {
+  const board = useContracts();
+  const now = useNow(60_000);
+  const b = board.data;
+  return (
+    <Card aria-labelledby="contracts-title" role="region">
+      <h2 id="contracts-title">Contracts</h2>
+      <p className="muted small">
+        Orders at a premium, paid in full to whoever delivers it all first, at that station, before the deadline.
+        Starter orders are for businesses that haven't built a factory yet.
+      </p>
+      <FormError message={board.error?.message} />
+      {b && !b.open.length && <p className="muted small">No open orders right now. New ones come up as these are taken.</p>}
+      {b && b.open.length > 0 && (
+        <ul className="list contracts">
+          {b.open.map((c) => (
+            <ContractRow key={c.id} contract={c} catalog={catalog} game={game} now={now} />
+          ))}
+        </ul>
+      )}
+      {b && b.closed.length > 0 && (
+        <>
+          <h3>Lately</h3>
+          <ul className="list">
+            {b.closed.map((c) => (
+              <li key={c.id}>
+                <span className="small">
+                  {amount(catalog.goods, c.good, c.qty)} to {stopName(catalog, c.stop)}
+                </span>
+                <span className="muted small">
+                  {c.winner
+                    ? `${c.winner.you ? "You" : (c.winner.username ?? "A private player")}${c.winner.bot ? " (bot)" : ""} delivered, ${credits(c.qty * c.price)}`
+                    : "Nobody delivered in time"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function ContractRow({ contract: c, catalog, game, now }: { contract: Contract; catalog: Catalog; game: GameState; now: number }) {
+  const me = useMe().data;
+  const deliver = useGameAction(`contracts/${c.id}/deliver`);
+  const here = !!me && canTrade(me.state) && me.currentStop === c.stop;
+  const have = (game.cargo[c.good] ?? 0) + (here && game.atHome ? (game.warehouse[c.good] ?? 0) : 0);
+  const starterClosed = c.tier === "starter" && game.factories.length > 0;
+  return (
+    <li>
+      <span>
+        <strong>{amount(catalog.goods, c.good, c.qty)}</strong> to {stopName(catalog, c.stop)}
+        {c.tier === "starter" && <Badge>Starter</Badge>}
+        <span className="muted small contract-terms">
+          {c.price} cr each · {credits(c.qty * c.price)} · due {formatIn(Math.max(0, c.expiresAt - now))}
+          {starterClosed ? " · for new businesses" : ""}
+        </span>
+      </span>
+      {here && !starterClosed && (
+        <Button small kind="primary" onClick={() => deliver.mutate()} disabled={deliver.isPending || have < c.qty}>
+          {have < c.qty ? `You have ${have}` : "Deliver"}
+        </Button>
+      )}
+      <FormError message={deliver.error?.message} />
+    </li>
+  );
+}
+
+/** The telegraph: big price moves, without the numbers. */
+function Telegraph({ catalog, prices }: { catalog: Catalog; prices: Prices }) {
+  const now = useNow(60_000);
+  if (!prices.news.length) return null;
+  const raw = (good: string) => catalog.goods.find((g) => g.id === good)?.kind === "raw";
+  return (
+    <Card aria-labelledby="telegraph-title" role="region">
+      <h2 id="telegraph-title">Telegraph</h2>
+      <p className="muted small">Word of big price moves, from wherever there's been trading. No numbers: go and see.</p>
+      <ul className="list">
+        {prices.news.map((n) => (
+          <li key={`${n.stop}:${n.good}:${n.direction}`}>
+            <span className="small">
+              {goodName(catalog.goods, n.good)}{" "}
+              {raw(n.good) ? (n.direction === "up" ? "getting dearer" : "getting cheaper") : n.direction === "up" ? "fetching more" : "fetching less"} at{" "}
+              {stopName(catalog, n.stop)}
+            </span>
+            <span className="muted small">{formatAgo(n.at, now)}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 /** Who's winning: what everyone earned trading this week, or everything they're worth. */
 function Standings({ catalog }: { catalog: Catalog }) {
@@ -347,9 +465,11 @@ function Standings({ catalog }: { catalog: Catalog }) {
 export function MarketCard({ stopId }: { stopId: string }) {
   const catalog = useCatalog();
   const game = useGame();
+  const prices = usePrices();
   const buy = useGameAction<{ good: string; qty: number }>("buy");
   const sell = useGameAction<{ good: string; qty: number }>("sell");
-  const market = catalog.data?.markets.find((m) => m.stop.id === stopId);
+  // Live prices: you're here.
+  const market = prices.data?.markets.find((m) => m.stop === stopId && m.live);
   const g = game.data;
   const [qty, setQty] = useState<Record<string, string>>({});
   if (!market || !g || !catalog.data) return null;

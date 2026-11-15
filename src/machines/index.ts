@@ -1,4 +1,5 @@
 import { camera } from "./camera";
+import { contract } from "./contract";
 import { factory } from "./factory";
 import { invite } from "./invite";
 import { live } from "./live";
@@ -7,7 +8,7 @@ import { train } from "./train";
 import { traveller } from "./traveller";
 
 /** Every state machine in the app: the game's (server) first, then the web app's. */
-export const MACHINES = [traveller, train, factory, invite, live, camera] as Machine<string, string>[];
+export const MACHINES = [traveller, train, factory, contract, invite, live, camera] as Machine<string, string>[];
 
 /** docs/StateMachines.md, generated from the machines (npm run machines). */
 export function renderMachinesDoc(): string {

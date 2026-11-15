@@ -31,6 +31,10 @@ test("buy materials abroad, bring them home to Berlin, and see what they're for"
   await expect(chocolate.getByText("4/4")).toBeVisible(); // 4 sacks of milk needed to build: done
   await expect(chocolate.getByRole("button", { name: "Build the chocolate factory" })).toBeDisabled(); // still need cocoa etc.
 
+  // Prices elsewhere are as you last saw them: Amsterdam's, from when you were there.
+  await expect(page.getByRole("region", { name: "Markets" })).toContainText(/Amsterdam Centraal \d+ cr, just now/);
+  await expect(page.getByRole("region", { name: "Contracts" })).toBeVisible();
+
   // You're in the standings: down this week (materials cost money), with no factories yet.
   const standings = page.getByRole("region", { name: "Standings" });
   await expect(standings.locator("li.is-you")).toContainText("No factories yet");

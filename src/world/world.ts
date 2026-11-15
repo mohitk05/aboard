@@ -41,6 +41,8 @@ import {
   type IndustryId,
 } from "../game/catalog";
 import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
+import { CONTRACT_TIERS, OPEN_CONTRACTS, newContract, type ContractTier } from "../game/contracts";
+import { contract as contractMachine, contractState } from "../machines/contract";
 import { NO_TRAIN_WAIT_MS, chooseDeparture, plan as planBot, shortestPaths, type BotMarket, type Step } from "../game/bot";
 
 // ---------- row types (as stored) ----------
@@ -189,7 +191,26 @@ const newId = () => crypto.randomUUID();
  * last seat (or, later, the last crate) at once.
  */
 /** Ledger entries that mean someone has played the game (an admin who has one is on the leaderboard). */
-const PLAYED_KINDS = ["fare", "buy", "sell", "build"];
+const PLAYED_KINDS = ["fare", "buy", "sell", "build", "contract"];
+/** A trade that moves a price by this share of its base makes the telegraph. */
+const NEWS_MOVE = 0.1;
+/** The contracts board is topped up at most this often. */
+const CONTRACT_REFILL_MS = 30 * 60_000;
+/** The telegraph shows news this recent. */
+const NEWS_DAYS = 3;
+
+type ContractRow = {
+  id: string;
+  tier: ContractTier;
+  stop_id: string;
+  good: GoodId;
+  qty: number;
+  price: number;
+  created_at: number;
+  expires_at: number;
+  delivered_by: string | null;
+  delivered_at: number | null;
+};
 
 export class World extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -256,6 +277,7 @@ export class World extends DurableObject<Env> {
       );
     });
     this.settleFactories(now); // finished production batches, with a notification
+    this.tickContracts(now);
     this.tickBots(now);
     this.broadcast({ type: "tick", at: now, summary });
     return summary;
@@ -342,6 +364,11 @@ export class World extends DurableObject<Env> {
           });
         } else {
           this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", here, u.id);
+          // Stopped at a station on the way: a look at its market from the platform.
+          if (stationStatus(trip, trip.stop_index) === "at-platform") {
+            const m = this.marketAt(stopRows[trip.stop_index]!, Date.now());
+            if (m) this.see(u.id, here, m, Date.now());
+          }
         }
       }
     }
@@ -1255,15 +1282,105 @@ export class World extends DurableObject<Env> {
     return { sells: list("sells"), buys: list("buys") };
   }
 
-  /** Every market in the world, with its prices right now. Pass the stations if you already have them. */
-  private allMarkets(now: number, stops?: StopRow[]) {
-    const markets = [];
+  /** Stations with a market (home included), by name. */
+  private marketStops(): StopRow[] {
+    const home = this.homeStop();
+    return this.sql
+      .exec<StopRow>("SELECT * FROM stops ORDER BY name")
+      .toArray()
+      .filter((s) => s.id === home?.id || MARKETS[s.name]);
+  }
+
+  /** A station's market at its usual prices (no weekly drift, no recent trading), or null. */
+  private usualAt(stop: StopRow) {
+    const def = stop.id === this.homeStop()?.id ? { buys: homeBuys() } : MARKETS[stop.name];
+    if (!def) return null;
+    const list = (m?: Partial<Record<GoodId, number>>) => Object.entries(m ?? {}).map(([good, usual]) => ({ good: good as GoodId, usual: usual! }));
+    return { sells: list(def.sells), buys: list(def.buys) };
+  }
+
+  /**
+   * The markets as a player knows them. Live where they can see: home, and the station they're
+   * at (not on a train). Elsewhere, the prices they last saw there and when; markets they've
+   * never seen aren't listed (the catalog has their usual prices). Looking records what's seen.
+   */
+  private knownMarkets(userId: string, now: number, stops = this.marketStops()) {
+    const u = this.userRow(userId);
+    const home = this.homeStop();
+    const here = canTrade(u.state) ? u.current_stop_id : null;
     const loads = this.marketLoads(now);
-    for (const row of stops ?? this.sql.exec<StopRow>("SELECT * FROM stops ORDER BY name").toArray()) {
-      const m = this.marketAt(row, now, loads);
-      if (m) markets.push({ stop: stopOut(row), ...m });
+    const seen = new Map<string, { price: number; at: number }>();
+    for (const r of this.sql
+      .exec<{ stop_id: string; good: string; price: number; at: number }>("SELECT stop_id, good, price, at FROM price_seen WHERE user_id = ?", userId)
+      .toArray())
+      seen.set(`${r.stop_id}:${r.good}`, r);
+    const out = [];
+    for (const row of stops) {
+      if (row.id === home?.id || row.id === here) {
+        const m = this.marketAt(row, now, loads)!;
+        if (row.id === here && row.id !== home?.id) this.see(userId, row.id, m, now);
+        out.push({ stop: row.id, live: true, seenAt: now, ...m });
+        continue;
+      }
+      const usual = this.usualAt(row)!;
+      const known = (offers: { good: GoodId }[]) =>
+        offers.flatMap((o) => {
+          const s = seen.get(`${row.id}:${o.good}`);
+          return s ? [{ good: o.good, price: s.price, base: s.price, load: 0, seenAt: s.at }] : [];
+        });
+      const sells = known(usual.sells);
+      const buys = known(usual.buys);
+      if (!sells.length && !buys.length) continue;
+      const seenAt = Math.min(...[...sells, ...buys].map((o) => o.seenAt));
+      out.push({ stop: row.id, live: false, seenAt, sells: sells.map(({ seenAt: _, ...o }) => o), buys: buys.map(({ seenAt: _, ...o }) => o) });
     }
-    return markets;
+    return out;
+  }
+
+  /** Remember what a player saw at a market. */
+  private see(userId: string, stopId: string, market: { sells: { good: GoodId; price: number }[]; buys: { good: GoodId; price: number }[] }, now: number) {
+    for (const o of [...market.sells, ...market.buys])
+      this.sql.exec(
+        `INSERT INTO price_seen (user_id, stop_id, good, price, at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (user_id, stop_id, good) DO UPDATE SET price = excluded.price, at = excluded.at`,
+        userId,
+        stopId,
+        o.good,
+        o.price,
+        now,
+      );
+  }
+
+  /** Prices as you know them (see knownMarkets), and the telegraph. */
+  prices(userId: string) {
+    return guard(() => {
+      const now = Date.now();
+      return { markets: this.knownMarkets(userId, now), news: this.news(now) };
+    });
+  }
+
+  /** The telegraph: recent big price moves, newest first. Vague on purpose: no numbers. */
+  private news(now: number) {
+    return this.sql
+      .exec<{ stop_id: string; good: GoodId; direction: "up" | "down"; at: number }>(
+        "SELECT * FROM market_news WHERE at >= ? ORDER BY at DESC LIMIT 12",
+        now - NEWS_DAYS * 86_400_000,
+      )
+      .toArray()
+      .map((n) => ({ stop: n.stop_id, good: n.good, direction: n.direction, at: n.at }));
+  }
+
+  /** A trade moved a price a lot: put it on the telegraph. */
+  private reportMove(stopId: string, good: GoodId, before: number, after: number, base: number, now: number) {
+    if (Math.abs(after - before) < NEWS_MOVE * base) return;
+    this.sql.exec(
+      `INSERT INTO market_news (stop_id, good, direction, at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (stop_id, good, direction) DO UPDATE SET at = excluded.at`,
+      stopId,
+      good,
+      after > before ? "up" : "down",
+      now,
+    );
   }
 
   /** Recent trading at every market (or one station's), faded to `now`, by "stopId:good". */
@@ -1291,7 +1408,8 @@ export class World extends DurableObject<Env> {
 
   /** Everything players need to plan: goods, industries, and every market with today's prices. */
   catalog() {
-    const markets = this.allMarkets(Date.now());
+    // Usual prices only: what's being paid right now is hidden (see prices()).
+    const markets = this.marketStops().map((row) => ({ stop: stopOut(row), ...this.usualAt(row)! }));
     return {
       home: this.homeStop(),
       cargoCapacity: CARGO_CAPACITY,
@@ -1396,6 +1514,7 @@ export class World extends DurableObject<Env> {
         this.charge(userId, cost, "buy", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
         this.addHolding(userId, "cargo", offer.good, qty);
         this.addMarketLoad(stop.id, offer.good, offer.load, qty, now);
+        this.reportMove(stop.id, offer.good, offer.price, marketPrice(offer.base, "sells", offer.load + qty, GOODS[offer.good].depth), offer.base, now);
       });
       this.broadcast({ type: "market", at: now, stop: stop.id, good: offer.good });
       return this.gameState(userId);
@@ -1420,6 +1539,7 @@ export class World extends DurableObject<Env> {
         this.addHolding(userId, "base", offer.good, -fromBase);
         this.charge(userId, -earned, "sell", `${qty} × ${GOODS[offer.good].name} at ${stop.name}`);
         this.addMarketLoad(stop.id, offer.good, offer.load, qty, now);
+        this.reportMove(stop.id, offer.good, offer.price, marketPrice(offer.base, "buys", offer.load + qty, GOODS[offer.good].depth), offer.base, now);
       });
       this.broadcast({ type: "market", at: now, stop: stop.id, good: offer.good });
       return this.gameState(userId);
@@ -1654,6 +1774,127 @@ export class World extends DurableObject<Env> {
     );
   }
 
+  // ======================= contracts =======================
+  // Orders with deadlines, at a premium, for whoever delivers first (src/game/contracts.ts).
+
+  private openContracts(now: number) {
+    return this.sql
+      .exec<ContractRow>("SELECT * FROM contracts WHERE delivered_at IS NULL AND expires_at > ? ORDER BY expires_at", now)
+      .toArray();
+  }
+
+  /** When the board was last topped up (in memory): see tickContracts. */
+  private contractsFilledAt = 0;
+
+  /**
+   * Keep the board full: a few open contracts at every level. Topping up works out distances
+   * over the whole network, so it's tried at most every half hour (a level this world can't fill,
+   * e.g. with no reachable buyer, would otherwise be retried on every tick).
+   */
+  private tickContracts(now: number, rng: () => number = Math.random) {
+    const home = this.homeStop();
+    if (!home || now - this.contractsFilledAt < CONTRACT_REFILL_MS) return;
+    const open = this.openContracts(now);
+    const missing = CONTRACT_TIERS.filter((t) => open.filter((c) => c.tier === t).length < OPEN_CONTRACTS[t]);
+    if (!missing.length) return;
+    this.contractsFilledAt = now;
+    const { dist } = shortestPaths(this.runningTrack().ahead, home.id);
+    const ctx = {
+      now,
+      home: home.id,
+      stopIds: new Map(this.marketStops().map((s) => [s.name, s.id])),
+      kmFromHome: (id: string) => (id === home.id ? 0 : (dist.get(id) ?? null)),
+      taken: new Set(open.map((c) => `${c.stop_id}:${c.good}`)),
+    };
+    let added = 0;
+    for (const tier of missing) {
+      for (let n = open.filter((c) => c.tier === tier).length; n < OPEN_CONTRACTS[tier]; n++) {
+        const c = newContract(tier, ctx, rng);
+        if (!c) break;
+        this.sql.exec(
+          "INSERT INTO contracts (id, tier, stop_id, good, qty, price, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          newId(),
+          c.tier,
+          c.stopId,
+          c.good,
+          c.qty,
+          c.price,
+          now,
+          c.expiresAt,
+        );
+        ctx.taken.add(`${c.stopId}:${c.good}`);
+        added++;
+      }
+    }
+    if (added) this.broadcast({ type: "contracts", at: now });
+  }
+
+  /** The board: open contracts, and the latest ones won or missed (with who won them). */
+  listContracts(viewerId: string, now = Date.now()) {
+    return guard(() => {
+      this.userRow(viewerId);
+      const recent = this.sql
+        .exec<ContractRow & { username: string | null; profile_mode: string | null; bot: number | null }>(
+          `SELECT c.*, u.username, u.profile_mode, u.bot FROM contracts c LEFT JOIN users u ON u.id = c.delivered_by
+           WHERE c.delivered_at IS NOT NULL OR c.expires_at > ? ORDER BY COALESCE(c.delivered_at, c.expires_at) DESC LIMIT 40`,
+          now - 86_400_000,
+        )
+        .toArray();
+      const out = (c: (typeof recent)[number]) => ({
+        id: c.id,
+        tier: c.tier,
+        stop: c.stop_id,
+        good: c.good,
+        qty: c.qty,
+        price: c.price,
+        expiresAt: c.expires_at,
+        /** OPEN, DELIVERED or EXPIRED (see src/machines/contract.ts). */
+        state: contractState(c, now),
+        deliveredAt: c.delivered_at,
+        winner:
+          c.delivered_by === null
+            ? null
+            : {
+                username: c.delivered_by === viewerId || c.profile_mode === "PUBLIC" ? c.username : null,
+                you: c.delivered_by === viewerId,
+                bot: !!c.bot,
+              },
+      });
+      const all = recent.map(out);
+      return {
+        open: all.filter((c) => c.state === "OPEN").sort((a, b) => a.expiresAt - b.expiresAt),
+        closed: all.filter((c) => c.state !== "OPEN").slice(0, 8),
+      };
+    });
+  }
+
+  /** Hand over a contract's goods at its station, and be paid. From your cargo (at home, the warehouse too). */
+  deliver(userId: string, contractId: string) {
+    return guard(() => {
+      const now = Date.now();
+      const { user, stop } = this.atMarket(userId);
+      const c = this.sql.exec<ContractRow>("SELECT * FROM contracts WHERE id = ?", contractId).toArray()[0];
+      if (!c) throw notFound("Contract not found.");
+      contractMachine.expect(contractState(c, now), "deliver");
+      if (c.stop_id !== stop.id) throw conflict(`This contract is for delivery at ${this.stopRow(c.stop_id).name}.`);
+      if (c.tier === "starter" && (user.bot || this.sql.exec("SELECT 1 FROM factories WHERE user_id = ?", userId).toArray().length))
+        throw conflict("Starter contracts are for businesses that haven't built a factory yet.");
+      const atHome = stop.id === this.homeStop()?.id;
+      const fromCargo = Math.min(c.qty, this.holding(userId, "cargo", c.good));
+      const fromBase = atHome ? Math.min(c.qty - fromCargo, this.holding(userId, "base", c.good)) : 0;
+      if (fromCargo + fromBase < c.qty) throw conflict(`It needs ${c.qty} and you have ${fromCargo + fromBase}.`);
+      const pay = c.qty * c.price;
+      this.ctx.storage.transactionSync(() => {
+        this.addHolding(userId, "cargo", c.good, -fromCargo);
+        this.addHolding(userId, "base", c.good, -fromBase);
+        this.charge(userId, -pay, "contract", `Contract: ${c.qty} × ${GOODS[c.good].name} at ${stop.name}`);
+        this.sql.exec("UPDATE contracts SET delivered_by = ?, delivered_at = ? WHERE id = ?", userId, now, c.id);
+      });
+      this.broadcast({ type: "contracts", at: now });
+      return this.gameState(userId);
+    });
+  }
+
   // ======================= bots =======================
   // Players the World runs itself. The brain is src/game/bot.ts; here we show it the world, carry
   // out its steps through the same methods a player's requests use, and find it trains.
@@ -1696,13 +1937,9 @@ export class World extends DurableObject<Env> {
       .toArray();
     if (!due.length) return;
     const track = this.runningTrack();
-    // Stations with markets: read once for every bot (their prices are read fresh for each, since
-    // each bot's trades move them).
-    const home = this.homeStop();
-    const marketStops = this.sql
-      .exec<StopRow>("SELECT * FROM stops ORDER BY name")
-      .toArray()
-      .filter((s) => s.id === home?.id || MARKETS[s.name]);
+    // Stations with markets: read once for every bot (prices are read fresh for each, since each
+    // bot's trades move them).
+    const marketStops = this.marketStops();
     for (const u of due) {
       try {
         this.runBot(u, now, track, marketStops);
@@ -1738,7 +1975,19 @@ export class World extends DurableObject<Env> {
     this.settleFactories(now, u.id);
     const game = this.gameState(u.id);
     const { dist } = shortestPaths(track.ahead, u.current_stop_id);
-    const markets: BotMarket[] = this.allMarkets(now, marketStops).map((m) => ({ stopId: m.stop.id, sells: m.sells, buys: m.buys }));
+    // A bot knows what a person would: live prices here and at home, what it's seen elsewhere,
+    // and the usual prices everywhere else.
+    const known = new Map(this.knownMarkets(u.id, now, marketStops).map((m) => [m.stop, m]));
+    const markets: BotMarket[] = marketStops.map((row) => {
+      const usual = this.usualAt(row)!;
+      const k = known.get(row.id);
+      const offers = (side: "sells" | "buys") =>
+        usual[side].map((o) => k?.[side].find((x) => x.good === o.good) ?? { good: o.good, base: o.usual, load: 0, price: o.usual });
+      return { stopId: row.id, sells: offers("sells"), buys: offers("buys") };
+    });
+    const contracts = this.openContracts(now)
+      .filter((c) => c.tier !== "starter") // starters are for new people, not bots
+      .map((c) => ({ id: c.id, stopId: c.stop_id, good: c.good, qty: c.qty, price: c.price, expiresAt: c.expires_at }));
     const { steps, note } = planBot({
       now,
       here: u.current_stop_id,
@@ -1751,6 +2000,7 @@ export class World extends DurableObject<Env> {
       markets,
       km: (stopId) => dist.get(stopId) ?? null,
       quirk: u.id,
+      contracts,
     });
     let nextAt: number | null = null; // next tick, unless a step says otherwise
     let said = note;
@@ -1782,6 +2032,8 @@ export class World extends DurableObject<Env> {
         return this.buy(userId, step.good, step.qty);
       case "wait":
         return step.until;
+      case "deliver":
+        return this.deliver(userId, step.contract);
       case "travel": {
         const here = this.userRow(userId).current_stop_id!;
         const departures = this.getDepartures(here, 30);

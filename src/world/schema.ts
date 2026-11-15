@@ -239,6 +239,45 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN bot_next_at INTEGER;
   ALTER TABLE users ADD COLUMN bot_note TEXT;
   `,
+  /* 10: hidden prices, the telegraph, and contracts */ `
+  -- What each player last saw at each market (prices elsewhere are hidden: you see them live only
+  -- where you are, and at home). price = the next unit's price when seen.
+  CREATE TABLE price_seen (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    good TEXT NOT NULL,
+    price REAL NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, stop_id, good)
+  );
+
+  -- The telegraph: public, vague news of big price moves ("cocoa getting dearer at Dakar").
+  -- One row per station, good and direction; a newer move just updates its time.
+  CREATE TABLE market_news (
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    good TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK (direction IN ('up', 'down')),
+    at INTEGER NOT NULL,
+    PRIMARY KEY (stop_id, good, direction)
+  );
+  CREATE INDEX market_news_by_time ON market_news(at);
+
+  -- The contracts board (src/game/contracts.ts, src/machines/contract.ts): a station wants qty of
+  -- a good by expires_at, at price credits each, from whoever delivers it all first.
+  CREATE TABLE contracts (
+    id TEXT PRIMARY KEY,
+    tier TEXT NOT NULL,
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    good TEXT NOT NULL,
+    qty INTEGER NOT NULL,
+    price REAL NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    delivered_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    delivered_at INTEGER
+  );
+  CREATE INDEX contracts_open ON contracts(delivered_at, expires_at);
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

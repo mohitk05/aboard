@@ -37,7 +37,17 @@ Each step up the ladder should pay more per day than the one below it. Chocolate
 | Battery works | ~570 | ~10 |
 | Semiconductor fab | ~740 | ~16 |
 
-**Prices** drift by up to ±15% on a weekly cycle that differs for each station and good, so it pays to check the boards (Business → Markets) before setting off.
+**Prices** drift by up to ±15% on a weekly cycle that differs for each station and good.
+
+**Prices are hidden.** Everyone can see what each market buys and sells, and its usual price (the base, with no drift and no recent trading). What's being paid right now you only see:
+
+- live, at the station you're standing at (not from a train), and always at home in Berlin;
+- from the platform, when your train stops at a station on the way (you see it as it was then);
+- otherwise, as you last saw it, with how long ago (Business → Markets, and a station's details on the globe).
+
+So you plan with what you know: learn each market's weekly cycle, guess where rivals are heading, and judge how stale a price is. Bots play by the same rule: they plan with what they've seen and the usual prices.
+
+**The telegraph** (Business → Telegraph) brings word of big price moves anywhere, without the numbers: when a trade moves a price by a tenth of its base or more, it reports "cocoa getting dearer at Dakar Central" or "chocolate fetching less at Amsterdam Centraal". Go and see.
 
 **Markets react to trading.** Every trade leaves a mark (a "load": units recently traded) on the market where it happens, shared by every player:
 
@@ -48,11 +58,26 @@ Each step up the ladder should pay more per day than the one below it. Chocolate
 
 `depth` is set per good: deep, cheap markets for bulk goods (sugar and milk: 400) and shallow ones for rare goods (vanilla: 60). Trading one depth's worth doubles a material's price, or halves a product's. If a rival has just sold their chocolate in Dubai, you'll get more in Tokyo. Whoever reaches Papeete first gets the cheapest vanilla. Supply never runs out; it just gets dearer.
 
+## Contracts
+
+Business → Contracts is a board of orders: a station wants a quantity of a good by a deadline, at a premium, and pays it all to whoever delivers the whole order there first. Delivery takes the goods from your cargo (at home, the warehouse too). Contracts don't move market prices. The rules are in `src/game/contracts.ts`, and a contract's states (`OPEN`, `DELIVERED`, `EXPIRED`) are a state machine (`src/machines/contract.ts`).
+
+The world keeps a few open at every level, topping the board up every half hour or so:
+
+| Level | Open | The order | Pays |
+| --- | --- | --- | --- |
+| Starter | 3 | 4–8 of a chocolate-factory material (cocoa, sugar, milk or vanilla), brought home to Berlin from one of the nearer sources | about 2.5× its price, plus something towards the fares |
+| Chocolate | 3 | 24–48 cases to a market that buys chocolate | 1.35–1.7× the usual price |
+| Batteries | 2 | 8–24 cases to a market that buys batteries | 1.35–1.7× |
+| Chips | 2 | 16–48 cases to a market that buys chips | 1.35–1.7× |
+
+Deadlines allow for the trip there and back from Berlin (at about 200 km/h, for changes and waits), the batches it takes to make, and a day or two more. Starter contracts are a quick first win for new businesses: only players who haven't built a factory can take them, and bots never do. Bots take the others when one pays better than the markets, and they can get there in time.
+
 ## Standings
 
 Business → Standings ranks every player two ways:
 
-- **This week:** what you earned trading since Monday 00:00 UTC, which is sales less materials and fares (ledger kinds `buy`, `sell`, `fare` and `refund`). Building a factory is an investment, not a loss, so it doesn't count. Last week's top earner is named.
+- **This week:** what you earned trading since Monday 00:00 UTC, which is sales and contracts less materials and fares (ledger kinds `buy`, `sell`, `contract`, `fare` and `refund`). Building a factory is an investment, not a loss, so it doesn't count. Last week's top earner is named.
 - **Net worth:** credits, plus factories at what they cost to build, plus goods at what they're worth (products at Berlin's base price, materials at their cheapest base price).
 
 Players with private profiles are listed without their name. Admin accounts are listed once they've played (paid a fare, traded or built a factory), and nothing on the board says they're admins; admin accounts that only run the world aren't listed.
@@ -75,7 +100,7 @@ Some players are bots: the World runs them itself (the brain is `src/game/bot.ts
 Bots play by the same rules as people. Every step goes through the same World methods a player's request does, so they pay fares, move markets and wait for trains like anyone else. On each world tick, every bot that's free at a station and awake looks at what it can see and plays the way a sensible person would:
 
 1. **At home:** unload, build the next factory on the ladder (chocolate, then batteries, then chips) once it can afford the factory and its materials with some to spare, and start a batch in every idle factory that has its inputs.
-2. **Selling:** carrying products, it sells where it is if that pays at least 90% of the best trip elsewhere. "Best" counts the trip: what the sale would fetch (with the market reacting to it) less a cost for the km. It sells at home only when broke.
+2. **Selling:** first it delivers any contract here it can fill. Then, carrying products, it sells where it is if that pays at least 90% of the best trip elsewhere. "Best" counts the trip: what the sale would fetch (at the prices it knows, with the market reacting to it) less a cost for the km, and contracts it can fill and reach in time. It sells at home only when broke.
 3. **Buying:** it keeps enough materials for three batches of each factory, plus whatever the next factory needs. It buys what it can here, keeping its fares and the next factory's price aside.
 4. **Where next:** to the best market for what it carries; otherwise to the nearest station selling what it still needs; otherwise home. When there's nothing to do at home, it waits for the next batch (or an hour).
 5. **Getting there:** it takes the departure that leaves the least to do, counting the km ridden, the rail distance still to go from where it gets off, the wait, and another wait if it has to change. If no train brings it closer, it tries again in half an hour.

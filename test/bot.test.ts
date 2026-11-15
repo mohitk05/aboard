@@ -115,6 +115,23 @@ describe("a bot's brain", () => {
     }
   });
 
+  it("delivers a contract where it is, and rides out to one that pays better than the markets", () => {
+    const factories = [{ industry: "chocolate" as const, readyAt: null }];
+    const contract = { id: "c1", stopId: "dakar", good: "chocolate" as const, qty: 40, price: 30, expiresAt: 1_000_000 + 7 * 86_400_000 };
+    const here = plan(view({ here: "dakar", factories, cargo: { chocolate: 48 }, contracts: [contract] }));
+    expect(here.steps[0]).toEqual({ do: "deliver", contract: "c1" });
+    expect(here.note).toMatch(/delivered 40 chocolate on contract/);
+
+    // From home with 48 cases: Dakar's contract (30 each) beats Amsterdam's market (15).
+    const home = plan(view({ factories, warehouse: { chocolate: 48, cocoa: 12, sugar: 6, milk: 6, vanilla: 3 }, contracts: [contract] }));
+    expect(home.steps.at(-1)).toEqual({ do: "travel", to: "dakar" });
+    // Not if it can't get there in time, or doesn't have enough.
+    const soon = { ...contract, expiresAt: 1_000_000 + 3_600_000 };
+    expect(plan(view({ factories, warehouse: { chocolate: 48 }, contracts: [soon] })).steps.at(-1)).toEqual({ do: "travel", to: "amsterdam" });
+    const big = { ...contract, qty: 100 };
+    expect(plan(view({ factories, warehouse: { chocolate: 48 }, contracts: [big] })).steps.at(-1)).toEqual({ do: "travel", to: "amsterdam" });
+  });
+
   it("doesn't sell at home unless it's broke", () => {
     const factories = [{ industry: "chocolate" as const, readyAt: 2_000_000 }];
     expect(plan(view({ factories, warehouse: { chocolate: 5 } })).steps).not.toContainEqual(expect.objectContaining({ do: "sell" }));

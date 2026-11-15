@@ -1208,6 +1208,9 @@ ol.list.standings {
   display: block;
   padding-left: 1.5em;
 }
+.contract-terms {
+  display: block;
+}
 .market-list li {
   display: grid;
   gap: 2px;

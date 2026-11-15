@@ -22,19 +22,65 @@ export interface Industry {
   build: { credits: number; materials: Record<GoodId, number> };
   recipe: { inputs: Record<GoodId, number>; output: GoodId; quantity: number; hours: number };
 }
+/** What a market trades, at its usual price (public). What's paid right now is hidden: see Prices. */
+export interface UsualOffer {
+  good: GoodId;
+  usual: number;
+}
+export interface Market {
+  stop: Stop;
+  sells: UsualOffer[];
+  buys: UsualOffer[];
+}
+/** A price as you know it. Live: exactly what's paid now. Seen: what was paid when you last looked. */
 export interface Offer {
   good: GoodId;
   /** The next unit, with recent trading. */
   price: number;
-  /** Today's price before recent trading. */
+  /** Today's price before recent trading (live only; otherwise the same as price). */
   base: number;
-  /** Units recently traded here (fading). */
+  /** Units recently traded here, fading (live only; otherwise 0). */
   load: number;
 }
-export interface Market {
-  stop: Stop;
+export interface KnownMarket {
+  stop: string;
+  /** Live (you're there, or it's home), or what you saw at seenAt. */
+  live: boolean;
+  seenAt: number;
   sells: Offer[];
   buys: Offer[];
+}
+/** The telegraph: a big price move somewhere, without the numbers. */
+export interface News {
+  stop: string;
+  good: GoodId;
+  /** up: dearer to buy, or fetching more; down: cheaper, or fetching less. */
+  direction: "up" | "down";
+  at: number;
+}
+export interface Prices {
+  markets: KnownMarket[];
+  news: News[];
+}
+export interface Contract {
+  id: string;
+  /** starter (bring a raw material home; only before your first factory), or the industry it's for. */
+  tier: "starter" | IndustryId;
+  stop: string;
+  good: GoodId;
+  qty: number;
+  /** Credits each, paid on delivery. */
+  price: number;
+  expiresAt: number;
+  /** OPEN, DELIVERED or EXPIRED (src/machines/contract.ts). */
+  state: import("../../src/machines/contract").ContractState;
+  deliveredAt: number | null;
+  /** Who delivered it (username null for a private profile). */
+  winner: { username: string | null; you: boolean; bot: boolean } | null;
+}
+export interface ContractsBoard {
+  open: Contract[];
+  closed: Contract[];
 }
 export interface Catalog {
   home: Stop | null;
@@ -62,12 +108,22 @@ export interface GameState {
   ledger: { at: number; kind: string; amount: number; note: string }[];
 }
 
-/**
- * Goods, industries and prices everywhere. Trades move prices, and a live "market" event says
- * when anyone trades (see live.ts), so it doesn't need refetching otherwise for a while.
- */
+/** Goods, industries and every market at its usual prices. These don't change, so it's cached a long while. */
 export function useCatalog() {
-  return useQuery({ queryKey: ["catalog"], queryFn: () => api<Catalog>("GET", "/game/catalog"), staleTime: 10 * 60_000 });
+  return useQuery({ queryKey: ["catalog"], queryFn: () => api<Catalog>("GET", "/game/catalog"), staleTime: 60 * 60_000 });
+}
+
+/**
+ * Prices as you know them (live where you are and at home, last seen elsewhere), and the
+ * telegraph. Under "me", so every world tick refreshes it (you may have passed a station).
+ */
+export function usePrices(enabled = true) {
+  return useQuery({ queryKey: ["me", "prices"], queryFn: () => api<Prices>("GET", "/game/prices"), enabled });
+}
+
+/** The contracts board. Refreshed when one is added or delivered (live.ts). */
+export function useContracts() {
+  return useQuery({ queryKey: ["contracts"], queryFn: () => api<ContractsBoard>("GET", "/game/contracts"), staleTime: 60_000 });
 }
 
 export interface Standing {
@@ -108,8 +164,9 @@ export function useGameAction<I = void>(path: string) {
     onSuccess: (state) => {
       qc.setQueryData(["me", "game"], state);
       qc.invalidateQueries({ queryKey: ["me"], exact: true }); // balance on your profile
-      qc.invalidateQueries({ queryKey: ["catalog"] }); // your trade moved the price
+      qc.invalidateQueries({ queryKey: ["me", "prices"] }); // your trade moved the price
       qc.invalidateQueries({ queryKey: ["leaderboard"] });
+      qc.invalidateQueries({ queryKey: ["contracts"] });
     },
   });
 }
@@ -128,10 +185,30 @@ export function amount(goods: Good[] | undefined, id: GoodId, qty: number) {
 
 export const goodName = (goods: Good[] | undefined, id: GoodId) => goods?.find((g) => g.id === id)?.name ?? id;
 
-/** Where each good is sold (raw) or bought (products), cheapest/best first. */
-export function marketsFor(catalog: Catalog | undefined, good: GoodId, side: "sells" | "buys") {
+/** A market's price for a good as you know it: live, seen (with when), or just the usual price. */
+export interface PriceKnown {
+  stop: Stop;
+  /** Live or last-seen price, or the usual price if you've never seen this market. */
+  price: number;
+  usual: number;
+  /** "live", "seen" (at seenAt), or "usual" (never seen). */
+  known: "live" | "seen" | "usual";
+  seenAt: number | null;
+  /** How far recent trading has moved a live price (0 otherwise). */
+  moved: number;
+}
+
+/** Where each good is sold (raw) or bought (products), cheapest/best first, as far as you know. */
+export function marketsFor(catalog: Catalog | undefined, good: GoodId, side: "sells" | "buys", prices?: Prices): PriceKnown[] {
   const list = (catalog?.markets ?? []).flatMap((m) =>
-    m[side].filter((o) => o.good === good).map((o) => ({ stop: m.stop, price: o.price, moved: o.price - o.base })),
+    m[side]
+      .filter((o) => o.good === good)
+      .map((o): PriceKnown => {
+        const k = prices?.markets.find((x) => x.stop === m.stop.id);
+        const offer = k?.[side].find((x) => x.good === good);
+        if (!k || !offer) return { stop: m.stop, price: o.usual, usual: o.usual, known: "usual", seenAt: null, moved: 0 };
+        return { stop: m.stop, price: offer.price, usual: o.usual, known: k.live ? "live" : "seen", seenAt: k.seenAt, moved: k.live ? offer.price - offer.base : 0 };
+      }),
   );
   return list.sort((a, b) => (side === "sells" ? a.price - b.price : b.price - a.price));
 }

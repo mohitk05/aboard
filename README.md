@@ -181,7 +181,10 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/push/subscription` | player | how many devices you've turned notifications on for |
 | POST | `/push/subscription` | player | `{ subscription }` from `PushManager.subscribe().toJSON()` |
 | DELETE | `/push/subscription` | player | `{ subscription: { endpoint } }` |
-| GET | `/game/catalog` | anyone | goods, industries, home station and every market's prices: each offer has `price` (the next unit), `base` (today's price before recent trading) and `load` (units recently traded there) |
+| GET | `/game/catalog` | anyone | goods, industries, home station and every market, at its `usual` prices (what's paid now is hidden) |
+| GET | `/game/prices` | player | prices as you know them: live (`live: true`, with `price`, `base` and `load`) at home and where you are, last seen elsewhere (`seenAt`); and the telegraph (`news`) |
+| GET | `/game/contracts` | player | the contracts board: `open` contracts, and the latest `closed` ones with who delivered |
+| POST | `/game/contracts/:id/deliver` | player | at the contract's station, hand over the whole order (from cargo; at home, the warehouse too) and be paid |
 | GET | `/game` | player | your credits, cargo, warehouse, factories and ledger (finished batches are delivered first) |
 | GET | `/game/leaderboard` | player | every player's net worth and what they earned trading this week (private profiles unnamed), and last week's top earner |
 | POST | `/game/buy` | player | `{ good, qty }` at a station that sells it, into your cargo (60 units max) |
@@ -194,7 +197,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | POST | `/user/:id/grant` | admin | `{ credits }`: give (or take) credits |
 | GET | `/admin/bots` | admin | every bot: where it is, its credits, and what it's up to |
 | POST | `/admin/bots` | admin | `{ usernames, bot? }`: make players bots (or, with `bot: false`, people again) |
-| GET | `/live` | anyone | WebSocket: `tick`, `world`, `market` (someone traded) and (for you) `message` events |
+| GET | `/live` | anyone | WebSocket: `tick`, `world`, `market` (someone traded), `contracts` (the board changed) and (for you) `message` events |
 | POST | `/admin/bootstrap` | `X-Admin-Secret` | same as signup, `currentStop` optional |
 | POST | `/admin/tick` | admin | |
 | GET | `/admin/sql-stats?limit=25` | admin | rows read per SQL statement since the world last woke (Cloudflare bills Durable Object SQLite by rows read) |

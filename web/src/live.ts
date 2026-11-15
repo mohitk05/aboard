@@ -38,6 +38,7 @@ type LiveEvent =
   | { type: "tick"; at: number }
   | { type: "world"; at: number }
   | { type: "market"; at: number; stop: string; good: string }
+  | { type: "contracts"; at: number }
   | { type: "message"; conversation: string; from: string };
 
 /**
@@ -61,7 +62,7 @@ export function useLiveUpdates() {
       switch (e.type) {
         case "hello":
           // Back after a drop: we may have missed events while away.
-          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations", "catalog", "leaderboard");
+          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations", "leaderboard", "contracts");
           dropped = false;
           retry = 0;
           break;
@@ -69,8 +70,12 @@ export function useLiveUpdates() {
           refetch("trips", "me", "departures", "fellow");
           break;
         case "market":
-          // Someone traded: prices there moved, and so did the standings.
-          refetch("catalog", "leaderboard");
+          // Someone traded: prices there moved (you see it if you're there), and the standings.
+          qc.invalidateQueries({ queryKey: ["me", "prices"] });
+          refetch("leaderboard");
+          break;
+        case "contracts":
+          refetch("contracts");
           break;
         case "world":
           refetch("stops", "routes", "trips", "vehicles", "departures");

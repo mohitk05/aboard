@@ -37,6 +37,18 @@ export interface BotMarket {
   sells: BotOffer[];
   buys: BotOffer[];
 }
+/** An open contract the bot may take: deliver `qty` of `good` at `stopId` by `expiresAt`, for `price` each. */
+export interface BotContract {
+  id: string;
+  stopId: string;
+  good: GoodId;
+  qty: number;
+  price: number;
+  expiresAt: number;
+}
+/** Speed for judging whether a contract's deadline can be met (a little under the trains'). */
+const CONTRACT_KMH = 200;
+
 export interface BotView {
   now: number;
   here: string;
@@ -57,6 +69,8 @@ export interface BotView {
    * choice in the same place. Leave it out for a plain, predictable bot.
    */
   quirk?: string;
+  /** Contracts it could take (see src/game/contracts.ts). */
+  contracts?: BotContract[];
 }
 
 /** A small, stable hash of a string, in [0, 1). */
@@ -77,6 +91,7 @@ export type Step =
   | { do: "load"; good: GoodId; qty: number }
   | { do: "sell"; good: GoodId; qty: number }
   | { do: "buy"; good: GoodId; qty: number }
+  | { do: "deliver"; contract: string }
   | { do: "travel"; to: string }
   | { do: "wait"; until: number };
 
@@ -154,6 +169,17 @@ function bestSale(view: BotView, goods: Stock): { stopId: string; value: number 
     const value = proceeds(m, goods) * taste(view, m.stopId) - km * kmCost(view);
     if (value > 0 && (!best || value > best.value)) best = { stopId: m.stopId, value };
   }
+  // A contract you can fill (and reach in time) is a sale too, usually a good one.
+  for (const c of view.contracts ?? []) {
+    if (c.stopId === view.here || (goods[c.good] ?? 0) < c.qty) continue;
+    const km = view.km(c.stopId);
+    if (km === null || view.now + (km / CONTRACT_KMH) * 3_600_000 > c.expiresAt) continue;
+    const rest: Stock = { ...goods };
+    add(rest, c.good, -c.qty);
+    const m = view.markets.find((x) => x.stopId === c.stopId);
+    const value = (c.qty * c.price + (m ? proceeds(m, rest) : 0)) * taste(view, c.stopId) - km * kmCost(view);
+    if (value > 0 && (!best || value > best.value)) best = { stopId: c.stopId, value };
+  }
   return best;
 }
 
@@ -208,6 +234,19 @@ export function plan(view: BotView): Plan {
         f.readyAt = view.now + recipe.hours * 3_600_000;
       }
     }
+  }
+
+  // ---- deliver any contract here you can fill ----
+  for (const c of view.contracts ?? []) {
+    if (c.stopId !== view.here || c.expiresAt <= view.now) continue;
+    const fromCargo = Math.min(c.qty, cargo[c.good] ?? 0);
+    const fromBase = atHome ? Math.min(c.qty - fromCargo, warehouse[c.good] ?? 0) : 0;
+    if (fromCargo + fromBase < c.qty) continue;
+    steps.push({ do: "deliver", contract: c.id });
+    add(cargo, c.good, -fromCargo);
+    add(warehouse, c.good, -fromBase);
+    balance += c.qty * c.price;
+    notes.push(`delivered ${c.qty} ${name(c.good)} on contract`);
   }
 
   // ---- sell what you carry, if this market is good enough ----
