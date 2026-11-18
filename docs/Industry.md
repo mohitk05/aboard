@@ -73,6 +73,12 @@ The world keeps a few open at every level, topping the board up every half hour 
 
 Deadlines allow for the trip there and back from Berlin (at about 200 km/h, for changes and waits), the batches it takes to make, and a day or two more. Starter contracts are a quick first win for new businesses: only players who haven't built a factory can take them, and bots never do. Bots take the others when one pays better than the markets, and they can get there in time.
 
+### Between players
+
+Players post their own orders on the same board: to **buy** a quantity of a good at a price each (the credits are held when you post), or to **sell** (the goods are held). Others fill them a part at a time. Orders settle between Berlin warehouses, where every player keeps theirs, so they work from anywhere: goods you sell into a buy order must be in your warehouse (or with you, when you're home), and goods you buy arrive in your warehouse. Whatever isn't filled goes back when you take the order down or it expires (after 1, 3 or 7 days). You're told when someone fills your order. An order's states (`OPEN`, `FILLED`, `CANCELLED`, `EXPIRED`) are a state machine (`src/machines/order.ts`).
+
+Up to 10 orders each, 500 units and 100,000 credits a unit at most. What an order holds still counts in your net worth, and a buy order that comes back unfilled isn't a loss on the weekly Standings (ledger kind `order`). Bots don't post or fill orders.
+
 ## Standings
 
 Business → Standings ranks every player two ways:

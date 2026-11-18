@@ -214,7 +214,7 @@ export function tradeTotal(base: number, side: "sells" | "buys", load: number, d
 // ---------- the leaderboard ----------
 
 /** Kinds of ledger entry that count as trading: what "earned this week" adds up. */
-export const TRADING_KINDS = ["buy", "sell", "fare", "refund", "contract"] as const;
+export const TRADING_KINDS = ["buy", "sell", "fare", "refund", "contract", "order"] as const;
 
 const WEEK_MS = 7 * 86_400_000;
 /** When the current week started: Monday 00:00 UTC. The weekly leaderboard starts afresh then. */

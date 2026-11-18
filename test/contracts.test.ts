@@ -189,3 +189,94 @@ describe("contracts", () => {
     expect(newContract("chocolate", { ...ctx, taken: new Set(["ams:chocolate", "dxb:chocolate"]) })).toBeNull();
   });
 });
+
+describe("orders between players", () => {
+  const post = (token: string, order: Record<string, unknown>) => api("POST", "/game/orders", { token, body: order });
+  const orders = (token: string) => api("GET", "/game/orders", { token }).then((r) => r.data);
+  const fill = (token: string, id: string, qty: number) => api("POST", `/game/orders/${id}/fill`, { token, body: { qty } });
+
+  it("a buy order holds the credits; others sell into it a part at a time, from Berlin", async () => {
+    const buyer = await signup();
+    const seller = await signup();
+    expect((await api("GET", "/game/orders")).status).toBe(401);
+
+    const posted = await post(buyer.token, { side: "buy", good: "vanilla", qty: 6, price: 50 });
+    expect(posted.status, posted.error).toBe(201);
+    expect(posted.data.balance).toBe(5000 - 300); // held
+    expect(posted.data.ledger[0]).toMatchObject({ kind: "order", amount: -300 });
+    const [o] = (await orders(seller.token)).open;
+    expect(o).toMatchObject({ side: "buy", good: "vanilla", qty: 6, remaining: 6, price: 50, state: "OPEN", mine: false, by: { username: buyer.user.username, bot: false } });
+
+    // The seller needs the goods in Berlin: away, what they carry doesn't count.
+    await give(seller.user.id, "cargo", "vanilla", 4);
+    await moveTo(seller.user.id, at["Dakar Central"]!);
+    expect((await fill(seller.token, o.id, 2)).error).toMatch(/You have 0 vanilla in Berlin/);
+    await moveTo(seller.user.id, berlin);
+    expect((await fill(buyer.token, o.id, 1)).error).toBe("That's your own order.");
+    expect((await fill(seller.token, o.id, 7)).error).toBe("Only 6 left on that order.");
+
+    const sold = await fill(seller.token, o.id, 4);
+    expect(sold.status, sold.error).toBe(200);
+    expect(sold.data.balance).toBe(5000 + 200);
+    expect(sold.data.cargo).toEqual({});
+    expect((await api("GET", "/game", { token: buyer.token })).data.warehouse).toEqual({ vanilla: 4 });
+    expect((await orders(buyer.token)).open[0]).toMatchObject({ remaining: 2, mine: true });
+
+    // Taking it down gives back what's still held (2 × 50).
+    const down = await api("DELETE", `/game/orders/${o.id}`, { token: buyer.token });
+    expect(down.data.balance).toBe(5000 - 300 + 100);
+    expect((await orders(buyer.token)).mine[0]).toMatchObject({ id: o.id, state: "CANCELLED", remaining: 2 });
+    expect((await fill(seller.token, o.id, 1)).error).toBe("That order was taken down.");
+    expect((await api("DELETE", `/game/orders/${o.id}`, { token: buyer.token })).error).toBe("That order was already taken down.");
+    expect((await api("DELETE", `/game/orders/${o.id}`, { token: seller.token })).status).toBe(404);
+  });
+
+  it("a sell order holds the goods; a buyer anywhere pays and gets them in Berlin", async () => {
+    const seller = await signup();
+    const buyer = await signup();
+    await give(seller.user.id, "base", "cocoa", 3);
+    await give(seller.user.id, "cargo", "cocoa", 7); // at home, so this counts too
+    expect((await post(seller.token, { side: "sell", good: "cocoa", qty: 11, price: 20 })).error).toMatch(/You have 10 cocoa beans in Berlin/);
+    const posted = await post(seller.token, { side: "sell", good: "cocoa", qty: 10, price: 20 });
+    expect(posted.status, posted.error).toBe(201);
+    expect(posted.data.warehouse).toEqual({});
+    expect(posted.data.cargo).toEqual({});
+    const [o] = (await orders(buyer.token)).open;
+
+    await moveTo(buyer.user.id, at["São Paulo Luz"]!); // away: fine, it lands in the warehouse
+    const bought = await fill(buyer.token, o.id, 10);
+    expect(bought.status, bought.error).toBe(200);
+    expect(bought.data.balance).toBe(5000 - 200);
+    expect(bought.data.warehouse).toEqual({ cocoa: 10 });
+    expect((await api("GET", "/game", { token: seller.token })).data.balance).toBe(5000 + 200);
+    expect((await orders(seller.token)).mine[0]).toMatchObject({ state: "FILLED", remaining: 0 });
+    expect((await fill(buyer.token, o.id, 1)).error).toBe("That order has been filled.");
+  });
+
+  it("what isn't filled goes back when an order expires, and counts in net worth meanwhile", async () => {
+    const { token, user } = await signup();
+    await give(user.id, "base", "milk", 5);
+    await post(token, { side: "sell", good: "milk", qty: 5, price: 30, days: 1 });
+    await post(token, { side: "buy", good: "sugar", qty: 10, price: 10, days: 1 });
+    const standing = async () => (await api("GET", "/game/leaderboard", { token })).data.players.find((p: any) => p.you);
+    // Nothing is lost while it's held: 100 credits held, and 5 milk at their usual value.
+    expect((await standing()).netWorth).toBe(5000 + 5 * 9);
+    // Posting a buy order isn't a loss: the held credits come back if nobody sells.
+    await sql("UPDATE orders SET expires_at = ? WHERE user_id = ?", Date.now() - 1, user.id);
+    await tick();
+    const g = (await api("GET", "/game", { token })).data;
+    expect(g.balance).toBe(5000);
+    expect(g.warehouse).toEqual({ milk: 5 });
+    expect((await orders(token)).mine.map((o: any) => o.state)).toEqual(["EXPIRED", "EXPIRED"]);
+    expect((await standing()).week).toBe(0);
+  });
+
+  it("limits what you can put up", async () => {
+    const { token } = await signup();
+    expect((await post(token, { side: "buy", good: "gold", qty: 1, price: 1 })).status).toBe(400);
+    expect((await post(token, { side: "buy", good: "milk", qty: 1000, price: 1 })).status).toBe(400);
+    expect((await post(token, { side: "buy", good: "milk", qty: 10, price: 1000 })).error).toMatch(/holds 10000 credits/);
+    for (let i = 0; i < 10; i++) expect((await post(token, { side: "buy", good: "milk", qty: 1, price: 1 })).status).toBe(201);
+    expect((await post(token, { side: "buy", good: "milk", qty: 1, price: 1 })).error).toBe("You can have 10 orders up at once.");
+  });
+});

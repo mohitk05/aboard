@@ -42,6 +42,19 @@ test("buy materials abroad, bring them home to Berlin, and see what they're for"
   await standings.getByRole("button", { name: "Net worth" }).click();
   await expect(standings.getByRole("button", { name: "Net worth" })).toHaveAttribute("aria-pressed", "true");
 
+  // Sell 2 of the milk to other players: the order holds them until it's filled or taken down.
+  const contracts = page.getByRole("region", { name: "Contracts" });
+  const form = contracts.getByRole("form", { name: "Post an order" });
+  await form.getByLabel("I want to").selectOption("sell");
+  await form.getByLabel("Goods").selectOption({ label: "Milk powder" });
+  await form.getByLabel("How many").fill("2");
+  await form.getByLabel("Price each (cr)").fill("15");
+  await form.getByRole("button", { name: "Post the order" }).click();
+  await expect(contracts.getByText("You are selling 2 sacks of milk powder")).toBeVisible();
+  await expect(goods.getByText("4 sacks of milk powder")).toBeVisible();
+  await contracts.getByRole("button", { name: "Take down" }).click();
+  await expect(goods.getByText("6 sacks of milk powder")).toBeVisible();
+
   // The ledger shows what it cost.
   await expect(page.getByRole("region", { name: "Ledger" })).toContainText("6 × Milk powder at Amsterdam Centraal");
 });

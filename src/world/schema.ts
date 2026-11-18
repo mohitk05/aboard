@@ -278,6 +278,26 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX contracts_open ON contracts(delivered_at, expires_at);
   `,
+  /* 11: orders between players */ `
+  -- A player's order on the contracts board (src/machines/order.ts): side 'buy' holds the credits
+  -- for what's left (remaining × price), 'sell' holds the goods. Others fill it a part at a time,
+  -- between Berlin warehouses. returned_at: when what wasn't filled went back (cancel or expiry).
+  CREATE TABLE orders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+    good TEXT NOT NULL,
+    qty INTEGER NOT NULL,
+    remaining INTEGER NOT NULL CHECK (remaining >= 0),
+    price REAL NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    cancelled_at INTEGER,
+    returned_at INTEGER
+  );
+  CREATE INDEX orders_by_user ON orders(user_id, created_at);
+  CREATE INDEX orders_open ON orders(returned_at, expires_at);
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

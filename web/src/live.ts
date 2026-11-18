@@ -39,6 +39,7 @@ type LiveEvent =
   | { type: "world"; at: number }
   | { type: "market"; at: number; stop: string; good: string }
   | { type: "contracts"; at: number }
+  | { type: "orders"; at: number }
   | { type: "message"; conversation: string; from: string };
 
 /**
@@ -62,7 +63,7 @@ export function useLiveUpdates() {
       switch (e.type) {
         case "hello":
           // Back after a drop: we may have missed events while away.
-          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations", "leaderboard", "contracts");
+          if (dropped) refetch("trips", "me", "departures", "fellow", "conversations", "leaderboard", "contracts", "orders");
           dropped = false;
           retry = 0;
           break;
@@ -76,6 +77,9 @@ export function useLiveUpdates() {
           break;
         case "contracts":
           refetch("contracts");
+          break;
+        case "orders":
+          refetch("orders");
           break;
         case "world":
           refetch("stops", "routes", "trips", "vehicles", "departures");

@@ -184,6 +184,10 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/game/catalog` | anyone | goods, industries, home station and every market, at its `usual` prices (what's paid now is hidden) |
 | GET | `/game/prices` | player | prices as you know them: live (`live: true`, with `price`, `base` and `load`) at home and where you are, last seen elsewhere (`seenAt`); and the telegraph (`news`) |
 | GET | `/game/contracts` | player | the contracts board: `open` contracts, and the latest `closed` ones with who delivered |
+| GET | `/game/orders` | player | orders between players: everyone's `open` ones, and your own latest closed ones (`mine`) |
+| POST | `/game/orders` | player | `{ side: "buy" \| "sell", good, qty, price, days? }`: post an order; buying holds the credits, selling holds the goods (from Berlin) |
+| POST | `/game/orders/:id/fill` | player | `{ qty }`: sell into a buy order (goods from Berlin), or buy from a sell order (goods to your warehouse) |
+| DELETE | `/game/orders/:id` | player | take your order down; what wasn't filled comes back |
 | POST | `/game/contracts/:id/deliver` | player | at the contract's station, hand over the whole order (from cargo; at home, the warehouse too) and be paid |
 | GET | `/game` | player | your credits, cargo, warehouse, factories and ledger (finished batches are delivered first) |
 | GET | `/game/leaderboard` | player | every player's net worth and what they earned trading this week (private profiles unnamed), and last week's top earner |

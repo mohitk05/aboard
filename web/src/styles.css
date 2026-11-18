@@ -1208,6 +1208,12 @@ ol.list.standings {
   display: block;
   padding-left: 1.5em;
 }
+.post-order {
+  margin-top: 8px;
+}
+.post-order .row > .field {
+  flex: 1 1 120px;
+}
 .contract-terms {
   display: block;
 }

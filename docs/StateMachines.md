@@ -169,6 +169,49 @@ Refusals (what the player is told):
 - `deliver` in `DELIVERED`: "Someone else delivered this one first."
 - `deliver` in `EXPIRED`: "This contract has expired."
 
+## Order
+
+A player's order between players: to buy (the credits are held) or to sell (the goods are held) a quantity of a good at a price each. Other players fill it a part at a time; goods and credits move between Berlin warehouses. Whatever isn't filled goes back when it's cancelled or expires.
+
+**Stored in:** derived from orders (cancelled_at set = CANCELLED; remaining 0 = FILLED; expires_at past = EXPIRED; else OPEN)
+
+```mermaid
+stateDiagram-v2
+  [*] --> OPEN
+  OPEN --> OPEN: fill
+  OPEN --> FILLED: fill_last
+  OPEN --> CANCELLED: cancel
+  OPEN --> EXPIRED: expire
+  EXPIRED --> EXPIRED: give_back
+```
+
+| State | Meaning | Accepts |
+| --- | --- | --- |
+| `OPEN` | On the board until expires_at, with `remaining` still to fill. | `fill` → `OPEN`, `fill_last` → `FILLED`, `cancel` → `CANCELLED`, `expire` → `EXPIRED` |
+| `FILLED` | All of it was bought or sold. | nothing (final) |
+| `CANCELLED` | Its player took it down; what wasn't filled went back to them. | nothing (final) |
+| `EXPIRED` | Its time ran out. What wasn't filled goes back to its player on the next world tick. | `give_back` → `EXPIRED` |
+
+| Event | When |
+| --- | --- |
+| `fill` | Another player fills part of it |
+| `fill_last` | Another player fills the rest of it |
+| `cancel` | Its player takes it down |
+| `expire` | Its time runs out |
+| `give_back` | What it still holds goes back to its player |
+
+Refusals (what the player is told):
+
+- `fill` in `FILLED`: "That order has been filled."
+- `fill` in `CANCELLED`: "That order was taken down."
+- `fill` in `EXPIRED`: "That order has expired."
+- `fill_last` in `FILLED`: "That order has been filled."
+- `fill_last` in `CANCELLED`: "That order was taken down."
+- `fill_last` in `EXPIRED`: "That order has expired."
+- `cancel` in `FILLED`: "That order has been filled."
+- `cancel` in `CANCELLED`: "That order was already taken down."
+- `cancel` in `EXPIRED`: "That order has expired."
+
 ## Invite
 
 A one-time signup code an admin shares as a link. Aboard is invite-only.

@@ -43,6 +43,7 @@ import {
 import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
 import { CONTRACT_TIERS, OPEN_CONTRACTS, newContract, type ContractTier } from "../game/contracts";
 import { contract as contractMachine, contractState } from "../machines/contract";
+import { order as orderMachine, orderState } from "../machines/order";
 import { NO_TRAIN_WAIT_MS, chooseDeparture, plan as planBot, shortestPaths, type BotMarket, type Step } from "../game/bot";
 
 // ---------- row types (as stored) ----------
@@ -191,7 +192,25 @@ const newId = () => crypto.randomUUID();
  * last seat (or, later, the last crate) at once.
  */
 /** Ledger entries that mean someone has played the game (an admin who has one is on the leaderboard). */
-const PLAYED_KINDS = ["fare", "buy", "sell", "build", "contract"];
+const PLAYED_KINDS = ["fare", "buy", "sell", "build", "contract", "order"];
+/** Orders between players: how long one stays up, at most and by default (days), and how many a player may have up. */
+export const ORDER_MAX_DAYS = 7;
+export const ORDER_DEFAULT_DAYS = 3;
+export const MAX_OPEN_ORDERS = 10;
+
+type OrderRow = {
+  id: string;
+  user_id: string;
+  side: "buy" | "sell";
+  good: GoodId;
+  qty: number;
+  remaining: number;
+  price: number;
+  created_at: number;
+  expires_at: number;
+  cancelled_at: number | null;
+  returned_at: number | null;
+};
 /** A trade that moves a price by this share of its base makes the telegraph. */
 const NEWS_MOVE = 0.1;
 /** The contracts board is topped up at most this often. */
@@ -278,6 +297,7 @@ export class World extends DurableObject<Env> {
     });
     this.settleFactories(now); // finished production batches, with a notification
     this.tickContracts(now);
+    this.tickOrders(now);
     this.tickBots(now);
     this.broadcast({ type: "tick", at: now, summary });
     return summary;
@@ -1475,6 +1495,11 @@ export class World extends DurableObject<Env> {
       for (const h of this.sql.exec<{ user_id: string; good: GoodId; qty: number }>("SELECT user_id, good, SUM(qty) AS qty FROM holdings GROUP BY user_id, good").toArray()) {
         if (worth.has(h.user_id) && h.good in GOODS) worth.set(h.user_id, worth.get(h.user_id)! + h.qty * goodValue(h.good));
       }
+      // What's held on open orders is still yours: credits for buying, goods for selling.
+      for (const o of this.sql.exec<OrderRow>("SELECT * FROM orders WHERE returned_at IS NULL").toArray()) {
+        if (!worth.has(o.user_id)) continue;
+        worth.set(o.user_id, worth.get(o.user_id)! + o.remaining * (o.side === "buy" ? o.price : goodValue(o.good)));
+      }
       const earned = (from: number, to: number) =>
         new Map(
           this.sql
@@ -1920,6 +1945,222 @@ export class World extends DurableObject<Env> {
       this.broadcast({ type: "contracts", at: now });
       return this.gameState(userId);
     });
+  }
+
+  // ======================= orders between players =======================
+  // Buy or sell orders on the contracts board, settled between Berlin warehouses
+  // (src/machines/order.ts). What an order needs is held when it's posted, so it can always be filled.
+
+  private orderOut(o: OrderRow & { username: string; profile_mode: string; bot: number }, viewerId: string, now: number) {
+    const mine = o.user_id === viewerId;
+    return {
+      id: o.id,
+      side: o.side,
+      good: o.good,
+      qty: o.qty,
+      remaining: o.remaining,
+      price: o.price,
+      createdAt: o.created_at,
+      expiresAt: o.expires_at,
+      /** OPEN, FILLED, CANCELLED or EXPIRED (see src/machines/order.ts). */
+      state: orderState(o, now),
+      mine,
+      by: { username: mine || o.profile_mode === "PUBLIC" ? o.username : null, bot: !!o.bot },
+    };
+  }
+
+  /** The orders between players: everyone's open ones, and your own latest closed ones. */
+  listOrders(viewerId: string, now = Date.now()) {
+    return guard(() => {
+      this.userRow(viewerId);
+      const rows = this.sql
+        .exec<OrderRow & { username: string; profile_mode: string; bot: number }>(
+          `SELECT o.*, u.username, u.profile_mode, u.bot FROM orders o JOIN users u ON u.id = o.user_id
+           WHERE (o.returned_at IS NULL AND o.expires_at > ?) OR (o.user_id = ? AND o.created_at > ?)
+           ORDER BY o.created_at DESC LIMIT 60`,
+          now,
+          viewerId,
+          now - ORDER_MAX_DAYS * 86_400_000,
+        )
+        .toArray()
+        .map((o) => this.orderOut(o, viewerId, now));
+      return { open: rows.filter((o) => o.state === "OPEN"), mine: rows.filter((o) => o.mine && o.state !== "OPEN").slice(0, 8) };
+    });
+  }
+
+  /** Goods you can hand over in Berlin: your warehouse, and your cargo too if you're there. */
+  private atBerlin(userId: string, good: GoodId) {
+    const u = this.userRow(userId);
+    const home = this.homeStop();
+    const here = !!home && u.current_stop_id === home.id && canTrade(u.state);
+    return { base: this.holding(userId, "base", good), cargo: here ? this.holding(userId, "cargo", good) : 0 };
+  }
+
+  /** Take `qty` of a good you have in Berlin (warehouse first, then cargo if you're there). */
+  private takeAtBerlin(userId: string, good: GoodId, qty: number) {
+    const { base } = this.atBerlin(userId, good);
+    const fromBase = Math.min(qty, base);
+    this.addHolding(userId, "base", good, -fromBase);
+    this.addHolding(userId, "cargo", good, -(qty - fromBase));
+  }
+
+  private shownName(userId: string) {
+    const u = this.userRow(userId);
+    return u.profile_mode === "PUBLIC" ? u.username : "a private player";
+  }
+
+  /** Post an order. Buying holds the credits now; selling holds the goods (from Berlin). */
+  postOrder(userId: string, input: { side: "buy" | "sell"; good: string; qty: number; price: number; days?: number }) {
+    return guard(() => {
+      const user = this.userRow(userId);
+      if (!(input.good in GOODS)) throw badRequest("Unknown goods.");
+      const good = input.good as GoodId;
+      const open = this.sql
+        .exec<{ n: number }>("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND returned_at IS NULL", userId)
+        .one().n;
+      if (open >= MAX_OPEN_ORDERS) throw conflict(`You can have ${MAX_OPEN_ORDERS} orders up at once.`);
+      const now = Date.now();
+      const days = Math.min(ORDER_MAX_DAYS, Math.max(1, input.days ?? ORDER_DEFAULT_DAYS));
+      const name = GOODS[good].name;
+      if (input.side === "buy") {
+        const cost = input.qty * input.price;
+        if (user.balance < cost) throw conflict(`That holds ${cost} credits and you have ${Math.floor(user.balance)}.`);
+      } else {
+        const { base, cargo } = this.atBerlin(userId, good);
+        if (base + cargo < input.qty)
+          throw conflict(`You have ${base + cargo} ${name.toLowerCase()} in Berlin${cargo ? "" : " (goods you carry count when you're there)"}.`);
+      }
+      const id = newId();
+      this.ctx.storage.transactionSync(() => {
+        if (input.side === "buy") this.charge(userId, input.qty * input.price, "order", `Order: buying ${input.qty} × ${name} at ${input.price} (held)`);
+        else {
+          this.takeAtBerlin(userId, good, input.qty);
+          this.record(userId, "order", 0, `Order: selling ${input.qty} × ${name} at ${input.price} (held)`);
+        }
+        this.sql.exec(
+          "INSERT INTO orders (id, user_id, side, good, qty, remaining, price, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          id,
+          userId,
+          input.side,
+          good,
+          input.qty,
+          input.qty,
+          input.price,
+          now,
+          now + days * 86_400_000,
+        );
+      });
+      this.broadcast({ type: "orders", at: now });
+      return this.gameState(userId);
+    });
+  }
+
+  /**
+   * Fill part of someone's order. A buy order: you sell them goods you have in Berlin, and are
+   * paid from what they hold. A sell order: you pay, and the goods go to your warehouse.
+   */
+  fillOrder(userId: string, orderId: string, qty: number) {
+    return guard(() => {
+      const now = Date.now();
+      const me = this.userRow(userId);
+      const o = this.sql.exec<OrderRow>("SELECT * FROM orders WHERE id = ?", orderId).toArray()[0];
+      if (!o) throw notFound("Order not found.");
+      const state = orderState(o, now);
+      if (state === "OPEN" && qty > o.remaining) throw badRequest(`Only ${o.remaining} left on that order.`);
+      orderMachine.expect(state, qty === o.remaining ? "fill_last" : "fill");
+      if (o.user_id === userId) throw conflict("That's your own order.");
+      const name = GOODS[o.good].name;
+      const total = qty * o.price;
+      if (o.side === "buy") {
+        const { base, cargo } = this.atBerlin(userId, o.good);
+        if (base + cargo < qty)
+          throw conflict(`You have ${base + cargo} ${name.toLowerCase()} in Berlin${cargo ? "" : " (goods you carry count when you're there)"}.`);
+      } else if (me.balance < total) throw conflict(`That costs ${total} credits and you have ${Math.floor(me.balance)}.`);
+      const them = this.shownName(o.user_id);
+      const you = this.shownName(userId);
+      this.ctx.storage.transactionSync(() => {
+        if (o.side === "buy") {
+          // You sell to them: your goods to their warehouse, their held credits to you.
+          this.takeAtBerlin(userId, o.good, qty);
+          this.addHolding(o.user_id, "base", o.good, qty);
+          this.charge(userId, -total, "sell", `${qty} × ${name} to ${them} (order)`);
+          this.record(o.user_id, "order", 0, `Bought ${qty} × ${name} from ${you} (order)`);
+        } else {
+          // You buy from them: your credits to them, their held goods to your warehouse.
+          this.charge(userId, total, "buy", `${qty} × ${name} from ${them} (order)`);
+          this.addHolding(userId, "base", o.good, qty);
+          this.charge(o.user_id, -total, "sell", `${qty} × ${name} to ${you} (order)`);
+        }
+        this.sql.exec(
+          "UPDATE orders SET remaining = remaining - ?, returned_at = CASE WHEN remaining - ? = 0 THEN ? ELSE NULL END WHERE id = ?",
+          qty,
+          qty,
+          now,
+          o.id,
+        );
+      });
+      this.notify(o.user_id, {
+        title: o.side === "buy" ? `${you} sold you ${qty} ${name.toLowerCase()}` : `${you} bought ${qty} ${name.toLowerCase()}`,
+        body:
+          (o.side === "buy" ? `It's in your Berlin warehouse.` : `${total} credits are yours.`) +
+          (qty === o.remaining ? " Your order is complete." : ` ${o.remaining - qty} still to go on your order.`),
+        url: "/business",
+        tag: `order-${o.id}`,
+      });
+      this.broadcast({ type: "orders", at: now });
+      return this.gameState(userId);
+    });
+  }
+
+  /** Give back what an order still holds: credits for buying, goods (to the warehouse) for selling. */
+  private returnOrder(o: OrderRow, now: number, why: string) {
+    const name = GOODS[o.good].name;
+    if (o.remaining > 0) {
+      if (o.side === "buy") this.charge(o.user_id, -o.remaining * o.price, "order", `Order ${why}: ${o.remaining} × ${name} not bought, credits back`);
+      else {
+        this.addHolding(o.user_id, "base", o.good, o.remaining);
+        this.record(o.user_id, "order", 0, `Order ${why}: ${o.remaining} × ${name} not sold, back in the warehouse`);
+      }
+    }
+    this.sql.exec("UPDATE orders SET returned_at = ? WHERE id = ?", now, o.id);
+  }
+
+  /** Take your order down; what wasn't filled comes back. */
+  cancelOrder(userId: string, orderId: string) {
+    return guard(() => {
+      const now = Date.now();
+      const o = this.sql.exec<OrderRow>("SELECT * FROM orders WHERE id = ?", orderId).toArray()[0];
+      if (!o || o.user_id !== userId) throw notFound("Order not found.");
+      orderMachine.expect(orderState(o, now), "cancel");
+      this.ctx.storage.transactionSync(() => {
+        this.sql.exec("UPDATE orders SET cancelled_at = ? WHERE id = ?", now, o.id);
+        this.returnOrder(o, now, "taken down");
+      });
+      this.broadcast({ type: "orders", at: now });
+      return this.gameState(userId);
+    });
+  }
+
+  /** Expired orders give back what they hold, and their players are told. */
+  private tickOrders(now: number) {
+    const due = this.sql
+      .exec<OrderRow>("SELECT * FROM orders WHERE returned_at IS NULL AND expires_at <= ?", now)
+      .toArray();
+    for (const o of due) {
+      orderMachine.expect(orderState(o, now), "give_back"); // EXPIRED, still holding what wasn't filled
+      this.ctx.storage.transactionSync(() => this.returnOrder(o, now, "expired"));
+      const name = GOODS[o.good].name.toLowerCase();
+      this.notify(o.user_id, {
+        title: `Your order for ${name} expired`,
+        body:
+          o.side === "buy"
+            ? `${o.remaining} weren't bought; the credits are back with you.`
+            : `${o.remaining} weren't sold; they're back in your warehouse.`,
+        url: "/business",
+        tag: `order-${o.id}`,
+      });
+    }
+    if (due.length) this.broadcast({ type: "orders", at: now });
   }
 
   // ======================= bots =======================

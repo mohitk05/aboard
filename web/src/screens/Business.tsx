@@ -12,12 +12,15 @@ import {
   useGameAction,
   useContracts,
   useLeaderboard,
+  useOrderAction,
+  useOrders,
   usePrices,
   type Catalog,
   type Contract,
   type GameState,
   type Industry,
   type Leaderboard,
+  type Order,
   type PriceKnown,
   type Prices,
 } from "../game";
@@ -26,7 +29,7 @@ import { canTrade } from "../../../src/machines/traveller";
 import { factoryState } from "../../../src/machines/factory";
 import { formatAgo, formatClock, formatIn } from "../lib/format";
 import { useNow } from "../lib/useNow";
-import { Badge, Board, Button, Card, FormError, Notice } from "../ui";
+import { Badge, Board, Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
 import { useWorldFocus } from "../world3d/focus";
 import { Shell } from "./Shell";
 
@@ -320,6 +323,7 @@ function Contracts({ catalog, game }: { catalog: Catalog; game: GameState }) {
   return (
     <Card aria-labelledby="contracts-title" role="region">
       <h2 id="contracts-title">Contracts</h2>
+      <h3>From stations</h3>
       <p className="muted small">
         Orders at a premium, paid in full to whoever delivers it all first, at that station, before the deadline.
         Starter orders are for businesses that haven't built a factory yet.
@@ -352,7 +356,156 @@ function Contracts({ catalog, game }: { catalog: Catalog; game: GameState }) {
           </ul>
         </>
       )}
+      <PlayerOrders catalog={catalog} game={game} now={now} />
     </Card>
+  );
+}
+
+/**
+ * Orders between players: buy what you're missing, or sell what you have. They settle between
+ * Berlin warehouses, so they work from anywhere.
+ */
+function PlayerOrders({ catalog, game, now }: { catalog: Catalog; game: GameState; now: number }) {
+  const board = useOrders();
+  const b = board.data;
+  const theirs = b?.open.filter((o) => !o.mine) ?? [];
+  const mine = b?.open.filter((o) => o.mine) ?? [];
+  return (
+    <>
+      <h3>Between players</h3>
+      <p className="muted small">
+        Buy what you're missing, or sell what you have, at your price. Orders settle between Berlin warehouses, so you
+        can trade from anywhere: what you sell must be in your warehouse (or with you, when you're home), and what you
+        buy arrives there. Posting holds the credits or the goods until the order is filled, taken down or expires.
+      </p>
+      <FormError message={board.error?.message} />
+      {b && !b.open.length && <p className="muted small">No orders between players yet. Post the first.</p>}
+      {theirs.length > 0 && (
+        <ul className="list orders">
+          {theirs.map((o) => (
+            <OrderRow key={o.id} order={o} catalog={catalog} game={game} now={now} />
+          ))}
+        </ul>
+      )}
+      {mine.length > 0 && (
+        <>
+          <h3>Your orders</h3>
+          <ul className="list orders">
+            {mine.map((o) => (
+              <OrderRow key={o.id} order={o} catalog={catalog} game={game} now={now} />
+            ))}
+          </ul>
+        </>
+      )}
+      <PostOrder catalog={catalog} game={game} />
+    </>
+  );
+}
+
+function OrderRow({ order: o, catalog, game, now }: { order: Order; catalog: Catalog; game: GameState; now: number }) {
+  const fill = useOrderAction<{ qty: number }>("POST", `orders/${o.id}/fill`);
+  const cancel = useOrderAction("DELETE", `orders/${o.id}`);
+  const name = goodName(catalog.goods, o.good).toLowerCase();
+  // What you could put in: goods you have in Berlin (to sell into a buy order), or credits (to buy).
+  const inBerlin = (game.warehouse[o.good] ?? 0) + (game.atHome ? (game.cargo[o.good] ?? 0) : 0);
+  const most = o.side === "buy" ? Math.min(o.remaining, inBerlin) : Math.min(o.remaining, Math.floor(game.balance / o.price));
+  const [qty, setQty] = useState("");
+  const n = Math.max(1, Math.min(most, Math.floor(Number(qty || most)) || 1));
+  const who = o.mine ? "You" : `${o.by.username ?? "A private player"}${o.by.bot ? " (bot)" : ""}`;
+  return (
+    <li>
+      <span>
+        <strong>
+          {who} {o.mine ? (o.side === "buy" ? "are buying" : "are selling") : o.side === "buy" ? "buys" : "sells"} {amount(catalog.goods, o.good, o.remaining)}
+        </strong>
+        <span className="muted small contract-terms">
+          {o.price} cr each{o.remaining < o.qty ? ` · ${o.qty - o.remaining} of ${o.qty} done` : ""} · ends {formatIn(Math.max(0, o.expiresAt - now))}
+        </span>
+      </span>
+      {o.mine ? (
+        <Button small kind="quiet" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+          Take down
+        </Button>
+      ) : most > 0 ? (
+        <span className="row">
+          <input
+            className="input input-small"
+            type="number"
+            min={1}
+            max={most}
+            inputMode="numeric"
+            aria-label={`How many ${name} to ${o.side === "buy" ? "sell" : "buy"}`}
+            value={qty}
+            placeholder={String(most)}
+            onChange={(e) => setQty(e.target.value)}
+          />
+          <Button small kind="primary" onClick={() => fill.mutate({ qty: n })} disabled={fill.isPending}>
+            {o.side === "buy" ? "Sell" : "Buy"} {n} · {credits(n * o.price)}
+          </Button>
+        </span>
+      ) : (
+        <span className="muted small">{o.side === "buy" ? `You have no ${name} in Berlin` : "You can't afford one"}</span>
+      )}
+      <FormError message={fill.error?.message ?? cancel.error?.message} />
+    </li>
+  );
+}
+
+/** Post an order to buy or sell. */
+function PostOrder({ catalog, game }: { catalog: Catalog; game: GameState }) {
+  const post = useOrderAction<{ side: "buy" | "sell"; good: string; qty: number; price: number; days: number }>("POST", "orders");
+  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [good, setGood] = useState(catalog.goods[0]?.id ?? "");
+  const [qty, setQty] = useState("1");
+  const [price, setPrice] = useState("");
+  const [days, setDays] = useState("3");
+  // A sensible starting price: the usual price at the cheapest market selling it, or the best buying it.
+  const usual = marketsFor(catalog, good, catalog.goods.find((g) => g.id === good)?.kind === "raw" ? "sells" : "buys")[0]?.usual ?? 1;
+  const n = Math.max(1, Math.floor(Number(qty)) || 1);
+  const p = Math.max(1, Math.floor(Number(price || usual)) || 1);
+  const have = (game.warehouse[good] ?? 0) + (game.atHome ? (game.cargo[good] ?? 0) : 0);
+  return (
+    <form
+      className="post-order"
+      aria-label="Post an order"
+      onSubmit={(e) => {
+        e.preventDefault();
+        post.mutate({ side, good, qty: n, price: p, days: Number(days) }, { onSuccess: () => (setQty("1"), setPrice("")) });
+      }}
+    >
+      <h3>Post an order</h3>
+      <div className="row">
+        <SelectField label="I want to" value={side} onValue={(v) => setSide(v as "buy" | "sell")}>
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+        </SelectField>
+        <SelectField label="Goods" value={good} onValue={(v) => (setGood(v), setPrice(""))}>
+          {catalog.goods.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+      <div className="row">
+        <TextField label="How many" type="number" min={1} max={500} inputmode="numeric" value={qty} onValue={setQty} />
+        <TextField label="Price each (cr)" type="number" min={1} inputmode="numeric" value={price} placeholder={String(usual)} onValue={setPrice} hint={`Usually about ${usual} cr`} />
+        <SelectField label="For" value={days} onValue={setDays}>
+          <option value="1">1 day</option>
+          <option value="3">3 days</option>
+          <option value="7">7 days</option>
+        </SelectField>
+      </div>
+      <p className="muted small">
+        {side === "buy"
+          ? `Holds ${credits(n * p)} until it's filled; you have ${credits(game.balance)}.`
+          : `Holds ${n} from Berlin until it's sold; you have ${have} there${game.atHome ? "" : " (goods you carry count when you're home)"}.`}
+      </p>
+      <FormError message={post.error?.message} />
+      <Button kind="primary" disabled={post.isPending || (side === "buy" ? n * p > game.balance : n > have)}>
+        Post the order
+      </Button>
+    </form>
   );
 }
 

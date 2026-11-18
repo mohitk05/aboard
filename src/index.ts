@@ -327,6 +327,29 @@ app.get("/game/prices", anyone, (c) => send(c, world(c.env).prices(c.var.user.id
 /** The contracts board. */
 app.get("/game/contracts", anyone, (c) => send(c, world(c.env).listContracts(c.var.user.id)));
 app.post("/game/contracts/:id/deliver", anyone, (c) => send(c, world(c.env).deliver(c.var.user.id, param(c, "id"))));
+/** Orders between players: everyone's open ones, and your own latest closed ones. */
+app.get("/game/orders", anyone, (c) => send(c, world(c.env).listOrders(c.var.user.id)));
+/** Post an order to buy (credits held) or sell (goods held, from Berlin). */
+app.post("/game/orders", anyone, async (c) => {
+  const i = await body(
+    c,
+    z.object({
+      side: z.enum(["buy", "sell"]),
+      good: z.string(),
+      qty: z.number().int().min(1).max(500),
+      price: z.number().int().min(1).max(100_000),
+      days: z.number().int().min(1).max(7).optional(),
+    }),
+  );
+  return send(c, world(c.env).postOrder(c.var.user.id, i), 201);
+});
+/** Fill part of someone's order: sell them goods you have in Berlin, or buy what they're selling. */
+app.post("/game/orders/:id/fill", anyone, async (c) => {
+  const { qty } = await body(c, z.object({ qty: z.number().int().min(1).max(500) }));
+  return send(c, world(c.env).fillOrder(c.var.user.id, param(c, "id"), qty));
+});
+/** Take your order down; what wasn't filled comes back. */
+app.delete("/game/orders/:id", anyone, (c) => send(c, world(c.env).cancelOrder(c.var.user.id, param(c, "id"))));
 /** Everyone's net worth, and what they've earned trading this week. */
 app.get("/game/leaderboard", anyone, (c) => send(c, world(c.env).leaderboard(c.var.user.id)));
 app.post("/game/buy", anyone, async (c) => {

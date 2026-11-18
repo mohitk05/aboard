@@ -78,6 +78,28 @@ export interface Contract {
   /** Who delivered it (username null for a private profile). */
   winner: { username: string | null; you: boolean; bot: boolean } | null;
 }
+/** A player's order between players, settled between Berlin warehouses. */
+export interface Order {
+  id: string;
+  /** buy: they hold credits and want goods; sell: they hold goods and want credits. */
+  side: "buy" | "sell";
+  good: GoodId;
+  qty: number;
+  remaining: number;
+  price: number;
+  createdAt: number;
+  expiresAt: number;
+  /** OPEN, FILLED, CANCELLED or EXPIRED (src/machines/order.ts). */
+  state: import("../../src/machines/order").OrderState;
+  mine: boolean;
+  /** Who posted it (username null for a private profile). */
+  by: { username: string | null; bot: boolean };
+}
+export interface OrdersBoard {
+  open: Order[];
+  /** Your own latest orders that are done (filled, taken down or expired). */
+  mine: Order[];
+}
 export interface ContractsBoard {
   open: Contract[];
   closed: Contract[];
@@ -119,6 +141,25 @@ export function useCatalog() {
  */
 export function usePrices(enabled = true) {
   return useQuery({ queryKey: ["me", "prices"], queryFn: () => api<Prices>("GET", "/game/prices"), enabled });
+}
+
+/** Orders between players. Refreshed when one is posted, filled or taken down (live.ts). */
+export function useOrders() {
+  return useQuery({ queryKey: ["orders"], queryFn: () => api<OrdersBoard>("GET", "/game/orders"), staleTime: 60_000 });
+}
+
+/** Post, fill or take down an order: like a game action, and the board refreshes too. */
+export function useOrderAction<I = void>(method: "POST" | "DELETE", path: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: I) => api<GameState>(method, `/game/${path}`, method === "DELETE" ? undefined : (input ?? {})),
+    onSuccess: (state) => {
+      qc.setQueryData(["me", "game"], state);
+      qc.invalidateQueries({ queryKey: ["me"], exact: true });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
+    },
+  });
 }
 
 /** The contracts board. Refreshed when one is added or delivered (live.ts). */
