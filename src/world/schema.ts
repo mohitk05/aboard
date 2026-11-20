@@ -356,6 +356,11 @@ export const MIGRATIONS: string[] = [
            stop_at, created_at, progress_tick
     FROM trips;
   `,
+  /* 14: everyone gets a profile picture (src/game/avatars.ts) */ `
+  -- Bots without one get a random one of the eight; everyone else without one, the first.
+  UPDATE users SET image = '/avatars/' || (ABS(RANDOM()) % 8 + 1) || '.webp' WHERE bot = 1 AND image IS NULL;
+  UPDATE users SET image = '/avatars/1.webp' WHERE bot = 0 AND image IS NULL;
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

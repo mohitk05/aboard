@@ -45,6 +45,7 @@ import { CONTRACT_TIERS, OPEN_CONTRACTS, newContract, type ContractTier } from "
 import { contract as contractMachine, contractState } from "../machines/contract";
 import { order as orderMachine, orderState } from "../machines/order";
 import { REGIONS, badgesFor, levelFor, regionOf, type Region } from "../game/travels";
+import { DEFAULT_AVATAR, randomAvatar } from "../game/avatars";
 import { NO_TRAIN_WAIT_MS, chooseDeparture, plan as planBot, shortestPaths, type BotMarket, type Step } from "../game/bot";
 
 // ---------- row types (as stored) ----------
@@ -143,7 +144,8 @@ export interface NewUserInput {
   currentStop?: string;
   interests?: string[];
   role?: UserRole;
-  image?: string;
+  /** A profile picture; null for none. Left out: the first avatar. */
+  image?: string | null;
   profileMode?: ProfileMode;
 }
 export interface TicketInput {
@@ -2298,6 +2300,8 @@ export class World extends DurableObject<Env> {
         if (!u) throw notFound(`No player called ${name}.`);
         if (u.role !== USER_ROLES.PLAYER) throw badRequest(`${u.username} is an admin; only players can be bots.`);
         this.sql.exec("UPDATE users SET bot = ?, bot_next_at = NULL, bot_note = NULL WHERE id = ?", bot ? 1 : 0, u.id);
+        // A bot gets a picture of its own (unless it was given one other than the default).
+        if (bot && (!u.image || u.image === DEFAULT_AVATAR)) this.sql.exec("UPDATE users SET image = ? WHERE id = ?", randomAvatar(), u.id);
         changed.push(u.username);
       }
       return { changed, bots: this.listBots() };
@@ -2522,7 +2526,7 @@ export class World extends DurableObject<Env> {
           input.role ?? USER_ROLES.PLAYER,
           input.currentStop ?? null,
           input.age,
-          input.image ?? null,
+          input.image === undefined ? DEFAULT_AVATAR : input.image, // the first, unless they chose another (or none)
           input.profileMode ?? "PUBLIC",
           Date.now(),
           STARTING_BALANCE,

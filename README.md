@@ -142,7 +142,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/user/me` | player | includes `journey` (ticket, train, stop-by-stop arrival times) when you have a ticket |
 | GET | `/user/:id` | player | (email etc. only for yourself or admin) |
 | GET | `/user/fellow-users` | player | |
-| PATCH | `/user/me` | player | `{ user: { interests?, image?, profileMode?, currentStop? } }` (`currentStop` only if you have none yet, or you're an admin). `image` is a profile picture: one of the avatars (`/avatars/1.webp` to `/avatars/8.webp`, listed in `src/game/avatars.ts`), a web address, or `null` for none |
+| PATCH | `/user/me` | player | `{ user: { interests?, image?, profileMode?, currentStop? } }` (`currentStop` only if you have none yet, or you're an admin). `image` is a profile picture: one of the avatars (`/avatars/1.webp` to `/avatars/8.webp`, listed in `src/game/avatars.ts`), a web address, or `null` for none. Everyone starts with the first avatar unless they choose another (or none) at signup; bots get a random one |
 | POST | `/user/me/locate` | player | `{ near? }`: put me at the nearest station (same rule as `currentStop`) |
 | POST | `/user/password` | player | `{ current, next }` |
 | POST | `/user` | admin | same as signup |

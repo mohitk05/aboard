@@ -1,6 +1,7 @@
-import { reset } from "cloudflare:test";
+import { reset, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, buildWorld, signup } from "./helpers";
+import type { World } from "../src/world/world";
+import { api, buildWorld, signup, worldStub } from "./helpers";
 
 let stops: { id: string }[];
 let admin: string;
@@ -80,5 +81,36 @@ describe("profile pictures", () => {
     await set("/avatars/1.webp");
     const other = await signup();
     expect((await api("GET", `/user/${user.id}`, { token: other.token })).data.image).toBe("/avatars/1.webp");
+  });
+
+  it("everyone starts with the first picture unless they choose another, or none", async () => {
+    expect((await signup()).user.image).toBe("/avatars/1.webp");
+    expect((await signup(undefined, { image: null })).user.image).toBeNull();
+  });
+
+  it("a new bot gets a picture of its own; one that chose a picture keeps it", async () => {
+    const admin = (await api("POST", "/user/login", { body: { user: { email: "admin@aboard.test", password: "admin-password" } } })).data.authToken;
+    const plain = await signup();
+    const chose = await signup(undefined, { image: "/avatars/5.webp" });
+    await api("POST", "/admin/bots", { token: admin, body: { usernames: [plain.user.username, chose.user.username] } });
+    const image = async (id: string) => (await api("GET", `/user/${id}`, { token: admin })).data.image;
+    expect(await image(plain.user.id)).toMatch(/^\/avatars\/[1-8]\.webp$/);
+    expect(await image(chose.user.id)).toBe("/avatars/5.webp");
+  });
+
+  it("gave everyone without a picture one when it came in: bots a random one, others the first", async () => {
+    const { MIGRATIONS } = await import("../src/world/schema");
+    const a = await signup(undefined, { image: null });
+    const b = await signup(undefined, { image: null });
+    const kept = await signup(undefined, { image: "/avatars/4.webp" });
+    await runInDurableObject(worldStub(), (_w: World, state) => {
+      state.storage.sql.exec("UPDATE users SET bot = 1 WHERE id = ?", b.user.id);
+      state.storage.sql.exec(MIGRATIONS[13]!);
+    });
+    const admin = (await api("POST", "/user/login", { body: { user: { email: "admin@aboard.test", password: "admin-password" } } })).data.authToken;
+    const image = async (id: string) => (await api("GET", `/user/${id}`, { token: admin })).data.image;
+    expect(await image(a.user.id)).toBe("/avatars/1.webp");
+    expect(await image(b.user.id)).toMatch(/^\/avatars\/[1-8]\.webp$/);
+    expect(await image(kept.user.id)).toBe("/avatars/4.webp");
   });
 });

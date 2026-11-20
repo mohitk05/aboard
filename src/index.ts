@@ -87,7 +87,8 @@ const schemas = {
       /** An invite code from an admin. Required to sign up yourself. */
       invite: z.string().trim().min(4).max(64).optional(),
       interests: z.array(id).max(50).optional(),
-      image: profileImage.optional(),
+      /** A profile picture; null for none. Left out, they get the first avatar. */
+      image: profileImage.nullable().optional(),
       profileMode: z.enum(PROFILE_MODES).optional(),
     }),
   }),

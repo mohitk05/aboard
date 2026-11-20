@@ -13,3 +13,9 @@ export const AVATARS = [
 ] as const;
 
 export const isAvatar = (image: string) => AVATARS.some((a) => a.src === image);
+
+/** Everyone who doesn't choose starts with this one. */
+export const DEFAULT_AVATAR = AVATARS[0].src;
+
+/** A random one, for bots. */
+export const randomAvatar = (rng: () => number = Math.random) => AVATARS[Math.floor(rng() * AVATARS.length)]!.src;
