@@ -44,6 +44,7 @@ import { SEED_INTERESTS, SEED_LINE_NAME, SEED_STOPS } from "./seed";
 import { CONTRACT_TIERS, OPEN_CONTRACTS, newContract, type ContractTier } from "../game/contracts";
 import { contract as contractMachine, contractState } from "../machines/contract";
 import { order as orderMachine, orderState } from "../machines/order";
+import { REGIONS, badgesFor, levelFor, regionOf, type Region } from "../game/travels";
 import { NO_TRAIN_WAIT_MS, chooseDeparture, plan as planBot, shortestPaths, type BotMarket, type Step } from "../game/bot";
 
 // ---------- row types (as stored) ----------
@@ -84,6 +85,7 @@ type UserRow = {
   profile_mode: ProfileMode;
   created_at: number;
   balance: number;
+  km_travelled: number;
   bot: number;
   bot_next_at: number | null;
   bot_note: string | null;
@@ -374,6 +376,9 @@ export class World extends DurableObject<Env> {
             here,
             u.id,
           );
+          // For the travel records: where they got off, the line, and how far they rode it.
+          const km = stopRows.slice(fromIdx + 1, trip.stop_index + 1).reduce((sum, s) => sum + s.km, 0);
+          this.recordJourney(u.id, here, this.routeRow(trip.route_id), km);
           summary.alighted++;
           const at = name(trip.stop_index);
           this.notify(u.id, {
@@ -1296,6 +1301,7 @@ export class World extends DurableObject<Env> {
       this.stopRow(stopId);
       traveller.expect(u.state, "move");
       this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", stopId, userId);
+      this.recordVisit(userId, stopId);
       return this.privateUserOut(this.userRow(userId));
     });
   }
@@ -1947,6 +1953,70 @@ export class World extends DurableObject<Env> {
     });
   }
 
+  // ======================= travel records and badges =======================
+  // Places stood at (not passed through), lines ridden and km, for badges (src/game/travels.ts).
+
+  private recordVisit(userId: string, stopId: string) {
+    this.sql.exec("INSERT OR IGNORE INTO visits (user_id, stop_id, first_at) VALUES (?, ?, ?)", userId, stopId, Date.now());
+  }
+
+  /** A journey done: got off at `stopId` after riding `km` of a line (either way round: it's one line). */
+  private recordJourney(userId: string, stopId: string, route: { id: string; return_of: string | null }, km: number) {
+    this.recordVisit(userId, stopId);
+    this.sql.exec(
+      `INSERT INTO rides (user_id, line_id, first_at, times) VALUES (?, ?, ?, 1)
+       ON CONFLICT (user_id, line_id) DO UPDATE SET times = times + 1`,
+      userId,
+      route.return_of ?? route.id,
+      Date.now(),
+    );
+    this.sql.exec("UPDATE users SET km_travelled = km_travelled + ? WHERE id = ?", Math.round(km), userId);
+  }
+
+  /** A traveller's level, from the places they've been to. */
+  private levelOf(userId: string) {
+    const places = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM visits WHERE user_id = ?", userId).one().n;
+    return { ...levelFor(places), places };
+  }
+
+  /**
+   * Someone's travels: places been to (with each region's), lines ridden, km, their traveller
+   * level and badges. Your own always; someone else's if their profile is public (or you're an admin).
+   */
+  getTravels(userId: string, viewer: Viewer) {
+    return guard(() => {
+      const u = this.userRow(userId);
+      if (viewer.id !== userId && viewer.role !== USER_ROLES.ADMIN && u.profile_mode !== "PUBLIC")
+        throw forbidden("This traveller keeps their travels private.");
+      const places = this.sql
+        .exec<StopRow & { first_at: number }>(
+          "SELECT s.*, v.first_at FROM visits v JOIN stops s ON s.id = v.stop_id WHERE v.user_id = ? ORDER BY v.first_at",
+          userId,
+        )
+        .toArray();
+      const regions: Partial<Record<Region, number>> = {};
+      for (const p of places) {
+        const r = regionOf(p.country, p.lng);
+        if (r) regions[r] = (regions[r] ?? 0) + 1;
+      }
+      const lines = this.sql
+        .exec<{ line_id: string; name: string; times: number; first_at: number }>(
+          "SELECT r.line_id, ro.name, r.times, r.first_at FROM rides r JOIN routes ro ON ro.id = r.line_id WHERE r.user_id = ? ORDER BY r.times DESC, r.first_at",
+          userId,
+        )
+        .toArray();
+      const stats = { places: places.length, lines: lines.length, km: Math.round(u.km_travelled), regions };
+      return {
+        ...stats,
+        level: levelFor(places.length),
+        regions: REGIONS.map((r) => ({ region: r, places: regions[r] ?? 0 })),
+        badges: badgesFor(stats),
+        placesList: places.map((p) => ({ stop: stopOut(p), firstAt: p.first_at })),
+        linesList: lines.map((l) => ({ id: l.line_id, name: l.name, times: l.times })),
+      };
+    });
+  }
+
   // ======================= orders between players =======================
   // Buy or sell orders on the contracts board, settled between Berlin warehouses
   // (src/machines/order.ts). What an order needs is held when it's posted, so it can always be filled.
@@ -2408,6 +2478,7 @@ export class World extends DurableObject<Env> {
         for (const i of new Set(interests))
           this.sql.exec("INSERT INTO user_interests (user_id, interest_id) VALUES (?, ?)", id, i);
         if (invite) this.sql.exec("UPDATE invites SET used_by = ?, used_at = ? WHERE code = ?", id, Date.now(), invite.code);
+        if (input.currentStop) this.recordVisit(id, input.currentStop);
       });
       return this.privateUserOut(this.userRow(id));
     });
@@ -2429,7 +2500,10 @@ export class World extends DurableObject<Env> {
         this.stopRow(input.currentStop);
       }
       this.ctx.storage.transactionSync(() => {
-        if (input.currentStop) this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", input.currentStop, userId);
+        if (input.currentStop) {
+          this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", input.currentStop, userId);
+          this.recordVisit(userId, input.currentStop);
+        }
         if (input.image !== undefined) this.sql.exec("UPDATE users SET image = ? WHERE id = ?", input.image, userId);
         if (input.profileMode) this.sql.exec("UPDATE users SET profile_mode = ? WHERE id = ?", input.profileMode, userId);
         if (input.interests) {
@@ -2817,6 +2891,8 @@ export class World extends DurableObject<Env> {
       image: u.image,
       /** Run by the World, not a person (src/game/bot.ts). */
       bot: !!u.bot,
+      /** Traveller level, from the places they've been to (only on a public profile). */
+      level: visible ? this.levelOf(u.id).name : null,
       interests: this.interestsOf(u.id),
       state: visible ? u.state : null,
       currentStop: visible ? u.current_stop_id : null,

@@ -8,6 +8,8 @@ export interface PublicUser {
   image: string | null;
   /** Run by the game, not a person: it won't answer messages. */
   bot: boolean;
+  /** Traveller level (null for a private profile). */
+  level: string | null;
   interests: { id: string; name: string }[];
   state: string | null;
   currentStop: string | null;
@@ -76,4 +78,21 @@ export function useSend(conversationId: string) {
       qc.invalidateQueries({ queryKey: peopleKeys.inbox });
     },
   });
+}
+
+/** Someone's travels and badges (src/game/travels.ts): yours, or a public profile's. */
+export interface Travels {
+  places: number;
+  lines: number;
+  km: number;
+  level: { name: string; rank: number; next: { name: string; places: number } | null };
+  regions: { region: string; places: number }[];
+  badges: { id: string; name: string; about: string; kind: "area" | "distance" | "lines"; earned: boolean; progress: { have: number; need: number } }[];
+  placesList: { stop: { id: string; name: string; country: string }; firstAt: number }[];
+  linesList: { id: string; name: string; times: number }[];
+}
+
+/** Under "me" for your own, so a world tick (you may have got off a train) refreshes it. */
+export function useTravels(userId: string, mine: boolean) {
+  return useQuery({ queryKey: mine ? ["me", "travels"] : ["travels", userId], queryFn: () => api<Travels>("GET", `/user/${userId}/travels`) });
 }

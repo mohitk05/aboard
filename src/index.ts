@@ -383,6 +383,8 @@ app.post("/user/password", anyone, async (c) => {
   return ok(c, { changed: true });
 });
 app.get("/user/fellow-users", anyone, (c) => send(c, world(c.env).getFellowUsers(c.var.user.id)));
+/** Someone's travels and badges: places been to, lines ridden, km (yours, or a public profile's). */
+app.get("/user/:id/travels", anyone, (c) => send(c, world(c.env).getTravels(param(c, "id"), c.var.user)));
 app.get("/user/:id", anyone, (c) => send(c, world(c.env).getUser(param(c, "id"), c.var.user)));
 
 // Ticket

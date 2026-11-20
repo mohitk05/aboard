@@ -186,6 +186,7 @@ All paths below are under `/api` (for example `POST /api/user/login`). Every res
 | GET | `/game/contracts` | player | the contracts board: `open` contracts, and the latest `closed` ones with who delivered |
 | GET | `/game/orders` | player | orders between players: everyone's `open` ones, and your own latest closed ones (`mine`) |
 | POST | `/game/orders` | player | `{ side: "buy" \| "sell", good, qty, price, days? }`: post an order; buying holds the credits, selling holds the goods (from Berlin) |
+| GET | `/user/:id/travels` | player | someone's travels (yours, or a public profile's): `places` been to, `lines` ridden, `km`, `level`, `regions`, `badges` with progress, and the lists |
 | POST | `/game/orders/:id/fill` | player | `{ qty }`: sell into a buy order (goods from Berlin), or buy from a sell order (goods to your warehouse) |
 | DELETE | `/game/orders/:id` | player | take your order down; what wasn't filled comes back |
 | POST | `/game/contracts/:id/deliver` | player | at the contract's station, hand over the whole order (from cargo; at home, the warehouse too) and be paid |

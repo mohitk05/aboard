@@ -298,6 +298,49 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX orders_by_user ON orders(user_id, created_at);
   CREATE INDEX orders_open ON orders(returned_at, expires_at);
   `,
+  /* 12: travel records, for badges */ `
+  -- Places you've been to (stood at: started, got off, or bought a ticket from; not passed through),
+  -- the lines you've ridden (a line and its return twin are one line), and how far you've ridden.
+  CREATE TABLE visits (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stop_id TEXT NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    first_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, stop_id)
+  );
+  CREATE TABLE rides (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    line_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+    first_at INTEGER NOT NULL,
+    times INTEGER NOT NULL,
+    PRIMARY KEY (user_id, line_id)
+  );
+  ALTER TABLE users ADD COLUMN km_travelled REAL NOT NULL DEFAULT 0;
+
+  -- History, from the tickets kept so far. A ticket was ridden if the next place its player was
+  -- seen (their next ticket's start, or where they are now if they no longer hold it) isn't where
+  -- it started: a cancelled ticket or a missed train leaves them where they were. The fare is
+  -- 0.01 credits a km, so the km ridden is the fare × 100.
+  CREATE TABLE _journeys AS
+    SELECT t.user_id, t.from_stop_id, t.created_at, t.price, COALESCE(r.return_of, r.id) AS line_id,
+           COALESCE(LEAD(t.from_stop_id) OVER (PARTITION BY t.user_id ORDER BY t.created_at, t.id),
+                    CASE WHEN u.ticket_id IS NULL OR u.ticket_id != t.id THEN u.current_stop_id END) AS got_to
+    FROM tickets t
+    JOIN users u ON u.id = t.user_id
+    JOIN trips tr ON tr.id = t.trip_id
+    JOIN routes r ON r.id = tr.route_id;
+  DELETE FROM _journeys WHERE got_to IS NULL OR got_to = from_stop_id;
+
+  INSERT INTO rides (user_id, line_id, first_at, times)
+    SELECT user_id, line_id, MIN(created_at), COUNT(*) FROM _journeys GROUP BY user_id, line_id;
+  UPDATE users SET km_travelled = COALESCE((SELECT ROUND(SUM(price) * 100) FROM _journeys j WHERE j.user_id = users.id), 0);
+  INSERT INTO visits (user_id, stop_id, first_at)
+    SELECT user_id, stop_id, MIN(at) FROM (
+      SELECT user_id, from_stop_id AS stop_id, created_at AS at FROM tickets
+      UNION ALL SELECT user_id, got_to, created_at FROM _journeys
+      UNION ALL SELECT id, current_stop_id, created_at FROM users WHERE current_stop_id IS NOT NULL AND ticket_id IS NULL
+    ) WHERE stop_id IN (SELECT id FROM stops) GROUP BY user_id, stop_id;
+  DROP TABLE _journeys;
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

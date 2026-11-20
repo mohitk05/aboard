@@ -42,6 +42,7 @@ export function People() {
                   {user.bot && <Badge>Bot</Badge>}
                 </strong>
                 <span className="muted small">
+                  {user.level ? `${user.level} · ` : ""}
                   {Math.round(score)}% in common{user.bot ? " · runs its own business, and doesn't chat" : ""}
                 </span>
                 <Tags items={user.interests} strong={mine} label={`${user.username}'s interests`} />

@@ -525,6 +525,10 @@ select.input {
   border-color: var(--label);
   color: var(--label);
 }
+.tag-dim {
+  color: var(--label-3);
+  border-style: dashed;
+}
 .tag-toggle {
   position: relative;
   min-height: 36px;
@@ -1487,4 +1491,59 @@ ol.list.standings {
 }
 .story {
   padding-bottom: 96px; /* room to scroll the last lines above the floating button */
+}
+
+/* ---------- travels and badges (Profile) ---------- */
+.travel-level {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+.travel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+.travel-stats div {
+  border-top: 1px solid var(--hairline);
+  padding-top: 8px;
+}
+.travel-stats dt {
+  color: var(--label-2);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+}
+.travel-stats dd {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.travel-badges {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.travel-badges li {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius);
+  color: var(--label-2);
+}
+.travel-badges li.is-earned {
+  border-style: solid;
+  border-color: var(--label);
+  color: var(--label);
+}
+.travel-badges .badge {
+  margin-left: 0;
+  justify-self: start;
 }

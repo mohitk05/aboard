@@ -99,6 +99,20 @@ All of the numbers are in `src/game/catalog.ts`. A market belongs to a station b
   - The station screen has a **Market** panel wherever there's a market.
   - The station details on the globe list what each market buys and sells.
 
+## Travels and badges
+
+Your Profile shows where you've been (`src/game/travels.ts`):
+
+- **Places:** stations you've stood at: where you started, got off a train, or bought a ticket from. Stations your train only passed through don't count.
+- **Lines:** lines you've ridden to the end of a journey (a line counts once, whichever way you rode it).
+- **Km ridden.**
+
+Your **traveller level** comes from places: Newcomer, Day-tripper (3), Wayfarer (6), Voyager (12), Globetrotter (25), Rail Legend (50). Other players see your level next to your name if your profile is public.
+
+**Badges:** one for each of seven regions you've got off a train in (Europe, Africa, Middle East, Asia, Oceania, North America, South America; Russia is Europe west of the Urals and Asia east of them), and Seven regions for all of them; First thousand (1,000 km), Long hauler (10,000), Around the world (40,075) and To the Moon (384,400); Line hopper (5 lines), Line collector (15) and Network master (30).
+
+Travel before these records began was worked out from the tickets kept (schema v12): a ticket counts as ridden if its player was next seen somewhere other than where it started.
+
 ## Bots
 
 Some players are bots: the World runs them itself (the brain is `src/game/bot.ts`). Admins choose which players are bots (`POST /api/admin/bots`, or `scripts/seed-bots.sh`). Everyone can tell who's a bot: they're marked on the Standings and the People screen, and they don't chat.

@@ -54,6 +54,10 @@ test("F4: meet someone at the station and talk", async ({ browser }) => {
 test("F4: edit your profile and change your password", async ({ page }) => {
   const me = await signUp(page, "Warsaw, Poland", ["Chess"]);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+  // Your travels: placed in Warsaw, so one place so far.
+  const travels = page.getByRole("region", { name: "Travels" });
+  await expect(travels.getByText("Newcomer")).toBeVisible();
+  await expect(travels.getByText(/Places you've been \(\d+\)/)).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Chess" })).toBeChecked();
   await checkTag(page, "Music");
   await page.getByRole("button", { name: "Save" }).click();

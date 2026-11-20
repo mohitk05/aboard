@@ -2,19 +2,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, type Interest, type Me } from "../api";
 import { meKey, useLogout, useMe } from "../auth";
-import { Button, Card, Check, FormError, Notice, TagPicker, TextField } from "../ui";
+import { useTravels, type Travels } from "../people";
+import { Badge, Button, Card, Check, FormError, Notice, TagPicker, TextField } from "../ui";
 import { NotificationSettings } from "./Notify";
 import { Shell } from "./Shell";
 
 export function Profile() {
   const me = useMe().data as Me;
+  const travels = useTravels(me.id, true);
   return (
     <Shell>
       <section className="board" aria-label="Your profile">
-        <div className="board-label">Traveller</div>
+        <div className="board-label">{travels.data?.level.name ?? "Traveller"}</div>
         <div className="board-title">{me.username}</div>
         <div className="board-sub">{me.email}</div>
       </section>
+      <FormError message={travels.error?.message} />
+      {travels.data && <TravelsCard t={travels.data} />}
       <ProfileForm me={me} />
       <NotificationSettings />
       <PasswordForm />
@@ -103,6 +107,109 @@ function LogOut() {
       <Button onClick={() => logout.mutate()} disabled={logout.isPending}>
         Log out
       </Button>
+    </Card>
+  );
+}
+
+const n = new Intl.NumberFormat("en");
+
+/** Where you've been: your traveller level, places, lines, km, regions and badges. */
+function TravelsCard({ t }: { t: Travels }) {
+  const { level } = t;
+  const from = level.next ? t.places : 1;
+  const pct = level.next ? Math.min(100, Math.round((100 * from) / level.next.places)) : 100;
+  // A region's badge is its chip under Regions; the grid has the rest.
+  const grid = t.badges.filter((b) => b.kind !== "area" || b.id === "region-all");
+  const earned = grid.filter((b) => b.earned);
+  const ahead = grid.filter((b) => !b.earned);
+  const regions = t.regions.filter((r) => r.places > 0).length;
+  return (
+    <Card aria-labelledby="travels-title" role="region">
+      <h2 id="travels-title">Travels</h2>
+      <p className="travel-level">
+        <strong>{level.name}</strong> <span className="muted small">· level {level.rank} of 6</span>
+      </p>
+      <div className="bar" role="progressbar" aria-label="Towards the next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <p className="muted small">
+        {level.next
+          ? `${level.next.places - t.places} more ${level.next.places - t.places === 1 ? "place" : "places"} to ${level.next.name}. A place counts when you get off a train there, not when you pass through.`
+          : "The highest level. Every station is still out there."}
+      </p>
+      <dl className="travel-stats">
+        <div>
+          <dt>Places</dt>
+          <dd>{n.format(t.places)}</dd>
+        </div>
+        <div>
+          <dt>Lines</dt>
+          <dd>{n.format(t.lines)}</dd>
+        </div>
+        <div>
+          <dt>Km ridden</dt>
+          <dd>{n.format(t.km)}</dd>
+        </div>
+      </dl>
+      <h3>
+        Regions · {regions} of {t.regions.length}
+      </h3>
+      <ul className="chips travel-regions" aria-label="Regions">
+        {t.regions.map((r) => (
+          <li key={r.region} className={r.places ? "tag tag-shared" : "tag tag-dim"}>
+            {r.region}
+            {r.places ? ` · ${r.places}` : ""}
+          </li>
+        ))}
+      </ul>
+      <h3>
+        Badges · {earned.length} of {grid.length}
+      </h3>
+      <ul className="travel-badges">
+        {[...earned, ...ahead].map((b) => (
+          <li key={b.id} className={b.earned ? "is-earned" : ""}>
+            <strong>
+              {b.earned && <span aria-hidden="true">✓ </span>}
+              {b.name}
+            </strong>
+            {b.earned && <Badge>Earned</Badge>}
+            <span className="muted small">{b.about}</span>
+            {!b.earned && b.progress.need > 1 && (
+              <span className="muted small">
+                {n.format(b.progress.have)} / {n.format(b.progress.need)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {t.placesList.length > 0 && (
+        <details>
+          <summary>Places you've been ({t.placesList.length})</summary>
+          <ul className="list">
+            {t.placesList.map((p) => (
+              <li key={p.stop.id}>
+                <span>{p.stop.name}</span>
+                <span className="muted small">{p.stop.country}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {t.linesList.length > 0 && (
+        <details>
+          <summary>Lines you've ridden ({t.linesList.length})</summary>
+          <ul className="list">
+            {t.linesList.map((l) => (
+              <li key={l.id}>
+                <span>{l.name}</span>
+                <span className="muted small">
+                  {l.times} {l.times === 1 ? "journey" : "journeys"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </Card>
   );
 }
