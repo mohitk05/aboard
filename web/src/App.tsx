@@ -52,6 +52,16 @@ const routes = [
 
 const router = createBrowserRouter(routes.map((r) => ({ ...r, errorElement: <RouteError /> })));
 
+// A notification tapped while the app is open: the service worker says where to go (see sw.js).
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (e: MessageEvent) => {
+    if (e.data?.type !== "navigate" || typeof e.data.url !== "string") return;
+    const to = new URL(e.data.url, location.origin);
+    if (to.origin === location.origin) void router.navigate(to.pathname + to.search + to.hash);
+  });
+  navigator.serviceWorker.startMessages();
+}
+
 function Live() {
   useLiveUpdates();
   return null;

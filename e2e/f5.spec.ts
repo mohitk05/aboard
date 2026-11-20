@@ -62,3 +62,22 @@ test("F5: turn notifications on and off", async ({ page, context }) => {
   await expect(card.getByRole("button", { name: "Turn on notifications" })).toBeVisible();
   expect((await (await page.request.get("/api/push/subscription")).json()).data.count).toBe(0);
 });
+
+test("F5: tapping a notification while the app is open goes where it points", async ({ page }) => {
+  await signUp(page, "Berlin, Germany");
+  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Journey" })).toHaveClass(/active/);
+  // What the service worker sends the open app when its notification is tapped (see sw.js).
+  const before = await page.evaluate(() => performance.timeOrigin);
+  await page.evaluate(() =>
+    navigator.serviceWorker.dispatchEvent(new MessageEvent("message", { data: { type: "navigate", url: `${location.origin}/profile` } })),
+  );
+  await expect(page).toHaveURL(/\/profile$/);
+  await expect(page.getByRole("region", { name: "Travels" })).toBeVisible();
+  // In the app, without reloading the page.
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(before);
+  // Anywhere else is ignored.
+  await page.evaluate(() =>
+    navigator.serviceWorker.dispatchEvent(new MessageEvent("message", { data: { type: "navigate", url: "https://example.com/business" } })),
+  );
+  await expect(page).toHaveURL(/\/profile$/);
+});

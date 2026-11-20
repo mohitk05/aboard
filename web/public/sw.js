@@ -1,5 +1,5 @@
 // Aboard service worker: offline app shell and push notifications.
-const SHELL = "aboard-shell-v5";
+const SHELL = "aboard-shell-v6";
 const ASSETS = "aboard-assets-v5"; // bump when icons or textures change (they are cached for good)
 
 /** Cache the page and the scripts and styles it loads, so the offline shell is whole at once. */
@@ -92,14 +92,24 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// Tapping a notification goes where it points. If Aboard is already open (even in the
+// background), tell the app to go there itself (see App.tsx) and bring it forward: asking the
+// browser to move the window (WindowClient.navigate) isn't reliable, e.g. in an iPhone's Home
+// Screen app, and fails for pages this worker doesn't control. Otherwise, open it there.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const open = wins.find((w) => new URL(w.url).origin === self.location.origin);
-      if (open) return open.navigate(target).then((w) => (w || open).focus());
-      return self.clients.openWindow(target);
-    }),
+      if (!open) return self.clients.openWindow(target);
+      open.postMessage({ type: "navigate", url: target });
+      try {
+        await open.focus();
+      } catch {
+        /* not allowed to focus: the app has still moved */
+      }
+    })(),
   );
 });
