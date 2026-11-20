@@ -46,8 +46,8 @@ export class SqlStats {
     this.pending = [];
   }
 
-  /** The statements that read the most rows, most first. */
-  report(limit = 25) {
+  /** The statements that read (or, by "written", wrote) the most rows, most first. */
+  report(limit = 25, by: "read" | "written" = "read") {
     this.settle();
     const all = [...this.byStatement.values()];
     const sum = (k: "rowsRead" | "rowsWritten" | "calls") => all.reduce((n, s) => n + s[k], 0);
@@ -57,7 +57,7 @@ export class SqlStats {
       calls: sum("calls"),
       rowsRead: sum("rowsRead"),
       rowsWritten: sum("rowsWritten"),
-      top: all.sort((a, b) => b.rowsRead - a.rowsRead).slice(0, limit),
+      top: all.sort((a, b) => (by === "written" ? b.rowsWritten - a.rowsWritten : b.rowsRead - a.rowsRead)).slice(0, limit),
     };
   }
 }

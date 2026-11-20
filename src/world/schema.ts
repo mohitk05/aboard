@@ -341,6 +341,21 @@ export const MIGRATIONS: string[] = [
     ) WHERE stop_id IN (SELECT id FROM stops) GROUP BY user_id, stop_id;
   DROP TABLE _journeys;
   `,
+  /* 13: trains' progress is worked out, not written every tick */ `
+  -- Writing every running train's progress on every tick was ~90% of all rows written. Now a
+  -- train's progress is stored as of a tick (progress_tick), and only rewritten when it arrives,
+  -- departs, turns round or is moved; in between, trips_now works it out from how many ticks have
+  -- passed (world_meta tick_count): each tick a moving train covers speed × 5 minutes of track, and
+  -- a standing one waits 5 more minutes. Read trains from trips_now; write to trips.
+  ALTER TABLE trips ADD COLUMN progress_tick INTEGER NOT NULL DEFAULT 0;
+  INSERT INTO world_meta (key, value) VALUES ('tick_count', '0') ON CONFLICT (key) DO NOTHING;
+  CREATE VIEW trips_now AS
+    SELECT id, vehicle_id, route_id, state, active, speed_kmh, stop_index,
+           progress + MAX(0, (SELECT CAST(value AS INTEGER) FROM world_meta WHERE key = 'tick_count') - progress_tick)
+             * (CASE state WHEN 'MOVING' THEN speed_kmh * 5.0 / 60 WHEN 'STATIONARY' THEN 5.0 ELSE 0 END) AS progress,
+           stop_at, created_at, progress_tick
+    FROM trips;
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

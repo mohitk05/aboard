@@ -70,6 +70,8 @@ type TripRow = {
   progress: number;
   stop_at: number | null;
   created_at: number;
+  /** The tick `progress` was stored at; read trains from trips_now, which works out progress since. */
+  progress_tick: number;
 };
 type UserRow = {
   id: string;
@@ -257,8 +259,8 @@ export class World extends DurableObject<Env> {
   }
 
   /** Which SQL statements read the most rows since this object woke (admin only). */
-  sqlReport(limit?: number) {
-    return this.sqlStats.report(limit);
+  sqlReport(limit?: number, by?: "read" | "written") {
+    return this.sqlStats.report(limit, by);
   }
 
   // ======================= world clock =======================
@@ -289,8 +291,10 @@ export class World extends DurableObject<Env> {
   tick(now: number): TickSummary {
     const summary: TickSummary = { tripsAdvanced: 0, arrivals: 0, departures: 0, boarded: 0, alighted: 0, missed: 0 };
     this.ctx.storage.transactionSync(() => {
+      const ticks = this.tickCount() + 1; // this tick, once it's done
       this.tickPassengers(summary);
-      this.tickTrips(now, summary);
+      this.tickTrips(now, summary, ticks);
+      this.sql.exec("UPDATE world_meta SET value = ? WHERE key = 'tick_count'", String(ticks));
       this.noticeApproaching(now);
       this.sql.exec(
         "INSERT INTO world_meta (key, value) VALUES ('last_tick_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -303,6 +307,11 @@ export class World extends DurableObject<Env> {
     this.tickBots(now);
     this.broadcast({ type: "tick", at: now, summary });
     return summary;
+  }
+
+  /** How many ticks the world has run: trains' progress is worked out from it (see trips_now). */
+  private tickCount(): number {
+    return Number(this.sql.exec<{ value: string }>("SELECT value FROM world_meta WHERE key = 'tick_count'").one().value);
   }
 
   /** When the world last advanced (ms), or null if it never has. */
@@ -388,7 +397,8 @@ export class World extends DurableObject<Env> {
             tag: `trip-${u.ticket_id}`,
           });
         } else {
-          this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", here, u.id);
+          // (Only when it changes: most ticks, the train is still between the same two stations.)
+          if (u.current_stop_id !== here) this.sql.exec("UPDATE users SET current_stop_id = ? WHERE id = ?", here, u.id);
           // Stopped at a station on the way: a look at its market from the platform.
           if (stationStatus(trip, trip.stop_index) === "at-platform") {
             const m = this.marketAt(stopRows[trip.stop_index]!, Date.now());
@@ -399,8 +409,13 @@ export class World extends DurableObject<Env> {
     }
   }
 
-  private tickTrips(now: number, summary: TickSummary): void {
-    const trips = this.sql.exec<TripRow>("SELECT * FROM trips WHERE active = 1").toArray();
+  /**
+   * Move the trains on by one tick. Only changes of state are written (arriving, departing,
+   * turning round, retiring), stored as of `ticks` (this tick, done); a train's progress in between
+   * is worked out by trips_now, so it isn't written every tick.
+   */
+  private tickTrips(now: number, summary: TickSummary, ticks: number): void {
+    const trips = this.sql.exec<TripRow>("SELECT * FROM trips_now WHERE active = 1").toArray();
     for (const trip of trips) {
       const stops = this.routeStops(trip.route_id);
       const last = stops.length - 1;
@@ -412,23 +427,28 @@ export class World extends DurableObject<Env> {
         const km = kmIntoSegment(trip) + (trip.speed_kmh * WORLD_INTERVAL_MINUTES) / 60;
         if (km >= segmentKm) {
           this.sql.exec(
-            "UPDATE trips SET state = ?, stop_index = stop_index + 1, progress = 0, stop_at = ? WHERE id = ?",
+            "UPDATE trips SET state = ?, stop_index = stop_index + 1, progress = 0, progress_tick = ?, stop_at = ? WHERE id = ?",
             train.expect(trip.state, "arrive"),
+            ticks,
             now,
             trip.id,
           );
           summary.arrivals++;
         } else {
-          train.expect(trip.state, "travel");
-          this.sql.exec("UPDATE trips SET progress = ? WHERE id = ?", km, trip.id);
+          train.expect(trip.state, "travel"); // (trips_now has it `km` along after this tick)
         }
       } else if (trip.state === "STATIONARY") {
         const waited = minutesWaited(trip) + WORLD_INTERVAL_MINUTES;
         if (waited < stops[trip.stop_index]!.dwell_minutes) {
-          train.expect(trip.state, "dwell");
-          this.sql.exec("UPDATE trips SET progress = ? WHERE id = ?", waited, trip.id);
+          train.expect(trip.state, "dwell"); // (trips_now has it waiting `waited` minutes after this tick)
         } else if (trip.stop_index < last) {
-          this.sql.exec("UPDATE trips SET state = ?, progress = 0, stop_at = ? WHERE id = ?", train.expect(trip.state, "depart"), now, trip.id);
+          this.sql.exec(
+            "UPDATE trips SET state = ?, progress = 0, progress_tick = ?, stop_at = ? WHERE id = ?",
+            train.expect(trip.state, "depart"),
+            ticks,
+            now,
+            trip.id,
+          );
           summary.departures++;
         } else {
           // End of the line: everyone for here has got off during the dwell. Turn around onto
@@ -437,14 +457,20 @@ export class World extends DurableObject<Env> {
           const twin = route.return_of ?? `${route.id}~r`;
           if (this.sql.exec("SELECT 1 FROM routes WHERE id = ?", twin).toArray().length) {
             this.sql.exec(
-              "UPDATE trips SET route_id = ?, stop_index = 0, progress = 0, state = ?, stop_at = ? WHERE id = ?",
+              "UPDATE trips SET route_id = ?, stop_index = 0, progress = 0, progress_tick = ?, state = ?, stop_at = ? WHERE id = ?",
               twin,
+              ticks,
               train.expect(trip.state, "turn_around"),
               now,
               trip.id,
             );
           } else {
-            this.sql.exec("UPDATE trips SET state = ?, active = 0, progress = 0 WHERE id = ?", train.expect(trip.state, "retire"), trip.id);
+            this.sql.exec(
+              "UPDATE trips SET state = ?, active = 0, progress = 0, progress_tick = ? WHERE id = ?",
+              train.expect(trip.state, "retire"),
+              ticks,
+              trip.id,
+            );
           }
         }
       }
@@ -706,7 +732,7 @@ export class World extends DurableObject<Env> {
         .exec<TripRow & { pos: number; route_name: string; vehicle_name: string | null }>(
           `SELECT t.*, rs.position AS pos, r.name AS route_name, v.name AS vehicle_name
            FROM route_stops rs
-           CROSS JOIN trips t ON t.route_id = rs.route_id AND t.active = 1
+           CROSS JOIN trips_now t ON t.route_id = rs.route_id AND t.active = 1
            JOIN routes r ON r.id = t.route_id
            LEFT JOIN vehicles v ON v.id = t.vehicle_id
            WHERE rs.stop_id = ?`,
@@ -764,7 +790,7 @@ export class World extends DurableObject<Env> {
         .exec<TripRow & { pos: number; route_name: string; vehicle_name: string | null }>(
           `SELECT t.*, rs.position AS pos, r.name AS route_name, v.name AS vehicle_name
            FROM route_stops rs
-           CROSS JOIN trips t ON t.route_id = rs.route_id AND t.active = 1
+           CROSS JOIN trips_now t ON t.route_id = rs.route_id AND t.active = 1
            JOIN routes r ON r.id = t.route_id
            LEFT JOIN vehicles v ON v.id = t.vehicle_id
            WHERE rs.stop_id = ?`,
@@ -813,7 +839,7 @@ export class World extends DurableObject<Env> {
       const candidates = this.sql
         .exec<TripRow & { pos: number }>(
           `SELECT t.*, rs.position AS pos FROM route_stops rs
-           CROSS JOIN trips t ON t.route_id = rs.route_id AND t.active = 1
+           CROSS JOIN trips_now t ON t.route_id = rs.route_id AND t.active = 1
            WHERE rs.stop_id = ?`,
           stopId,
         )
@@ -862,7 +888,7 @@ export class World extends DurableObject<Env> {
       if (line.return_of) throw badRequest("That's a line's return run: change the line itself.");
       const stops = this.routeInputStops(input.stops);
       const twinId = `${id}~r`;
-      const trips = this.sql.exec<TripRow>("SELECT * FROM trips WHERE route_id IN (?, ?)", id, twinId).toArray();
+      const trips = this.sql.exec<TripRow>("SELECT * FROM trips_now WHERE route_id IN (?, ?)", id, twinId).toArray();
       const ticketed = trips.length
         ? this.sql.exec(`SELECT 1 FROM tickets WHERE trip_id IN (${trips.map(() => "?").join(",")}) LIMIT 1`, ...trips.map((t) => t.id)).toArray()
         : [];
@@ -887,6 +913,7 @@ export class World extends DurableObject<Env> {
         this.writeRouteStops(id, stops);
         this.forgetNetwork();
         const now = Date.now();
+        const ticks = this.tickCount();
         for (const t of trips) {
           const at = along(this.routeStops(t.route_id));
           const target = share.get(t.id)! * at.at(-1)!;
@@ -896,11 +923,24 @@ export class World extends DurableObject<Env> {
             while (i < last - 1 && at[i + 1]! <= target) i++;
             const km = Math.min(Math.max(0, target - at[i]!), Math.max(0, at[i + 1]! - at[i]! - 0.1));
             const departed = now - (km / t.speed_kmh) * 3_600_000;
-            this.sql.exec("UPDATE trips SET stop_index = ?, progress = ?, stop_at = ? WHERE id = ?", i, km, Math.round(departed), t.id);
+            this.sql.exec(
+              "UPDATE trips SET stop_index = ?, progress = ?, progress_tick = ?, stop_at = ? WHERE id = ?",
+              i,
+              km,
+              ticks,
+              Math.round(departed),
+              t.id,
+            );
           } else {
             // Standing (or not running): at the station nearest that point, starting its wait afresh.
             const i = at.reduce((best, km, j) => (Math.abs(km - target) < Math.abs(at[best]! - target) ? j : best), 0);
-            this.sql.exec("UPDATE trips SET stop_index = ?, progress = 0, stop_at = ? WHERE id = ?", t.state === "IDLE" ? 0 : i, now, t.id);
+            this.sql.exec(
+              "UPDATE trips SET stop_index = ?, progress = 0, progress_tick = ?, stop_at = ? WHERE id = ?",
+              t.state === "IDLE" ? 0 : i,
+              ticks,
+              now,
+              t.id,
+            );
           }
         }
       });
@@ -1014,14 +1054,15 @@ export class World extends DurableObject<Env> {
       const id = newId();
       const active = input.active ? 1 : 0;
       this.sql.exec(
-        `INSERT INTO trips (id, vehicle_id, route_id, state, active, speed_kmh, stop_index, progress, stop_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
+        `INSERT INTO trips (id, vehicle_id, route_id, state, active, speed_kmh, stop_index, progress, progress_tick, stop_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`,
         id,
         input.vehicle ?? null,
         input.route,
         active ? train.expect(train.def.initial, "start") : train.def.initial,
         active,
         input.speedKmh ?? DEFAULT_SPEED_KMH,
+        this.tickCount(),
         active ? Date.now() : null,
         Date.now(),
       );
@@ -1033,7 +1074,7 @@ export class World extends DurableObject<Env> {
 
   listTrips(activeOnly: boolean) {
     return this.sql
-      .exec<TripRow>(`SELECT * FROM trips ${activeOnly ? "WHERE active = 1" : ""} ORDER BY created_at`)
+      .exec<TripRow>(`SELECT * FROM trips_now ${activeOnly ? "WHERE active = 1" : ""} ORDER BY created_at`)
       .toArray()
       .map((t) => this.tripOut(t));
   }
@@ -1049,8 +1090,15 @@ export class World extends DurableObject<Env> {
   /** Admin: change how fast a train runs. Takes effect from the next tick; arrival times update now. */
   setTripSpeed(id: string, speedKmh: number) {
     return guard(() => {
-      this.tripRow(id);
-      this.sql.exec("UPDATE trips SET speed_kmh = ? WHERE id = ?", speedKmh, id);
+      const trip = this.tripRow(id);
+      // Keep the progress made so far at the old speed: store it as of now, then change speed.
+      this.sql.exec(
+        "UPDATE trips SET progress = ?, progress_tick = ?, speed_kmh = ? WHERE id = ?",
+        trip.progress,
+        this.tickCount(),
+        speedKmh,
+        id,
+      );
       return this.tripOut(this.tripRow(id));
     });
   }
@@ -1060,8 +1108,9 @@ export class World extends DurableObject<Env> {
       const trip = this.tripRow(id);
       const started = train.expect(trip.state, "start");
       this.sql.exec(
-        "UPDATE trips SET active = 1, state = ?, stop_index = 0, progress = 0, stop_at = ? WHERE id = ?",
+        "UPDATE trips SET active = 1, state = ?, stop_index = 0, progress = 0, progress_tick = ?, stop_at = ? WHERE id = ?",
         started,
+        this.tickCount(),
         Date.now(),
         id,
       );
@@ -1092,18 +1141,20 @@ export class World extends DurableObject<Env> {
         // As if it left the station long enough ago to have covered `km`.
         const departed = now - (km / trip.speed_kmh) * 3_600_000;
         this.sql.exec(
-          "UPDATE trips SET state = ?, stop_index = ?, progress = ?, stop_at = ? WHERE id = ?",
+          "UPDATE trips SET state = ?, stop_index = ?, progress = ?, progress_tick = ?, stop_at = ? WHERE id = ?",
           placed,
           input.stopIndex,
           km,
+          this.tickCount(),
           Math.round(departed),
           id,
         );
       } else {
         this.sql.exec(
-          "UPDATE trips SET state = ?, stop_index = ?, progress = 0, stop_at = ? WHERE id = ?",
+          "UPDATE trips SET state = ?, stop_index = ?, progress = 0, progress_tick = ?, stop_at = ? WHERE id = ?",
           placed,
           input.stopIndex,
+          this.tickCount(),
           now,
           id,
         );
@@ -1395,7 +1446,8 @@ export class World extends DurableObject<Env> {
     for (const o of [...market.sells, ...market.buys])
       this.sql.exec(
         `INSERT INTO price_seen (user_id, stop_id, good, price, at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT (user_id, stop_id, good) DO UPDATE SET price = excluded.price, at = excluded.at`,
+         ON CONFLICT (user_id, stop_id, good) DO UPDATE SET price = excluded.price, at = excluded.at
+         WHERE price != excluded.price OR excluded.at - at > 1800000`,
         userId,
         stopId,
         o.good,
@@ -2744,7 +2796,7 @@ export class World extends DurableObject<Env> {
   private routeRow = (id: string) =>
     this.one<{ id: string; name: string; return_of: string | null }>("SELECT * FROM routes WHERE id = ?", id, "Route");
   private vehicleRow = (id: string) => this.one<{ id: string; name: string }>("SELECT * FROM vehicles WHERE id = ?", id, "Vehicle");
-  private tripRow = (id: string) => this.one<TripRow>("SELECT * FROM trips WHERE id = ?", id, "Trip");
+  private tripRow = (id: string) => this.one<TripRow>("SELECT * FROM trips_now WHERE id = ?", id, "Trip");
   private userRow = (id: string) => this.one<UserRow>("SELECT * FROM users WHERE id = ?", id, "User");
   private interestRow = (id: string) => this.one<{ id: string }>("SELECT id FROM interests WHERE id = ?", id, "Interest");
 

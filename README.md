@@ -103,7 +103,7 @@ Admins don't need a `currentStop`. Then create stops, routes and trips with the 
 
 `POST /api/admin/tick` (admin only) advances the world one tick immediately, which helps when testing by hand.
 
-`GET /api/admin/sql-stats` (admin only) shows which SQL statements read the most rows. The free plan allows 5M rows read a day, so check it if that number climbs. The rail network is kept in the World's memory, and the web app polls only while its live connection is down.
+`GET /api/admin/sql-stats` (admin only) shows which SQL statements read the most rows (`?by=written`: wrote the most), since the World last woke. The free plan allows 100k rows written a day: trains' progress isn't written every tick (that was ~90k a day with ~300 trains), only when a train arrives, departs or turns round; the `trips_now` view works out how far along each train is from the world's tick count. The free plan allows 5M rows read a day, so check it if that number climbs. The rail network is kept in the World's memory, and the web app polls only while its live connection is down.
 
 ### Deploy
 

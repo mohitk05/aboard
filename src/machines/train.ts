@@ -12,7 +12,7 @@ export type TrainEvent = "start" | "dwell" | "depart" | "travel" | "arrive" | "t
 export const train = machine<TrainState, TrainEvent>({
   name: "Train",
   about: "A train running a line, moved by the world clock every 5 minutes. Lines run both ways: at the end of the line a train turns around onto the line's return twin.",
-  stored: "trips.state (with trips.active, trips.route_id, trips.stop_index, trips.progress)",
+  stored: "trips.state (with trips.active, trips.route_id, trips.stop_index, and trips.progress as of trips.progress_tick; read from the trips_now view, which adds the ticks since)",
   initial: "IDLE",
   states: {
     IDLE: { about: "Not running (never started, or retired at the end of a line with no return run).", on: { start: "STATIONARY" } },

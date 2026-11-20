@@ -1,6 +1,7 @@
-import { reset } from "cloudflare:test";
+import { reset, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, buildWorld } from "./helpers";
+import type { World } from "../src/world/world";
+import { api, buildWorld, worldStub } from "./helpers";
 
 // Cloudflare bills the World's SQLite by rows read, and the free plan stops at 5M a day. These
 // pin the cheap paths: a station's board reads its own lines' trains, not every train in the
@@ -59,5 +60,40 @@ describe("rows read", () => {
     await api("POST", "/trip", { token: admin, body: { trip: { route: farEast.id, active: true } } });
     const board = (await api("GET", `/stop/${vlad.id}/board`)).data;
     expect(board.departures.map((d: { to: string }) => d.to)).toContain("Tokyo");
+  });
+
+  it("a tick writes when trains arrive or leave, not every train's progress", async () => {
+    // 20 trains standing at Lisbon; the dwell there is longer than a few ticks.
+    for (let i = 0; i < 20; i++) await api("POST", "/trip", { token: admin, body: { trip: { route: route.id, active: true } } });
+    const tick = () => runInDurableObject(worldStub(), (w: World) => void w.tick(Date.now()));
+    const written = async (run: () => Promise<unknown>) => {
+      const read = async () => (await api("GET", "/admin/sql-stats?limit=1", { token: admin })).data.rowsWritten as number;
+      const before = await read();
+      await run();
+      return (await read()) - before;
+    };
+    // Three ticks of waiting (they leave on the fourth, after 20 minutes). Writing each train's
+    // progress would be 60 rows over three ticks; now it's only the world's clock (2 rows a tick,
+    // and one more the first time it's set).
+    expect(await written(async () => (await tick(), await tick(), await tick()))).toBeLessThanOrEqual(3 * 2 + 1);
+    // Leaving is a change of state, so that's written: once for each train.
+    expect(await written(tick)).toBe(2 + 20);
+  });
+});
+
+describe("trains' progress, worked out between ticks", () => {
+  it("moves a train speed × 5 minutes a tick, and keeps the way covered when its speed changes", async () => {
+    const trip = (await api("POST", "/trip", { token: admin, body: { trip: { route: route.id, active: true, speedKmh: 300 } } })).data;
+    // Paris → Berlin is far longer than a few ticks' travel.
+    await api("POST", `/trip/${trip.id}/position`, { token: admin, body: { stopIndex: 2, km: 100 } });
+    const tick = () => runInDurableObject(worldStub(), (w: World) => void w.tick(Date.now()));
+    const progress = async () => (await api("GET", `/trip/${trip.id}`, { token: admin })).data.progress as number;
+    expect(await progress()).toBe(100);
+    for (let i = 0; i < 3; i++) await tick();
+    expect(await progress()).toBeCloseTo(100 + 3 * 25, 6); // 300 km/h × 5 min = 25 km a tick
+    await api("PATCH", `/trip/${trip.id}`, { token: admin, body: { trip: { speedKmh: 600 } } });
+    expect(await progress()).toBeCloseTo(175, 6);
+    await tick();
+    expect(await progress()).toBeCloseTo(175 + 50, 6);
   });
 });

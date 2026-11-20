@@ -455,7 +455,9 @@ app.post("/admin/tick", admin, async (c) => {
   return ok(c, summary);
 });
 /** Which SQL statements read the most rows (Cloudflare bills by rows read), since the world last woke. */
-app.get("/admin/sql-stats", admin, async (c) => ok(c, await world(c.env).sqlReport(Number(c.req.query("limit")) || 25)));
+app.get("/admin/sql-stats", admin, async (c) =>
+  ok(c, await world(c.env).sqlReport(Number(c.req.query("limit")) || 25, c.req.query("by") === "written" ? "written" : "read")),
+);
 /** Build the demo Lisbon → Vladivostok line and start a train on it. Safe to repeat. */
 // Invites: signing up needs one.
 /** Public: is this invite code usable? */

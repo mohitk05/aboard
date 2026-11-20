@@ -62,7 +62,7 @@ Refusals (what the player is told):
 
 A train running a line, moved by the world clock every 5 minutes. Lines run both ways: at the end of the line a train turns around onto the line's return twin.
 
-**Stored in:** trips.state (with trips.active, trips.route_id, trips.stop_index, trips.progress)
+**Stored in:** trips.state (with trips.active, trips.route_id, trips.stop_index, and trips.progress as of trips.progress_tick; read from the trips_now view, which adds the ticks since)
 
 ```mermaid
 stateDiagram-v2
