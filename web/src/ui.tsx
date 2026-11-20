@@ -1,5 +1,6 @@
 import { useId, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { Link } from "react-router";
+import { AVATARS } from "../../src/game/avatars";
 
 // Aboard's UI kit: native HTML elements with Aboard's own styling (web/src/styles.css, described in
 // docs/Design.md). Screens use only these.
@@ -247,5 +248,36 @@ export function Splash({ error, onRetry }: { error?: string; onRetry?: () => voi
         <p className="muted">Checking the timetable…</p>
       )}
     </div>
+  );
+}
+
+/** Someone's profile picture, or the first letter of their name if they haven't one. Decorative: their name is beside it. */
+export function Avatar({ image, name, small }: { image: string | null | undefined; name: string; small?: boolean }) {
+  return (
+    <span className={`avatar${small ? " avatar-small" : ""}`} aria-hidden="true">
+      {image ? <img src={image} alt="" loading="lazy" /> : name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
+/** Choose a profile picture (or none): radio buttons, so it works with a keyboard and screen readers. */
+export function AvatarPicker({ value, onChange, legend = "Profile picture" }: { value: string | null; onChange: (v: string | null) => void; legend?: string }) {
+  const name = useId();
+  return (
+    <fieldset className="avatar-picker">
+      <legend>{legend}</legend>
+      <div className="avatar-grid">
+        {AVATARS.map((a) => (
+          <label key={a.src} className="avatar-choice">
+            <input type="radio" name={name} checked={value === a.src} onChange={() => onChange(a.src)} />
+            <img src={a.src} alt={a.alt} loading="lazy" />
+          </label>
+        ))}
+        <label className="avatar-choice avatar-none">
+          <input type="radio" name={name} checked={!value} onChange={() => onChange(null)} />
+          <span>None</span>
+        </label>
+      </div>
+    </fieldset>
   );
 }

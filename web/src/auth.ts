@@ -28,6 +28,8 @@ export interface SignupInput {
   age: number;
   interests: string[];
   profileMode: "PUBLIC" | "PRIVATE";
+  /** A profile picture (one of the avatars), if they chose one. */
+  image?: string;
   /** The invite code from the admin's link. */
   invite: string;
 }

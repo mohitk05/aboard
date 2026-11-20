@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api, type Interest, type Me } from "../api";
 import { meKey, useLogout, useMe } from "../auth";
 import { useTravels, type Travels } from "../people";
-import { Badge, Button, Card, Check, FormError, Notice, TagPicker, TextField } from "../ui";
+import { AvatarPicker, Badge, Button, Card, Check, FormError, Notice, TagPicker, TextField } from "../ui";
 import { NotificationSettings } from "./Notify";
 import { Shell } from "./Shell";
 
@@ -12,11 +12,19 @@ export function Profile() {
   const travels = useTravels(me.id, true);
   return (
     <Shell>
-      <section className="board" aria-label="Your profile">
-        <div className="board-label">{travels.data?.level.name ?? "Traveller"}</div>
-        <div className="board-title">{me.username}</div>
-        <div className="board-sub">{me.email}</div>
+      <section className="board board-with-avatar" aria-label="Your profile">
+        {me.image && (
+          <span className="avatar avatar-large" aria-hidden="true">
+            <img src={me.image} alt="" />
+          </span>
+        )}
+        <div>
+          <div className="board-label">{travels.data?.level.name ?? "Traveller"}</div>
+          <div className="board-title">{me.username}</div>
+          <div className="board-sub">{me.email}</div>
+        </div>
       </section>
+      <PictureForm me={me} />
       <FormError message={travels.error?.message} />
       {travels.data && <TravelsCard t={travels.data} />}
       <ProfileForm me={me} />
@@ -24,6 +32,39 @@ export function Profile() {
       <PasswordForm />
       <LogOut />
     </Shell>
+  );
+}
+
+/** Choose (or change, or remove) your profile picture. */
+function PictureForm({ me }: { me: Me }) {
+  const qc = useQueryClient();
+  const [image, setImage] = useState<string | null>(me.image);
+  const save = useMutation({
+    mutationFn: () => api<Me>("PATCH", "/user/me", { user: { image } }),
+    onSuccess: (m) => {
+      qc.setQueryData(meKey, m);
+      qc.invalidateQueries({ queryKey: ["fellow"] });
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
+    },
+  });
+  return (
+    <Card aria-labelledby="picture-title" role="region">
+      <form
+        className="form-wide"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <h2 id="picture-title">Profile picture</h2>
+        <AvatarPicker legend="Choose how other travellers see you" value={image} onChange={setImage} />
+        <FormError message={save.error?.message} />
+        {save.isSuccess && image === me.image && <Notice tone="successful">Saved.</Notice>}
+        <Button kind="primary" type="submit" disabled={save.isPending || image === me.image}>
+          Save picture
+        </Button>
+      </form>
+    </Card>
   );
 }
 

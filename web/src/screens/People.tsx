@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import type { Me } from "../api";
 import { useMe } from "../auth";
 import { useFellowTravellers, useStartChat } from "../people";
-import { Badge, Button, Card, FormError, Notice, Tags } from "../ui";
+import { Avatar, Badge, Button, Card, FormError, Notice, Tags } from "../ui";
 import { Shell } from "./Shell";
 
 export function People() {
@@ -33,9 +33,7 @@ export function People() {
         <ul className="people">
           {fellow.data?.map(({ user, score }) => (
             <li key={user.id}>
-              <div className="avatar" aria-hidden>
-                {user.username.slice(0, 1).toUpperCase()}
-              </div>
+              <Avatar image={user.image} name={user.username} />
               <div className="person">
                 <strong>
                   {user.username}

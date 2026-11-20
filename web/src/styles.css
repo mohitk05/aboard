@@ -880,6 +880,95 @@ select.input {
   color: var(--label);
   font-family: var(--font-title);
 }
+.avatar {
+  overflow: hidden;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-small {
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
+  vertical-align: middle;
+  margin-right: 6px;
+  display: inline-grid;
+}
+.avatar-large {
+  width: 72px;
+  height: 72px;
+  font-size: 1.75rem;
+}
+/* Choosing a profile picture: radio buttons drawn as the pictures. */
+.avatar-picker {
+  border: 0;
+  margin: 0 0 16px;
+  padding: 0;
+}
+.avatar-picker legend {
+  padding: 0;
+  margin-bottom: 8px;
+  color: var(--label-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+}
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+}
+.avatar-choice {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.avatar-choice input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.avatar-choice img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0.7;
+  /* Taps go through to the (invisible) radio button over it. */
+  pointer-events: none;
+}
+.avatar-choice:hover img {
+  opacity: 1;
+}
+.avatar-choice:has(input:checked) {
+  border-color: var(--label);
+}
+.avatar-choice:has(input:checked) img {
+  opacity: 1;
+}
+.avatar-choice:has(input:focus-visible) {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.avatar-none {
+  border: 1px dashed var(--hairline);
+  color: var(--label-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+}
 .people,
 .inbox {
   list-style: none;
@@ -1546,4 +1635,11 @@ ol.list.standings {
 .travel-badges .badge {
   margin-left: 0;
   justify-self: start;
+}
+
+/* The Profile's headline band, with your picture beside your name. */
+.board-with-avatar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }

@@ -29,7 +29,7 @@ import { canTrade } from "../../../src/machines/traveller";
 import { factoryState } from "../../../src/machines/factory";
 import { formatAgo, formatClock, formatIn } from "../lib/format";
 import { useNow } from "../lib/useNow";
-import { Badge, Board, Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
+import { Avatar, Badge, Board, Button, Card, FormError, Notice, SelectField, TextField } from "../ui";
 import { useWorldFocus } from "../world3d/focus";
 import { Shell } from "./Shell";
 
@@ -590,7 +590,8 @@ function Standings({ catalog }: { catalog: Catalog }) {
           {rows.map((p, n) => (
             <li key={p.id ?? `private-${n}`} className={p.you ? "is-you" : ""}>
               <span>
-                <span className="standing-rank">{n + 1}</span> {p.username ?? "A private player"}
+                <span className="standing-rank">{n + 1}</span> <Avatar image={p.image} name={p.username ?? "?"} small />
+                {p.username ?? "A private player"}
                 {p.you && <span className="muted small"> · you</span>}
                 {p.bot && <Badge>Bot</Badge>}
                 <span className="muted small standing-factories">

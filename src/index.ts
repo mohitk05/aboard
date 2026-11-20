@@ -3,6 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { sign, verify } from "hono/jwt";
 import { z } from "zod";
+import { isAvatar } from "./game/avatars";
 import { ALL_USER_ROLES, MAX_SPEED_KMH, MIN_SPEED_KMH, PROFILE_MODES, USER_ROLES, type UserRole } from "./lib/constants";
 import { hashPassword, verifyPassword } from "./lib/password";
 import { findStopPhoto } from "./lib/photo";
@@ -42,6 +43,9 @@ const id = z.string().uuid();
 /** A line, or its return twin (the line's id + "~r"). */
 const routeId = z.string().regex(/^[0-9a-f-]{36}(~r)?$/i, "Invalid line id");
 const latLng = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
+/** A profile picture: one of the avatars players choose from (src/game/avatars.ts), or a web address. */
+const profileImage = z.union([z.string().refine(isAvatar, "Not one of the profile pictures."), z.string().url().max(2048)]);
+
 const schemas = {
   stop: z.object({
     stop: z.object({
@@ -83,7 +87,7 @@ const schemas = {
       /** An invite code from an admin. Required to sign up yourself. */
       invite: z.string().trim().min(4).max(64).optional(),
       interests: z.array(id).max(50).optional(),
-      image: z.string().url().max(2048).optional(),
+      image: profileImage.optional(),
       profileMode: z.enum(PROFILE_MODES).optional(),
     }),
   }),
@@ -103,7 +107,7 @@ const schemas = {
   profile: z.object({
     user: z.object({
       interests: z.array(id).max(50).optional(),
-      image: z.string().url().max(2048).nullable().optional(),
+      image: profileImage.nullable().optional(),
       profileMode: z.enum(PROFILE_MODES).optional(),
       currentStop: id.optional(),
     }),

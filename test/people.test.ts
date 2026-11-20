@@ -66,3 +66,19 @@ describe("choosing a starting station", () => {
     expect(r.status).toBe(403);
   });
 });
+
+describe("profile pictures", () => {
+  it("can be one of the avatars, chosen at signup or later, or none", async () => {
+    const { token, user } = await signup(undefined, { image: "/avatars/3.webp" });
+    expect(user.image).toBe("/avatars/3.webp");
+    const set = (image: string | null) => api("PATCH", "/user/me", { token, body: { user: { image } } });
+    expect((await set("/avatars/7.webp")).data.image).toBe("/avatars/7.webp");
+    expect((await set("/avatars/9.webp")).status).toBe(400); // not one of them
+    expect((await set("/etc/passwd")).status).toBe(400);
+    expect((await set(null)).data.image).toBeNull();
+    // Others see it.
+    await set("/avatars/1.webp");
+    const other = await signup();
+    expect((await api("GET", `/user/${user.id}`, { token: other.token })).data.image).toBe("/avatars/1.webp");
+  });
+});

@@ -58,9 +58,16 @@ test("F4: edit your profile and change your password", async ({ page }) => {
   const travels = page.getByRole("region", { name: "Travels" });
   await expect(travels.getByText("Newcomer")).toBeVisible();
   await expect(travels.getByText(/Places you've been \(\d+\)/)).toBeVisible();
+  // Choose a profile picture: it shows at the top of the profile.
+  const picture = page.getByRole("region", { name: "Profile picture" });
+  // (Each picture is covered by its own invisible radio button, so a tap anywhere on it chooses it.)
+  await picture.getByRole("radio", { name: /bald, bearded man/ }).check();
+  await picture.getByRole("button", { name: "Save picture" }).click();
+  await expect(picture.getByText("Saved.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Your profile" }).locator('img[src="/avatars/3.webp"]')).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Chess" })).toBeChecked();
   await checkTag(page, "Music");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "Music" })).toBeChecked();

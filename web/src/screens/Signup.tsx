@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { api, type Interest, type Stop } from "../api";
 import { useSignup } from "../auth";
-import { Button, Card, Check, FormError, Notice, Page, TagPicker, TextField } from "../ui";
+import { AvatarPicker, Button, Card, Check, FormError, Notice, Page, TagPicker, TextField } from "../ui";
 
 /** Aboard is invite-only: the signup form needs a valid invite code (from an admin's link). */
 export function Signup() {
@@ -70,6 +70,7 @@ function SignupForm({ invite, note }: { invite: string; note: string | null }) {
   const [age, setAge] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [isPrivate, setPrivate] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
   // Everyone starts at home, in Berlin: that's where your warehouse and factories will be.
   const home = useQuery({ queryKey: ["catalog"], queryFn: () => api<{ home: Stop | null }>("GET", "/game/catalog") }).data?.home;
 
@@ -82,6 +83,7 @@ function SignupForm({ invite, note }: { invite: string; note: string | null }) {
       age: Number(age),
       interests: picked,
       profileMode: isPrivate ? "PRIVATE" : "PUBLIC",
+      ...(image ? { image } : {}),
       invite,
     });
   };
@@ -156,6 +158,8 @@ function SignupForm({ invite, note }: { invite: string; note: string | null }) {
               onChange={setPicked}
             />
           )}
+
+          <AvatarPicker legend="Pick a profile picture (optional)" value={image} onChange={setImage} />
 
           <Check checked={isPrivate} onValue={setPrivate}>
             Travel privately (other travellers won't see you or where you are)

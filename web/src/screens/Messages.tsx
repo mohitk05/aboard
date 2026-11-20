@@ -5,7 +5,7 @@ import { useMe } from "../auth";
 import { formatClock } from "../lib/format";
 import { useNow } from "../lib/useNow";
 import { useInbox, useSend, useThread } from "../people";
-import { Button, Card, FormError, TextArea } from "../ui";
+import { Avatar, Button, Card, FormError, TextArea } from "../ui";
 import { Shell } from "./Shell";
 
 export function Inbox() {
@@ -26,9 +26,7 @@ export function Inbox() {
           {inbox.data?.map((c) => (
             <li key={c.id}>
               <Link to={`/messages/${c.id}`}>
-                <span className="avatar" aria-hidden>
-                  {(c.with[0]?.username ?? "?").slice(0, 1).toUpperCase()}
-                </span>
+                <Avatar image={c.with[0]?.image} name={c.with[0]?.username ?? "?"} />
                 <span className="inbox-text">
                   <strong>{c.with.map((u) => u.username).join(", ") || "Just you"}</strong>
                   <span className="muted small inbox-last">
