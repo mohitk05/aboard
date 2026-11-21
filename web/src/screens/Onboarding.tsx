@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, type Departure, type Me, type Stop } from "../api";
 import { meKey, useMe } from "../auth";
@@ -73,6 +73,13 @@ export function Onboarding() {
   const towns = plan?.towns ?? [];
   const town = towns[0] ?? null;
 
+  // Tell screen readers what's on the new screen (the visible content changes in place).
+  const main = useRef<HTMLElement>(null);
+  const [announce, setAnnounce] = useState("");
+  useEffect(() => {
+    setAnnounce(main.current?.querySelector("h1, h2")?.textContent ?? "");
+  }, [screen]);
+
   const leave = () => navigate(GAME);
   const next = () => setScreen((s) => Math.min(STEPS - 1, s + 1));
   // One step per screen: the strip and "Step n of 6" move on with every screen.
@@ -101,7 +108,12 @@ export function Onboarding() {
           <li key={i} className={i < step ? "on" : undefined} />
         ))}
       </ol>
-      <main className="onb-body">{body}</main>
+      <p className="sr-only" role="status">
+        Step {step} of {STEPS}. {announce}
+      </p>
+      <main className="onb-body" ref={main}>
+        {body}
+      </main>
       {paint && <footer className="onb-foot">{footer}</footer>}
     </div>
   );

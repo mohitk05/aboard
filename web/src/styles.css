@@ -1686,7 +1686,7 @@ ol.list.standings {
   font: 600 0.6875rem/1 var(--font-sans);
   text-transform: uppercase;
   letter-spacing: var(--caps-track);
-  color: var(--label-3);
+  color: var(--label-2);
 }
 .onb-strip {
   display: flex;
@@ -1709,7 +1709,6 @@ ol.list.standings {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 12px;
   padding: 12px var(--gutter);
   overflow-y: auto;
@@ -1719,8 +1718,12 @@ ol.list.standings {
   flex: none;
 }
 .onb.is-paint .onb-body {
-  justify-content: flex-start;
   gap: 6px;
+}
+/* The panel sits at the bottom. Pushing it down with an auto margin (not justify-content: flex-end)
+   means a panel taller than the screen scrolls from its top, and its headline is never cut off. */
+.onb:not(.is-paint) .onb-body > :first-child {
+  margin-top: auto;
 }
 .onb-bar {
   display: flex;
@@ -1756,7 +1759,7 @@ ol.list.standings {
   background: none;
   border: 0;
   padding: 8px 0;
-  color: var(--label-3);
+  color: var(--label-2);
   font: 600 0.75rem/1 var(--font-sans);
   text-transform: uppercase;
   letter-spacing: var(--caps-track);
@@ -1793,6 +1796,26 @@ ol.list.standings {
   height: 100%;
   object-fit: cover;
 }
+@media (max-height: 700px) {
+  .onb-art {
+    height: 28dvh;
+  }
+  /* On a short screen the panel can be taller than the screen: it scrolls, and its action stays
+     in view at the bottom. */
+  .onb-card > .onb-bar {
+    position: sticky;
+    bottom: -12px;
+    z-index: 1;
+    margin: 0 -20px -8px;
+    padding: 14px 20px 8px;
+    background: #000;
+  }
+}
+@media (max-width: 380px) {
+  .onb-cta {
+    width: 150px;
+  }
+}
 .onb-title {
   font-size: clamp(1.9rem, 7vw, 2.3rem);
   line-height: 1.1;
@@ -1800,7 +1823,7 @@ ol.list.standings {
 }
 .onb-credit {
   font-size: 0.6875rem;
-  color: var(--label-3);
+  color: var(--label-2);
   margin-top: 6px;
 }
 .onb-card {
@@ -1868,7 +1891,7 @@ ol.list.standings {
   display: block;
   margin-top: 2px;
   font-size: 0.75rem;
-  color: var(--label-3);
+  color: var(--label-2);
 }
 .onb-ico {
   display: grid;

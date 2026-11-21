@@ -67,6 +67,21 @@ Rules for the new-player tutorial (`web/src/screens/Onboarding.tsx`, styles unde
 - **Real data over invented where possible,** and flag what is a stand-in. The towns and their figures are the tutorial's own until the game has towns that run out of things.
 - **Credit the paintings.** The story screens carry a small credit line under the text. They are public domain, but the credit stays.
 
+### Screen sizes and accessibility
+
+From a review against the `game-ui-ux` rules ([awesome-gamedev-agent-skills](https://github.com/gamedev-skills/awesome-gamedev-agent-skills)), run as a size sweep at 360 × 640 (small phone), 1280 × 720 (laptop) and 2560 × 1080 (ultrawide):
+
+- **A panel taller than the screen scrolls from its top.** Push the panel to the bottom with an auto margin on its first child, never with `justify-content: flex-end`: with `flex-end`, overflow runs off the top and the headline can't be reached. (Fault found: on a small phone the mission headline was cut off under the header.)
+- **The action stays in view.** On short screens (under 700px tall) the panel's action bar sticks to the bottom of the screen, so a tall panel never hides it.
+- **Short screens get a smaller painting,** so the story text isn't pushed behind the action bar.
+- **Narrow screens (under 380px) use a 150px action,** so the quiet link beside it doesn't wrap. It is still the same size on every screen at that width.
+- **Secondary text is at least 66% white** (`--label-2`), as in Accessibility below. `--label-3` (38% white) fails 4.5:1 on black and is for decoration only, never for words a player needs. (Fault found: the step label, the credit line and the town sub-lines used it.)
+- **A new screen is announced.** The visible content changes in place, so a hidden status line reads "Step n of 6" and the new headline to screen readers.
+- **Colour is never the only signal.** Red urgency is always beside words ("38 h of bread left").
+- **Known and accepted:** on a very short phone (about 640px tall) the home-base label on the map sits close to the progress strip on screens 5 and 6, since there is little map above the panel.
+
+The sweep is an e2e test (`e2e/onboarding.spec.ts`, "fits a small phone, a laptop and an ultrawide monitor"). It fails if anything scrolls sideways, the action is off screen, or the headline is under the header. It takes about 6 minutes, because the software-rendered globe is slow to resize.
+
 ### Checks before showing a set of screens
 
 1. Step labels and strips agree on every screen.
@@ -75,7 +90,8 @@ Rules for the new-player tutorial (`web/src/screens/Onboarding.tsx`, styles unde
 4. Nothing looks selected that isn't.
 5. Every icon is from the shared set and is an outline.
 6. Each screen says why it asks what it asks.
-7. Screenshots are taken from the real app at phone size (`SHOTS=<dir> npm run e2e -- onboarding` saves one per screen), not from a mockup, and checked against the mockup.
+7. The size sweep passes (the e2e test above), and secondary text is `--label-2` or brighter.
+8. Screenshots are taken from the real app at phone size (`SHOTS=<dir> npm run e2e -- onboarding` saves one per screen), not from a mockup, and checked against the mockup.
 
 ## Accessibility
 
