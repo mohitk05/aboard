@@ -22,7 +22,7 @@ Story screens: three short beats on the story page, each over one painting (see 
 
 - Players who like slow, real-time strategy: planning, waiting, checking in.
 - It should feel quiet, serious and a little melancholy, with care for the people you serve. It should not feel like chasing a leaderboard.
-- Progress is measured in **people served**, not only credits.
+- Progress is measured in **people served**, not only tokens.
 
 ## 4. Core loop (unchanged)
 
@@ -103,7 +103,7 @@ Not agreed. Ideas so far:
 ## 11. Known risks (from review of the current code)
 
 - **Alt-account funnelling.** Sales through player orders count towards weekly earnings, and order prices are not tied to market prices, so one person with two accounts can push one to the top. Exclude player-to-player trades from weekly earnings, or cap order prices against the market.
-- **Travel is almost free.** Fares are 0.01 credits per km, and cancelling a ticket refunds it in full. Time is the only cost.
+- **Travel is almost free.** Fares are 0.01 tokens per km (called credits in the code today), and cancelling a ticket refunds it in full. Time is the only cost.
 - **Orders bypass market price effects,** so players can buy materials from each other and skip the ride-out loop. Consider gating orders to a later level.
 - **Starter contracts can be farmed** (about 2.5× the price, refilled every half hour, only for players without a factory).
 - **Market griefing** on shallow markets (vanilla, and rare goods in general).
