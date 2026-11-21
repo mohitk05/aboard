@@ -74,8 +74,8 @@ export function Onboarding() {
 
   const leave = () => navigate(GAME);
   const next = () => setScreen((s) => Math.min(STEPS - 1, s + 1));
-  // Screens 1-3 are step 1 with the arrival; then one step each.
-  const step = screen <= 3 ? 1 : screen - 2;
+  // One step per screen: the strip and "Step n of 6" move on with every screen.
+  const step = screen + 1;
 
   // The story screens carry their actions in a bar at the bottom of the screen; the others in the
   // bottom of their panel (the `bar`), so the action stays with what it's about.
