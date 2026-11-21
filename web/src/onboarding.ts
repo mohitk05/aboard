@@ -31,16 +31,35 @@ export function distanceKm(a: Stop["coordinates"], b: Stop["coordinates"]): numb
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
-/** The stations nearest to home, nearest first, with the tutorial's figures. */
-export function nearestTowns(stops: Stop[], homeId: string, count = 2): Town[] {
+/** Every station but home, nearest first. */
+function byDistance(stops: Stop[], homeId: string): { stop: Stop; km: number }[] {
   const home = stops.find((s) => s.id === homeId);
   if (!home) return [];
   return stops
     .filter((s) => s.id !== homeId)
     .map((stop) => ({ stop, km: distanceKm(home.coordinates, stop.coordinates) }))
-    .sort((a, b) => a.km - b.km || a.stop.name.localeCompare(b.stop.name))
-    .slice(0, count)
-    .map((t, i) => ({ ...t, ...NEED[i]! }));
+    .sort((a, b) => a.km - b.km || a.stop.name.localeCompare(b.stop.name));
+}
+
+/** The tutorial's two places: where the ingredients are bought, and the towns that need the bread. */
+export interface Plan {
+  /** Where the first train goes: the nearest station, standing in for the station that sells the ingredients. */
+  market: Stop;
+  /** The towns that need bread, most urgent first: the next nearest stations. */
+  towns: Town[];
+}
+
+/**
+ * Berlin has no grain, so the first train goes to the nearest station (the market), and the bread
+ * goes to the next nearest (the towns in need). In a world with only one other station it does
+ * both jobs.
+ */
+export function tutorialPlan(stops: Stop[], homeId: string, townCount = 3): Plan | null {
+  const ranked = byDistance(stops, homeId);
+  const [first, ...rest] = ranked;
+  if (!first) return null;
+  const towns = (rest.length ? rest : [first]).slice(0, townCount).map((t, i) => ({ ...t, ...NEED[i]! }));
+  return { market: first.stop, towns };
 }
 
 /** A rough travel time in ms at the average train speed, for before there is a real departure. */

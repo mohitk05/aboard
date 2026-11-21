@@ -8,7 +8,7 @@ import { useCatalog } from "../game";
 import { formatClock, formatIn } from "../lib/format";
 import { Icon, type IconName } from "../lib/icons";
 import { useNow } from "../lib/useNow";
-import { FED_PER_BATCH, formatHoursLeft, nearestTowns, supplyRadiusKm, type Town } from "../onboarding";
+import { FED_PER_BATCH, formatHoursLeft, supplyRadiusKm, tutorialPlan, type Town } from "../onboarding";
 import { Button, Card, FormError } from "../ui";
 import { useWorld } from "../world";
 import { useWorldFocus } from "../world3d/focus";
@@ -69,7 +69,8 @@ export function Onboarding() {
   const [screen, setScreen] = useState(0);
   const home = useCatalog().data?.home ?? null;
   const world = useWorld();
-  const towns = home ? nearestTowns(world.stops, home.id, 3) : [];
+  const plan = home ? tutorialPlan(world.stops, home.id) : null;
+  const towns = plan?.towns ?? [];
   const town = towns[0] ?? null;
 
   const leave = () => navigate(GAME);
@@ -135,7 +136,7 @@ export function Onboarding() {
   if (screen === 3) {
     return frame(
       <>
-        <Focus home={home} town={null} routes={world.routes} label="Berlin Hauptbahnhof, your home base" />
+        <Focus home={home} others={[]} routes={world.routes} label="Berlin Hauptbahnhof, your home base" />
         <Card className="onb-card onb-center">
           <span className="onb-seal">
             <Icon name="coin" large />
@@ -151,7 +152,7 @@ export function Onboarding() {
     );
   }
 
-  if (!home || !town) {
+  if (!home || !town || !plan) {
     // A world with no other station, or still loading: nothing to feed yet.
     return frame(
       <Card className="onb-card">
@@ -166,13 +167,13 @@ export function Onboarding() {
     const shown = towns.slice(0, 2);
     return frame(
       <>
-        <Focus home={home} town={town.stop} routes={world.routes} label={`The line from ${home.name} to ${town.stop.name}`} />
+        <Focus home={home} others={[town.stop]} routes={world.routes} label={`The line from ${home.name} to ${town.stop.name}`} />
         <Card className="onb-card">
           <p className="eyebrow onb-urgent">
             <span className="live-dot" />
             {towns.length} {towns.length === 1 ? "town needs" : "towns near you need"} bread
           </p>
-          <h2>You are the only supply line within {supplyRadiusKm(shown).toLocaleString("en")} km.</h2>
+          <h2>You are the only supply line within {supplyRadiusKm([town]).toLocaleString("en")} km.</h2>
           <p className="muted">
             The line to {town.stop.name} is lit. It is the town closest to running out.
           </p>
@@ -201,6 +202,7 @@ export function Onboarding() {
     <Mission
       me={me}
       home={home}
+      market={plan.market}
       town={town}
       routes={world.routes}
       frame={frame}
@@ -215,6 +217,7 @@ export function Onboarding() {
 function Mission({
   me,
   home,
+  market,
   town,
   routes,
   frame,
@@ -224,6 +227,8 @@ function Mission({
 }: {
   me: Me;
   home: Stop;
+  /** Where the first train goes: the station that sells the ingredients. */
+  market: Stop;
   town: Town;
   routes: ReturnType<typeof useWorld>["routes"];
   frame: (body: ReactNode, paint?: boolean, footer?: ReactNode) => ReactNode;
@@ -239,10 +244,10 @@ function Mission({
     queryFn: () => api<Departure[]>("GET", `/stop/${home.id}/departures`),
     enabled: atHome,
   });
-  const dep = departures.data?.find((d) => d.destinations.some((x) => x.stop.id === town.stop.id));
-  const dest = dep?.destinations.find((x) => x.stop.id === town.stop.id);
+  const dep = departures.data?.find((d) => d.destinations.some((x) => x.stop.id === market.id));
+  const dest = dep?.destinations.find((x) => x.stop.id === market.id);
   const board = useMutation({
-    mutationFn: () => api("POST", "/ticket/buy", { ticket: { trip: dep!.trip.id, from: home.id, to: town.stop.id } }),
+    mutationFn: () => api("POST", "/ticket/buy", { ticket: { trip: dep!.trip.id, from: home.id, to: market.id } }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: meKey });
       go();
@@ -250,7 +255,7 @@ function Mission({
   });
 
   const flow: { icon: IconName; title: string; text: string }[] = [
-    { icon: "wheat", title: "Grain, salt, yeast", text: "Plain ingredients" },
+    { icon: "wheat", title: "Grain, salt, yeast", text: `Bought in ${market.name}` },
     { icon: "oven", title: "Your bakery", text: "2 hours a batch" },
     { icon: "loaf", title: "24 loaves", text: `Feeds about ${FED_PER_BATCH}` },
   ];
@@ -267,7 +272,7 @@ function Mission({
 
   return frame(
     <>
-      <Focus home={home} town={town.stop} routes={routes} label={`The line from ${home.name} to ${town.stop.name}`} />
+      <Focus home={home} others={[market, town.stop]} routes={routes} label={`${home.name}, ${market.name} for the ingredients, ${town.stop.name} for the bread`} />
       <Card className="onb-card">
         <p className="eyebrow onb-urgent">
           <span className="live-dot" />
@@ -275,7 +280,8 @@ function Mission({
         </p>
         <h2>Make bread. Save {town.stop.name}.</h2>
         <p className="muted">
-          {town.people.toLocaleString("en")} people are waiting on one thing. You make it, and you carry it.
+          {town.people.toLocaleString("en")} people in {town.stop.name} are waiting on one thing. {home.name} has no grain, so your
+          first train goes to {market.name}, where it is sold.
         </p>
         <div className="onb-flow">
           {flow.map((f, i) => (
@@ -291,7 +297,7 @@ function Mission({
         </div>
         <div className="onb-pass">
           <p className="eyebrow">
-            {dep ? `Board the train · ${dep.boardingNow ? "boarding now" : `departs ${formatIn(dep.departureTime - now)}`}` : "Your first train"}
+            {dep ? `Ingredients · ${dep.boardingNow ? "boarding now" : `departs ${formatIn(dep.departureTime - now)}`}` : "Ingredients"}
           </p>
           {dep && dest ? (
             <div className="onb-leg">
@@ -306,7 +312,7 @@ function Mission({
               <span className="onb-stop">
                 <Icon name="pin" />
                 <span>
-                  <strong>{town.stop.name}</strong>
+                  <strong>{market.name}</strong>
                   <small>{formatClock(dest.arrivalTime, now)}</small>
                 </span>
               </span>
@@ -317,7 +323,7 @@ function Mission({
                 ? "You're already on your way. Carry on from the main screen."
                 : departures.isPending
                   ? "Reading the board…"
-                  : `No train to ${town.stop.name} is due yet. Check the departures at ${home.name}.`}
+                  : `No train to ${market.name} is due yet. Check the departures at ${home.name}.`}
             </p>
           )}
           <FormError message={board.error?.message} />
@@ -328,27 +334,32 @@ function Mission({
   );
 }
 
-/** Point the 3D world at home, or at the line from home to a town (lit, as when hovered). */
+/** Point the 3D world at home, or at the lines from home to other stations (lit, as when hovered). */
 function Focus({
   home,
-  town,
+  others,
   routes,
   label,
 }: {
   home: Stop | null;
-  town: Stop | null;
+  others: Stop[];
   routes: ReturnType<typeof useWorld>["routes"];
   label: string;
 }) {
-  const lit = home && town ? routes.filter((r) => r.stops.some((s) => s.id === home.id) && r.stops.some((s) => s.id === town.id)).map((r) => r.id) : [];
-  const ids = [home?.id, town?.id].filter((x): x is string => !!x);
-  // Look a little south of the line, so it sits in the open map above the panel.
+  const ids = [home?.id, ...others.map((o) => o.id)].filter((x): x is string => !!x);
+  const lit = home ? routes.filter((r) => r.stops.some((s) => s.id === home.id) && others.some((o) => r.stops.some((s) => s.id === o.id))).map((r) => r.id) : [];
+  const all = home ? [home, ...others] : [];
+  // Look a little south of the northernmost station, so the stations sit in the open map above
+  // the panel (whichever way the others lie from home).
   const mid = home
-    ? town
-      ? { lat: (home.coordinates.lat + town.coordinates.lat) / 2 - 1.1, lng: (home.coordinates.lng + town.coordinates.lng) / 2 }
+    ? others.length
+      ? {
+          lat: Math.max(...all.map((s) => s.coordinates.lat)) - 1.25,
+          lng: all.reduce((m, s) => m + s.coordinates.lng, 0) / all.length,
+        }
       : { lat: home.coordinates.lat - 0.7, lng: home.coordinates.lng }
     : null;
-  const span = home && town ? Math.abs(home.coordinates.lng - town.coordinates.lng) + Math.abs(home.coordinates.lat - town.coordinates.lat) : 0;
+  const span = home ? Math.max(0, ...others.map((o) => Math.abs(home.coordinates.lng - o.coordinates.lng) + Math.abs(home.coordinates.lat - o.coordinates.lat))) : 0;
   useWorldFocus({ label, highlight: ids, labels: ids, litRoutes: lit, center: mid, distance: Math.min(3, 1.5 + span / 40) });
   return null;
 }

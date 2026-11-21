@@ -71,7 +71,7 @@ Learn by doing, in six steps. Each step is one prompt on the Journey screen; eve
 
 1. **Welcome.** The three story beats, then the arrival: the Rail Authority grants 5,000 credits ("trust, not a prize").
 2. **Your first need.** A map of the nearest towns that need bread, in red, with you in white at Berlin: "You are the only supply line within 600 km." Each town shows its people, how long its supplies last and how far away it is. The most urgent is offered first ("Feed Łódź first"); the others are later or locked.
-3. **The mission and the first ride.** One screen shows the whole mission (buy in Warsaw, bake in Berlin, deliver to Łódź, with the town's countdown) and the boarding pass for stop 1 (departure, arrival, fare covered by the grant). Real time is explained in one line: close the app and you will be told when it is your stop.
+3. **The mission and the first ride.** One screen shows why you ride: Berlin has no grain, so the first train goes to the station that sells the ingredients ("Bought in Warsaw"), and the bread then goes to the town in need. It shows the whole mission (buy, bake, deliver, with the town's countdown) and the boarding pass for stop 1 (departure, arrival, fare covered by the grant). Real time is explained in one line: close the app and you will be told when it is your stop.
 4. **Buy at the station.** Prices rise as you buy, and you can carry 60.
 5. **Ride home and build.** Unload, build the bakery, start a batch.
 6. **Deliver.** Take the bread to people who need it. Show the first "people served" moment.
