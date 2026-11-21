@@ -76,7 +76,7 @@ Learn by doing, in six steps. Each step is one prompt on the Journey screen; eve
 5. **Ride home and build.** Unload, build the bakery, start a batch.
 6. **Deliver.** Take the bread to people who need it. Show the first "people served" moment.
 
-**Approved screens 1 to 6** (story, arrival, first need, mission): [onboarding/screens-1-6.png](onboarding/screens-1-6.png). Screens 7 to 12 (on the rails, buy, build, loaves ready, delivered, level up) are still being designed.
+**Approved screens 1 to 6** (story, arrival, first need, mission): [onboarding/screens-1-6.png](onboarding/screens-1-6.png). Screens 1 to 6 are built (`web/src/screens/Onboarding.tsx`, shown at `/welcome` after signup; e2e: `e2e/onboarding.spec.ts`). The towns and their figures are the tutorial's own (`web/src/onboarding.ts`) until the game has towns that really run out of bread. Screens 7 to 12 (on the rails, buy, build, loaves ready, delivered, level up) are still being designed.
 
 Rules for every onboarding screen:
 

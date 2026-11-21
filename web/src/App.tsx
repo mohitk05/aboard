@@ -6,6 +6,7 @@ import { useLiveUpdates } from "./live";
 import { WorldLayer } from "./world3d/WorldLayer";
 import { Admin } from "./screens/Admin";
 import { Business } from "./screens/Business";
+import { Onboarding } from "./screens/Onboarding";
 import { Story } from "./screens/Story";
 import { Conversation, Inbox } from "./screens/Messages";
 import { People } from "./screens/People";
@@ -38,8 +39,9 @@ function RouteError() {
 const routes = [
   { path: "/", element: <Gate signedIn={<Home />} signedOut={<Landing />} /> },
   { path: "/login", element: <Gate signedIn={home} signedOut={<Login />} /> },
-  // Once signed up (the only way to be signed in on this page), start with the story.
-  { path: "/signup", element: <Gate signedIn={<Navigate to="/story" replace />} signedOut={<Signup />} /> },
+  // Once signed up (the only way to be signed in on this page), start the tutorial.
+  { path: "/signup", element: <Gate signedIn={<Navigate to="/welcome" replace />} signedOut={<Signup />} /> },
+  { path: "/welcome", element: <Gate signedIn={<Onboarding />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/story", element: <Gate signedIn={<Story />} signedOut={<Story />} /> },
   { path: "/business", element: <Gate signedIn={<Business />} signedOut={<Navigate to="/login" replace />} /> },
   { path: "/people", element: <Gate signedIn={<People />} signedOut={<Navigate to="/login" replace />} /> },

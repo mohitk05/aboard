@@ -41,7 +41,7 @@ export async function tick(request: APIRequestContext, adminToken: string, n = 1
  * Sign up through the UI. Everyone starts at home in Berlin; to start a test somewhere else
  * ("Paris, France"), the admin moves the new player there.
  */
-export async function signUp(page: Page, station = "Berlin, Germany", interests: string[] = []) {
+export async function signUpToTutorial(page: Page, interests: string[] = []) {
   const username = unique("t");
   // Aboard is invite-only: the admin makes an invite, and the player opens its link.
   await page.goto("/"); // (an origin for the admin's requests)
@@ -55,13 +55,19 @@ export async function signUp(page: Page, station = "Berlin, Germany", interests:
   await page.getByLabel("Age", { exact: true }).fill("28");
   for (const i of interests) await checkTag(page, i);
   await page.getByRole("button", { name: "Start travelling" }).click();
-  // New players start with the story, then go on to the game.
+  return { username, email: `${username}@e2e.test` };
+}
+
+/** Sign up and skip the tutorial. */
+export async function signUp(page: Page, station = "Berlin, Germany", interests: string[] = []) {
+  const { username, email } = await signUpToTutorial(page, interests);
+  // New players start with the tutorial (skippable at any step), then go on to the game.
   // (Slow when several software-rendered 3D worlds run at once.)
-  await expect(page.getByRole("heading", { name: "How the world came to ride the rails" })).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("link", { name: "Go to the game" }).click();
+  await expect(page.getByRole("heading", { name: "We cooled the sky and warmed the sea." })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Skip", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Journey" })).toHaveClass(/active/);
   if (station !== "Berlin, Germany") await placeAt(page, station);
-  return { username, email: `${username}@e2e.test` };
+  return { username, email };
 }
 
 /** As the admin (in a separate context, so the page's session isn't touched), make an invite code. */

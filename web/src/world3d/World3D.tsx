@@ -225,7 +225,7 @@ export default function World3D({ stops, routes, allRoutes, trips, home, focus, 
     function highlightRoutes() {
       const sel = latest.current.selection;
       for (const [id, l] of routeLines) {
-        const on = id === hoverRoute || (sel?.kind === "route" && sel.id === id);
+        const on = id === hoverRoute || (sel?.kind === "route" && sel.id === id) || latest.current.focus.litRoutes.includes(id);
         l.hot.forEach((m) => (m.visible = on));
         l.normal.forEach((m) => (m.visible = !on));
       }

@@ -1643,3 +1643,317 @@ ol.list.standings {
   align-items: center;
   gap: 16px;
 }
+
+/* ---------- onboarding: the new-player tutorial (docs/PRD.md §7) ---------- */
+/* Every screen has the same frame: brand and step on top, a six-part strip, one panel, and a
+   fixed bar at the bottom with the one primary action on the right. No tab bar. */
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-large {
+  width: 38px;
+  height: 38px;
+}
+.onb {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none; /* the world behind stays draggable wherever there's no panel */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.onb.is-paint {
+  background: #000;
+  pointer-events: auto;
+}
+.onb-head {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px calc(var(--gutter) + 8px) 8px;
+  text-shadow: 0 0 6px rgb(0 0 0 / 0.8);
+}
+.onb-step {
+  font: 600 0.6875rem/1 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  color: var(--label-3);
+}
+.onb-strip {
+  display: flex;
+  gap: 5px;
+  list-style: none;
+  margin: 6px calc(var(--gutter) + 8px) 0;
+  padding: 0;
+}
+.onb-strip li {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--separator);
+}
+.onb-strip li.on {
+  background: #fff;
+}
+.onb-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px var(--gutter);
+  overflow-y: auto;
+}
+.onb-body > * {
+  pointer-events: auto;
+  flex: none;
+}
+.onb.is-paint .onb-body {
+  justify-content: flex-start;
+  gap: 6px;
+}
+.onb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px var(--gutter) 22px;
+}
+.onb-bar > * {
+  pointer-events: auto;
+}
+/* Over the map, a soft scrim keeps the quiet link readable. */
+.onb:not(.is-paint) .onb-bar {
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.7));
+}
+.onb-cta {
+  width: 176px;
+  min-height: 44px;
+  padding: 0;
+  white-space: nowrap;
+  /* The one action on the screen is always filled. */
+  background: var(--tint);
+  color: var(--on-tint);
+}
+.onb-cta:not(:disabled):hover {
+  background: rgb(255 255 255 / 0.85);
+}
+.onb-link {
+  background: none;
+  border: 0;
+  padding: 8px 0;
+  color: var(--label-3);
+  font: 600 0.75rem/1 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: var(--caps-track);
+  text-decoration: none;
+  cursor: pointer;
+}
+.onb-link:hover,
+.onb-link:focus-visible {
+  color: var(--label);
+}
+@media (min-width: 900px) {
+  .onb-body,
+  .onb-bar {
+    width: 100%;
+    max-width: calc(440px + 2 * var(--gutter));
+  }
+  .onb.is-paint .onb-body,
+  .onb.is-paint .onb-bar {
+    margin-inline: auto;
+    max-width: calc(480px + 2 * var(--gutter));
+  }
+}
+
+.onb-art {
+  margin: 8px 0 0;
+  height: min(42vh, 360px);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.onb-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.onb-title {
+  font-size: clamp(1.9rem, 7vw, 2.3rem);
+  line-height: 1.1;
+  margin: 2px 0 6px;
+}
+.onb-credit {
+  font-size: 0.6875rem;
+  color: var(--label-3);
+  margin-top: 6px;
+}
+.onb-card {
+  display: grid;
+  gap: 8px;
+}
+.onb-card > * {
+  margin: 0;
+}
+.onb-card h2 {
+  font-size: 1.65rem;
+  line-height: 1.15;
+}
+.onb-center {
+  text-align: center;
+  justify-items: center;
+}
+.onb-seal {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+}
+.onb-grant {
+  font: 400 4rem/1 var(--font-title);
+  margin: 4px 0 0;
+}
+.onb-urgent {
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgb(255 90 95 / 0.2);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.onb-rows {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.onb-rows li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--separator);
+}
+.onb-rows small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--label-3);
+}
+.onb-ico {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+}
+.onb-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin: 6px 0;
+}
+.onb-flow-item {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+  gap: 4px;
+}
+.onb-flow-item > div {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.onb-flow-item > div.is-hot {
+  border-color: #fff;
+}
+.onb-flow-item .icon-large {
+  margin-bottom: 8px;
+}
+.onb-flow-item strong {
+  display: block;
+  font: 400 1.0625rem/1.15 var(--font-title);
+  margin-bottom: 3px;
+}
+.onb-flow-item small {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--label-2);
+}
+.onb-arrow {
+  align-self: center;
+  color: var(--label-3);
+}
+.onb-pass {
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius);
+}
+.onb-leg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.onb-stop {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+.onb-stop strong {
+  display: block;
+  font: 400 1.375rem/1 var(--font-title);
+}
+.onb-stop small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--label-2);
+}
+.onb-leg-line {
+  flex: 1;
+  height: 1px;
+  position: relative;
+  top: -8px;
+  background: repeating-linear-gradient(90deg, #fff 0 4px, transparent 4px 8px);
+}
+.onb-leg-line::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -3px;
+  border-left: 6px solid #fff;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}

@@ -40,13 +40,11 @@ test("an admin makes an invite link, and a friend joins with it", async ({ page,
   await friend.getByLabel("Password", { exact: true }).fill("password123");
   await friend.getByLabel("Age", { exact: true }).fill("30");
   await friend.getByRole("button", { name: "Start travelling" }).click();
-  // They start with the story, with the game one tap away.
-  await expect(friend.getByRole("heading", { name: "How the world came to ride the rails" })).toBeVisible({ timeout: 15_000 });
-  await expect(friend.getByRole("heading", { name: "Gameplay" })).toBeAttached();
-  // The way to the game floats on screen from the first chapter, so they can skip the story.
-  const go = friend.getByRole("link", { name: "Go to the game" });
-  await expect(go).toBeInViewport();
-  await go.click();
+  // They start with the tutorial, which they can skip from the first screen.
+  await expect(friend.getByRole("heading", { name: "We cooled the sky and warmed the sea." })).toBeVisible({ timeout: 15_000 });
+  const skip = friend.getByRole("button", { name: "Skip", exact: true });
+  await expect(skip).toBeInViewport();
+  await skip.click();
   await expect(friend.getByRole("region", { name: "At the station" })).toContainText("Berlin");
 
   // The link is spent: it can't be used again, and the admin sees who used it.

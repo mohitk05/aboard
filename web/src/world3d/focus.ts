@@ -15,6 +15,8 @@ export interface WorldFocus {
    * Every other station is just a dot, named when you hover it, so the map stays uncluttered.
    */
   labels: string[];
+  /** Lines to light up (as when hovered), e.g. the line to the town a tutorial screen is about. */
+  litRoutes: string[];
   /** Keep this train in view as it moves. */
   follow: string | null;
   /** Look at this point… */
@@ -25,7 +27,7 @@ export interface WorldFocus {
   onMapClick?: (at: LatLng) => void;
 }
 
-const DEFAULT: WorldFocus = { label: "Map of the rail network", highlight: [], labels: [], follow: null, center: null, distance: null };
+const DEFAULT: WorldFocus = { label: "Map of the rail network", highlight: [], labels: [], litRoutes: [], follow: null, center: null, distance: null };
 
 let current: WorldFocus = DEFAULT;
 const listeners = new Set<() => void>();
@@ -46,7 +48,7 @@ export function useWorldFocus(f: Partial<WorldFocus>) {
   // Click handlers change identity every render; keep the latest without re-focusing.
   const handlers = useRef({ onStopClick: f.onStopClick, onMapClick: f.onMapClick });
   handlers.current = { onStopClick: f.onStopClick, onMapClick: f.onMapClick };
-  const key = JSON.stringify([f.label, f.highlight, f.labels, f.follow, f.center, f.distance, !!f.onStopClick, !!f.onMapClick]);
+  const key = JSON.stringify([f.label, f.highlight, f.labels, f.litRoutes, f.follow, f.center, f.distance, !!f.onStopClick, !!f.onMapClick]);
 
   useEffect(() => {
     set({
@@ -54,6 +56,7 @@ export function useWorldFocus(f: Partial<WorldFocus>) {
       ...f,
       highlight: f.highlight ?? [],
       labels: f.labels ?? [],
+      litRoutes: f.litRoutes ?? [],
       onStopClick: f.onStopClick ? (id) => handlers.current.onStopClick?.(id) : undefined,
       onMapClick: f.onMapClick ? (at) => handlers.current.onMapClick?.(at) : undefined,
     });
