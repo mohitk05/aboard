@@ -1734,9 +1734,9 @@ ol.list.standings {
   pointer-events: auto;
 }
 /* Inside a panel, the actions close it off, under a hairline. */
-.onb-card .onb-bar {
+.onb-card > .onb-bar {
   width: 100%;
-  margin-top: 6px;
+  margin-top: auto;
   padding: 14px 0 0;
   border-top: 1px solid var(--separator);
 }
@@ -1804,8 +1804,12 @@ ol.list.standings {
   margin-top: 6px;
 }
 .onb-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  /* Screens 4-6 share one panel height (the tallest, the mission), so the panel's top edge and
+     its action sit at the same place on every screen. */
+  min-height: min(572px, calc(100dvh - 250px));
 }
 .onb-card > * {
   margin: 0;
@@ -1816,13 +1820,17 @@ ol.list.standings {
 }
 .onb-center {
   text-align: center;
-  justify-items: center;
+  align-items: center;
+}
+.onb-center > .onb-bar {
+  align-items: center;
 }
 .onb-seal {
   display: grid;
   place-items: center;
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
+  margin-top: 10px;
   border: 1px solid var(--hairline);
   border-radius: 50%;
 }

@@ -138,11 +138,11 @@ export function Onboarding() {
       <>
         <Focus home={home} others={[]} routes={world.routes} label="Berlin Hauptbahnhof, your home base" />
         <Card className="onb-card onb-center">
+          <p className="eyebrow">{home ? `${home.name} · Rail Authority` : "Rail Authority"}</p>
+          <h2>Welcome, traveller.</h2>
           <span className="onb-seal">
             <Icon name="coin" large />
           </span>
-          <p className="eyebrow">{home ? `${home.name} · Rail Authority` : "Rail Authority"}</p>
-          <h2>Welcome, traveller.</h2>
           <p className="onb-grant">{STARTING_BALANCE.toLocaleString("en")}</p>
           <p className="eyebrow">credits granted</p>
           <p className="muted">This is trust, not a prize. Turn it into food, water and medicine for people who need it.</p>
@@ -164,7 +164,7 @@ export function Onboarding() {
   }
 
   if (screen === 4) {
-    const shown = towns.slice(0, 2);
+    const shown = towns.slice(0, 3);
     return frame(
       <>
         <Focus home={home} others={[town.stop]} routes={world.routes} label={`The line from ${home.name} to ${town.stop.name}`} />
