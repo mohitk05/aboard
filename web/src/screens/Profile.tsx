@@ -24,10 +24,10 @@ export function Profile() {
           <div className="board-sub">{me.email}</div>
         </div>
       </section>
-      <PictureForm me={me} />
       <FormError message={travels.error?.message} />
       {travels.data && <TravelsCard t={travels.data} />}
       <ProfileForm me={me} />
+      <PictureForm me={me} />
       <NotificationSettings />
       <PasswordForm />
       <LogOut />
