@@ -794,6 +794,80 @@ select.input {
   background: var(--tint);
   transition: width 1s linear;
 }
+/* ---------- the trip rail: your train on its way, on the Journey screen ---------- */
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+}
+.rail-pin {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--label);
+}
+.rail-pin-from {
+  background: var(--label);
+}
+.rail-track {
+  position: relative;
+  flex: 1;
+  height: 2px;
+  background: var(--hairline);
+}
+.rail-done {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--tint);
+  /* Glide, over about the time between updates, rather than jump. */
+  transition: width 15s linear;
+}
+.rail-train {
+  position: absolute;
+  bottom: 1px;
+  /* The nose sits on the point the train has reached; the set trails behind it. */
+  transform: translateX(-100%);
+  color: var(--label);
+  transition: left 15s linear;
+  line-height: 0;
+}
+.rail-train-art {
+  display: block;
+}
+.rail-speed {
+  position: absolute;
+  right: 100%;
+  top: 4px;
+  width: 26px;
+  height: 9px;
+  opacity: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 6px, var(--label-2) 6px 14px) 0 1px / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 9px, var(--label-3) 9px 15px) 0 5px / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 4px, var(--label-2) 4px 10px) 0 8px / 100% 1px no-repeat;
+}
+.rail.is-moving .rail-speed {
+  opacity: 1;
+  animation: rail-speed 0.45s linear infinite;
+}
+.rail.is-moving .rail-train-art {
+  animation: rail-rock 0.9s ease-in-out infinite;
+}
+@keyframes rail-speed {
+  from {
+    background-position-x: 0, 0, 0;
+  }
+  to {
+    background-position-x: -14px, -15px, -10px;
+  }
+}
+@keyframes rail-rock {
+  50% {
+    transform: translateY(-0.6px);
+  }
+}
 .timeline {
   list-style: none;
   margin: 0 0 12px;
@@ -1101,6 +1175,14 @@ select.input {
   .bar > span,
   .btn {
     transition: none;
+  }
+  /* The train still shows where it is; it just doesn't stream or rock. */
+  .rail.is-moving .rail-speed,
+  .rail.is-moving .rail-train-art {
+    animation: none;
+  }
+  .rail.is-moving .rail-speed {
+    opacity: 0;
   }
 }
 
