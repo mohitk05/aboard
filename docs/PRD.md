@@ -1,6 +1,6 @@
 # Aboard: Product Requirements
 
-Status: draft v1 (2026-11-21). Currency is **tokens**. Levels 1–11 are agreed. Everything marked **Open** still needs a decision.
+Status: draft v1 (2026-11-21). Currency stays **credits**, as in the code. Levels 1–11 are agreed. Everything marked **Open** still needs a decision.
 Read this first. [Industry.md](Industry.md) describes the game as it is built today; this document describes where it is going and why.
 
 ## 1. One-line pitch
@@ -13,7 +13,7 @@ The game's world, and the reason every rule exists.
 
 - **The sky and sea closed.** In 2190 there were twelve billion people and one tired planet. Those who could, left on great arks to new worlds among the stars. The people who stayed swore to hold the planet together (the Accord of the Remaining), and in doing so they cooled the sky and warmed the sea. Above three thousand metres wings find nothing to hold, and the oceans never calmed. Nothing flies. No ship survives.
 - **So we built rails.** Tunnels under the Atlantic and the Bering Strait, lines across the steppes and through the Andes. The Great Lines took two hundred years. Trains cross continents in days, and the railway is how the world moves.
-- **The Remaining, and you.** You are one of the people who stayed behind. When you arrive at your first station, the **Rail Authority** grants you **5,000 tokens** to start a supply line. It is trust, not a prize: you are expected to turn it into survival for ordinary people.
+- **The Remaining, and you.** You are one of the people who stayed behind. When you arrive at your first station, the **Rail Authority** grants you **5,000 credits** to start a supply line. It is trust, not a prize: you are expected to turn it into survival for ordinary people.
 - **The world has been damaged on purpose, and carefully.** Dust, ash and smoke are common. Forests are preserved and closed to ordinary people, so wood is rare and paper is a luxury. Basic resources are scarce and hard to reach, which is why trade happens at all.
 
 Story screens: three short beats on the story page, each over one painting (see `web/src/screens/Story.tsx`). The long history (the Exodus, the Accord, the Thin Sky, the Wild Sea) stays on a "Read the full history" page.
@@ -22,7 +22,7 @@ Story screens: three short beats on the story page, each over one painting (see 
 
 - Players who like slow, real-time strategy: planning, waiting, checking in.
 - It should feel quiet, serious and a little melancholy, with care for the people you serve. It should not feel like chasing a leaderboard.
-- Progress is measured in **people served**, not only tokens.
+- Progress is measured in **people served**, not only credits.
 
 ## 4. Core loop (unchanged)
 
@@ -69,7 +69,7 @@ Shared raw materials make levels compete with each other, and that is intended: 
 
 Learn by doing, in five steps. Each step is one prompt on the Journey screen; everything else stays hidden until needed.
 
-1. **Welcome.** The three story beats, then the 5,000 tokens on arrival.
+1. **Welcome.** The three story beats, then the 5,000 credits on arrival.
 2. **First ride.** A short trip to fetch grain for a hungry town (the level 1 contract). Explain real time in one line: close the app and you will be told when it is your stop.
 3. **Buy at the station.** Prices rise as you buy, and you can carry 60.
 4. **Ride home and build.** Unload, build the bakery, start a batch.
@@ -96,15 +96,23 @@ Not agreed. Ideas so far:
 ## 10. Decisions on the risks below
 
 - **Accounts:** one per email (already enforced) and signup stays invite-only. If signups ever open: email verification, and block `+` aliases and disposable domains.
-- **Player trades:** happen only through messages, as a trade offer attached to a chat message that the other player accepts. Maximum 5 per day per player. Player-to-player trades do not count towards weekly earnings, and offer prices are capped to a band around the market price. The public order board goes away.
+- **Player trades are gifts only.** No credits ever pass between players, and the public order board goes away. Rules:
+  - A player can ask another player for a gift of goods, never credits.
+  - They can ask only someone who has the goods (in their warehouse or cargo) or is about to buy them (holds a ticket to, or stands at, a station that sells them).
+  - Only people you have crossed paths with (been at the same station or on the same train) or messaged can be asked.
+  - The giver can say no, with no reason shown to the asker.
+  - Accepted gifts go straight into the receiver's Berlin warehouse.
+  - A daily cap on requests (for example 5) stops spam.
+  - Gifts don't count towards weekly earnings.
+  - Gift history is recorded. It is the basis for alliances later.
 - **Fares:** cancelling a ticket refunds 75% of the fare (a 25% cancellation fee). Raising the fares themselves is still open.
 - **Starter contracts:** become the level 1 tutorial, capped per player (for example 2 in total).
 
 ## 11. Known risks (from review of the current code)
 
-- **Alt-account funnelling.** Sales through player orders count towards weekly earnings, and order prices are not tied to market prices, so one person with two accounts can push one to the top. Exclude player-to-player trades from weekly earnings, or cap order prices against the market.
-- **Travel is almost free.** Fares are 0.01 tokens per km (called credits in the code today), and cancelling a ticket refunds it in full. Time is the only cost.
-- **Orders bypass market price effects,** so players can buy materials from each other and skip the ride-out loop. Consider gating orders to a later level.
+- **Alt-account funnelling** (today's code only: player orders count towards weekly earnings at any price). Solved by gifts-only trades.
+- **Travel is almost free.** Fares are 0.01 credits per km, and cancelling a ticket refunds it in full. Time is the only cost.
+- **Orders bypass market price effects** (today's code only). Solved by gifts-only trades, though a gift still lets someone skip a ride-out, which the "ask only someone who has it or is about to buy it" rule limits.
 - **Starter contracts can be farmed** (about 2.5× the price, refilled every half hour, only for players without a factory).
 - **Market griefing** on shallow markets (vanilla, and rare goods in general).
 - **Bots are predictable** and ignore orders and starter contracts, and will need to learn the new needs.
@@ -114,8 +122,7 @@ Not agreed. Ideas so far:
 The code today has three industries only: chocolate, batteries, chips (`src/game/catalog.ts`). To reach this PRD:
 
 - Add goods and factories for levels 1–4, 6, 8 (replacing chips), 9–11, and the new raw materials. Drop cobalt from batteries.
-- Replace the order board with message trade offers (5 a day), and change the ticket refund to 75%.
-- Rename credits to tokens throughout.
+- Replace the order board with gift requests (rules in §10), and change the ticket refund to 75%.
 - Add a level and "people served" progression, and the arrival reward.
 - Add the weekly regional water shortage and the telegraph warning.
 - Shorten the story to three beats and add the full-history page (`web/src/screens/Story.tsx`).
