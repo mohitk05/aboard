@@ -76,6 +76,16 @@ Learn by doing, in six steps. Each step is one prompt on the Journey screen; eve
 5. **Ride home and build.** Unload, build the bakery, start a batch.
 6. **Deliver.** Take the bread to people who need it. Show the first "people served" moment.
 
+**Approved screens 1 to 6** (story, arrival, first need, mission): [onboarding/screens-1-6.png](onboarding/screens-1-6.png). Screens 7 to 12 (on the rails, buy, build, loaves ready, delivered, level up) are still being designed.
+
+Rules for every onboarding screen:
+
+- A header with the logo, "Step X of 6" and a six-segment progress strip, always in the same place.
+- The primary action is a fixed-size button (176 × 44) at the bottom right, in the same spot on every screen. A quiet text link (Skip, Wait, Read the full history) sits at the bottom left. Panels never contain buttons.
+- No bottom navigation during onboarding.
+- One icon set, outline style with rounded ends (grain, salt, yeast, oven, loaf, pin, train, coin, people, clock, drop, box, check).
+- Red means urgency only (a town's countdown, the lit route).
+
 Each step has a progress strip and a skip link. Each term (cargo, warehouse, contract) is explained once, when it first appears. Mockups: the story, levels, first ride, station and level-up screens (visual style as in [Design.md](Design.md)).
 
 ## 8. Open: levels 12 and later
