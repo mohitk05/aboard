@@ -116,13 +116,14 @@ Not agreed. Ideas so far:
   - A daily cap on requests (for example 5) stops spam.
   - Gifts don't count towards weekly earnings.
   - Gift history is recorded. It is the basis for alliances later.
-- **Fares:** cancelling a ticket refunds 75% of the fare (a 25% cancellation fee). Raising the fares themselves is still open.
+- **Fares:** cancelling a ticket refunds 75% of the fare (a 25% cancellation fee). Fares stay cheap on purpose: the cost of travel is time, not money.
+- **Work passage (later feature):** a player who can't afford a fare can ride anyway and work the journey. The fare is waived and the work pays nothing; they get off at their stop as normal. It is offered only when credits are below the fare. There is no dropping people off midway and no friend paying a fare, so nobody is ever stranded. Not part of the tutorial (the 5,000 grant covers the first trips).
 - **Starter contracts:** become the level 1 tutorial, capped per player (for example 2 in total).
 
 ## 11. Known risks (from review of the current code)
 
 - **Alt-account funnelling** (today's code only: player orders count towards weekly earnings at any price). Solved by gifts-only trades.
-- **Travel is almost free.** Fares are 0.01 credits per km, and cancelling a ticket refunds it in full. Time is the only cost.
+- **Travel is almost free.** Fares are 0.01 credits per km. This is accepted by design: time is the cost of travel (see §10). Cancelling a ticket used to refund the fare in full; it will refund 75%.
 - **Orders bypass market price effects** (today's code only). Solved by gifts-only trades, though a gift still lets someone skip a ride-out, which the "ask only someone who has it or is about to buy it" rule limits.
 - **Starter contracts can be farmed** (about 2.5× the price, refilled every half hour, only for players without a factory).
 - **Market griefing** on shallow markets (vanilla, and rare goods in general).
