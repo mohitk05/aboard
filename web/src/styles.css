@@ -1733,9 +1733,12 @@ ol.list.standings {
 .onb-bar > * {
   pointer-events: auto;
 }
-/* Over the map, a soft scrim keeps the quiet link readable. */
-.onb:not(.is-paint) .onb-bar {
-  background: linear-gradient(transparent, rgb(0 0 0 / 0.7));
+/* Inside a panel, the actions close it off, under a hairline. */
+.onb-card .onb-bar {
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--separator);
 }
 .onb-cta {
   width: 176px;

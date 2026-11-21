@@ -77,7 +77,15 @@ export function Onboarding() {
   // Screens 1-3 are step 1 with the arrival; then one step each.
   const step = screen <= 3 ? 1 : screen - 2;
 
-  const frame = (body: ReactNode, left: ReactNode, cta: ReactNode, paint = false) => (
+  // The story screens carry their actions in a bar at the bottom of the screen; the others in the
+  // bottom of their panel (the `bar`), so the action stays with what it's about.
+  const bar = (left: ReactNode, cta: ReactNode) => (
+    <div className="onb-bar">
+      <span className="onb-left">{left}</span>
+      {cta}
+    </div>
+  );
+  const frame = (body: ReactNode, paint = false, footer?: ReactNode) => (
     <div className={`onb${paint ? " is-paint" : ""}`}>
       <header className="onb-head">
         <Link to={GAME} className="brand" aria-label="Skip the tutorial and go to Aboard">
@@ -93,10 +101,7 @@ export function Onboarding() {
         ))}
       </ol>
       <main className="onb-body">{body}</main>
-      <footer className="onb-bar">
-        <span className="onb-left">{left}</span>
-        {cta}
-      </footer>
+      {paint && <footer className="onb-foot">{footer}</footer>}
     </div>
   );
   const primary = (label: string, onClick: () => void, disabled?: boolean) => (
@@ -122,9 +127,8 @@ export function Onboarding() {
         <p className="lede">{b.text}</p>
         <p className="onb-credit">{b.credit}. Public domain.</p>
       </>,
-      screen === 2 ? <Link to="/story" className="onb-link">Read the full history</Link> : quiet("Skip", leave),
-      primary(screen === 2 ? "Arrive" : "Next", next),
       true,
+      bar(screen === 2 ? <Link to="/story" className="onb-link">Read the full history</Link> : quiet("Skip", leave), primary(screen === 2 ? "Arrive" : "Next", next)),
     );
   }
 
@@ -141,10 +145,9 @@ export function Onboarding() {
           <p className="onb-grant">{STARTING_BALANCE.toLocaleString("en")}</p>
           <p className="eyebrow">credits granted</p>
           <p className="muted">This is trust, not a prize. Turn it into food, water and medicine for people who need it.</p>
+          {bar(null, primary("Accept the grant", next))}
         </Card>
       </>,
-      null,
-      primary("Accept the grant", next),
     );
   }
 
@@ -154,9 +157,8 @@ export function Onboarding() {
       <Card className="onb-card">
         <h2>The line is still being laid.</h2>
         <p className="muted">There are no towns to reach yet. You can look around while the world fills in.</p>
+        {bar(null, primary("Go to Aboard", leave))}
       </Card>,
-      null,
-      primary("Go to Aboard", leave),
     );
   }
 
@@ -189,10 +191,9 @@ export function Onboarding() {
               </li>
             ))}
           </ul>
+          {bar(quiet("Skip tutorial", leave), primary(`Feed ${town.stop.name} first`, next))}
         </Card>
       </>,
-      quiet("Skip tutorial", leave),
-      primary(`Feed ${town.stop.name} first`, next),
     );
   }
 
@@ -203,6 +204,7 @@ export function Onboarding() {
       town={town}
       routes={world.routes}
       frame={frame}
+      bar={bar}
       left={quiet("Wait", leave)}
       go={leave}
     />
@@ -216,6 +218,7 @@ function Mission({
   town,
   routes,
   frame,
+  bar,
   left,
   go,
 }: {
@@ -223,7 +226,8 @@ function Mission({
   home: Stop;
   town: Town;
   routes: ReturnType<typeof useWorld>["routes"];
-  frame: (body: ReactNode, left: ReactNode, cta: ReactNode, paint?: boolean) => ReactNode;
+  frame: (body: ReactNode, paint?: boolean, footer?: ReactNode) => ReactNode;
+  bar: (left: ReactNode, cta: ReactNode) => ReactNode;
   left: ReactNode;
   go: () => void;
 }) {
@@ -318,10 +322,9 @@ function Mission({
           )}
           <FormError message={board.error?.message} />
         </div>
+        {bar(left, cta)}
       </Card>
     </>,
-    left,
-    cta,
   );
 }
 
