@@ -1891,9 +1891,6 @@ ol.list.standings {
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
 }
-.onb-flow-item > div.is-hot {
-  border-color: #fff;
-}
 .onb-flow-item .icon-large {
   margin-bottom: 8px;
 }

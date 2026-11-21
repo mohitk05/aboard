@@ -249,9 +249,9 @@ function Mission({
     },
   });
 
-  const flow: { icon: IconName; title: string; text: string; hot?: boolean }[] = [
+  const flow: { icon: IconName; title: string; text: string }[] = [
     { icon: "wheat", title: "Grain, salt, yeast", text: "Plain ingredients" },
-    { icon: "oven", title: "Your bakery", text: "2 hours a batch", hot: true },
+    { icon: "oven", title: "Your bakery", text: "2 hours a batch" },
     { icon: "loaf", title: "24 loaves", text: `Feeds about ${FED_PER_BATCH}` },
   ];
 
@@ -281,7 +281,7 @@ function Mission({
           {flow.map((f, i) => (
             <div key={f.title} className="onb-flow-item">
               {i > 0 && <span className="onb-arrow" aria-hidden="true">→</span>}
-              <div className={f.hot ? "is-hot" : undefined}>
+              <div>
                 <Icon name={f.icon} large />
                 <strong>{f.title}</strong>
                 <small>{f.text}</small>
