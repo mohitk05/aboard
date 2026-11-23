@@ -280,6 +280,9 @@ a {
   border-radius: var(--radius);
   padding: 20px;
 }
+.card[id] {
+  scroll-margin-top: 16px; /* so a #anchor link leaves a little room above the box */
+}
 /* Every panel over the world (board, cards, nudges, details) frosts what's behind it, so text
    stays easy to read over lines, labels and city lights. */
 .board,
