@@ -707,6 +707,13 @@ select.input {
 .departures .is-open .departure {
   background: var(--fill);
 }
+/* A return run: just information (no ticket yet), so it doesn't look tappable. */
+.departure.is-returning {
+  cursor: default;
+}
+.departure.is-returning:hover {
+  background: transparent;
+}
 .dep-time {
   grid-area: time;
   display: grid;

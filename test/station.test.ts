@@ -45,6 +45,18 @@ describe("station board", () => {
     expect(end.departures[0].departureTime).toBeGreaterThan(Date.now());
   });
 
+  it("the departures list shows a train at the terminus going back, with nothing to buy yet", async () => {
+    const trip = (await api("POST", "/trip", { token: admin, body: { trip: { route: route.id, active: true } } })).data;
+    await api("POST", `/trip/${trip.id}/position`, { token: admin, body: { stopIndex: stops.length - 1, km: 0 } });
+    const end = (await api("GET", `/stop/${stops.at(-1)!.id}/departures`, { token: admin })).data;
+    expect(end).toHaveLength(1);
+    expect(end[0]).toMatchObject({ returning: true, boardingNow: false, destinations: [], terminus: { name: stops[0]!.name } });
+    expect(end[0].departureTime).toBeGreaterThan(Date.now());
+    // Mid-line stations still list the train as a normal departure.
+    const mid = (await api("GET", `/stop/${stops[2]!.id}/departures`, { token: admin })).data;
+    expect(mid.every((d: { returning: boolean }) => !d.returning)).toBe(true);
+  });
+
   it("404s for an unknown station", async () => {
     expect((await api("GET", "/stop/nope/board")).status).toBe(404);
     expect((await api("GET", "/stop/nope/photo")).status).toBe(404);

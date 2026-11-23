@@ -117,6 +117,7 @@ export function departure(trip: string, line: string, terminus: Stop, to: Stop[]
     line,
     train: "The Long Way",
     boardingNow: false,
+    returning: false,
     arrivalTime: now + 20 * 60_000,
     departureTime: now + 25 * 60_000,
     terminus,

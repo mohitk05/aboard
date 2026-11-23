@@ -91,6 +91,8 @@ export interface Departure {
   line: string;
   train: string | null;
   boardingNow: boolean;
+  /** A train that ends its line here and sets off back the other way: nothing to buy yet. */
+  returning: boolean;
   arrivalTime: number;
   departureTime: number;
   terminus: Stop;

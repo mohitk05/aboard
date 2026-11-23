@@ -154,6 +154,26 @@ function DepartureRow({ d, from, open, onToggle }: { d: Departure; from: string;
   });
   const panel = `dest-${d.trip.id}`;
 
+  // A train ending its line here, about to go back the other way: when it sets off, but no
+  // ticket yet (it's still on its inbound run; it goes on sale once the train has turned round).
+  if (d.returning) {
+    return (
+      <li>
+        <div className="departure is-returning" aria-label={`Return run to ${d.terminus.name}, ${d.line}`}>
+          <DepTime at={d.departureTime} now={now} />
+          <span className="dep-dest">
+            <strong>{d.terminus.name}</strong>
+            <span className="muted small">
+              {d.line}
+              {d.train ? ` · ${d.train}` : ""} · turns round here
+            </span>
+          </span>
+          <span className="dep-status">{formatIn(d.departureTime - now)}</span>
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li className={open ? "is-open" : undefined}>
       <button className="departure" aria-expanded={open} aria-controls={panel} onClick={onToggle}>

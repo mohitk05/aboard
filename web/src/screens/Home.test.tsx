@@ -9,6 +9,7 @@ import { Home } from "./Home";
 const paris = stop("Paris", "France");
 const berlin = stop("Berlin", "Germany");
 const vladivostok = stop("Vladivostok", "Russia");
+const lisbon = stop("Lisbon", "Portugal");
 const LINE = "Lisbon – Vladivostok";
 
 /** A server with one player at Paris, where the one departure is the Long Way. Buying moves them to the platform. */
@@ -74,6 +75,17 @@ describe("Home, at a station", () => {
     await user.click(await within(board).findByRole("button", { name: new RegExp(LINE) }));
     expect(within(board).queryByText("Lisbon")).toBeNull();
     expect(within(board).queryByRole("button", { name: /Buy a ticket to Paris/ })).toBeNull();
+  });
+
+  it("lists a train that ends its line here as a return run, with nothing to buy yet", async () => {
+    const back = { ...departure("trip2", LINE, lisbon, []), returning: true };
+    parisServer([back]);
+    renderScreen(<Home />, { signedIn: me({ currentStop: paris.id }) });
+    const board = await screen.findByRole("region", { name: "Departures" });
+    const row = await within(board).findByLabelText(`Return run to Lisbon, ${LINE}`);
+    expect(row.textContent).toContain("turns round here");
+    expect(within(board).queryByRole("button", { name: /Lisbon/ })).toBeNull();
+    expect(screen.queryByText(/No trains are due here right now/)).toBeNull();
   });
 
   it("says so when no trains are due", async () => {

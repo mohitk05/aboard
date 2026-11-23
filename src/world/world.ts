@@ -20,8 +20,8 @@ import { factory, factoryState } from "../machines/factory";
 import { invite as inviteMachine, inviteState } from "../machines/invite";
 import { dueAt, kmIntoSegment, minutesWaited, positionStatus, stationStatus, train } from "../machines/train";
 
-/** How far ahead the station board lists a terminating train's return departure (keeps the list finite). */
-const RETURN_HORIZON_MS = 3 * 60 * 60_000;
+/** How far ahead the boards list a terminating train's return departure (keeps the list finite). */
+const RETURN_HORIZON_MS = 24 * 60 * 60_000;
 import { canTrade, traveller } from "../machines/traveller";
 import {
   CARGO_CAPACITY,
@@ -723,7 +723,22 @@ export class World extends DurableObject<Env> {
     return guard(() => stopOut(this.stopRow(id)));
   }
 
-  /** Trains still due at this stop, soonest first, with distance (km) and arrival time (ms). */
+  /**
+   * A train ending its line turns round onto the line's return run: when it next sets off from
+   * here (arrival, the dwell at the end, then the wait on the return platform) and where to.
+   * Null if the line has no return run or the departure is too far ahead to list.
+   */
+  private returnRun(trip: TripRow, dwellMinutes: number, arrivalTime: number) {
+    const route = this.routeRow(trip.route_id);
+    const twinId = route.return_of ?? `${route.id}~r`;
+    if (!this.sql.exec("SELECT 1 FROM routes WHERE id = ?", twinId).toArray().length) return null;
+    const back = this.routeStops(twinId);
+    if (back.length < 2) return null;
+    const departureTime = Math.max(Date.now(), arrivalTime + (dwellMinutes + back[0]!.dwell_minutes) * 60_000);
+    if (departureTime - Date.now() > RETURN_HORIZON_MS) return null;
+    return { departureTime, terminus: stopOut(back[back.length - 1]!), next: back[1]!.name };
+  }
+
   /**
    * The departures board: running trains that will still call here, soonest first, each with
    * the stations you could ride to, their arrival times and fares.
@@ -745,13 +760,43 @@ export class World extends DurableObject<Env> {
         )
         .toArray();
 
-      const out = [];
+      const out: {
+        trip: ReturnType<World["tripOut"]>;
+        line: string;
+        train: string | null;
+        boardingNow: boolean;
+        returning: boolean;
+        arrivalTime: number;
+        departureTime: number;
+        terminus: Stop;
+        destinations: { stop: Stop; km: number; price: number; arrivalTime: number }[];
+      }[] = [];
       for (const trip of candidates) {
         const due = dueAt(trip, trip.pos);
         const stops = this.routeStops(trip.route_id);
-        if (!due || trip.pos === stops.length - 1) continue; // gone, or this is the end of the line
+        if (!due) continue; // gone
         const asOf = this.tripAsOf(trip);
         const here = this.remainingTo(trip, stops, trip.pos);
+        if (trip.pos === stops.length - 1) {
+          // The end of the line: it turns round and goes back. Listed so the board isn't empty
+          // for hours at a terminus, but not yet a train you can buy a ticket on (it's still on
+          // its inbound run), so it has no destinations.
+          const back = this.returnRun(trip, stops[trip.pos]!.dwell_minutes, Math.max(Date.now(), asOf + here.ms));
+          if (back) {
+            out.push({
+              trip: this.tripOut(trip),
+              line: trip.route_name,
+              train: trip.vehicle_name,
+              boardingNow: false,
+              returning: true,
+              arrivalTime: Math.max(Date.now(), asOf + here.ms),
+              departureTime: back.departureTime,
+              terminus: back.terminus,
+              destinations: [],
+            });
+          }
+          continue;
+        }
         let km = 0;
         const destinations = [];
         for (let j = trip.pos + 1; j < stops.length; j++) {
@@ -768,6 +813,7 @@ export class World extends DurableObject<Env> {
           line: trip.route_name,
           train: trip.vehicle_name,
           boardingNow: trip.stop_index === trip.pos,
+          returning: false,
           arrivalTime: Math.max(Date.now(), asOf + here.ms),
           /** When it leaves this station (arrival plus the wait here). */
           departureTime: Math.max(
@@ -778,7 +824,9 @@ export class World extends DurableObject<Env> {
           destinations,
         });
       }
-      out.sort((a, b) => a.arrivalTime - b.arrivalTime);
+      // Soonest first: when a train gets here, or for a return run, when it sets off again.
+      const when = (d: (typeof out)[number]) => (d.returning ? d.departureTime : d.arrivalTime);
+      out.sort((a, b) => when(a) - when(b));
       return out.slice(0, limit);
     });
   }
@@ -833,18 +881,13 @@ export class World extends DurableObject<Env> {
         } else {
           // The train ends its line here, but it turns round and heads back: show that departure
           // too (projected: arrival, the dwell here, then the wait on the return platform).
-          const route = this.routeRow(trip.route_id);
-          const twinId = route.return_of ?? `${route.id}~r`;
-          if (!this.sql.exec("SELECT 1 FROM routes WHERE id = ?", twinId).toArray().length) continue;
-          const back = this.routeStops(twinId);
-          if (back.length < 2) continue;
-          const departureTime = Math.max(now, arrivalTime + (stops[trip.pos]!.dwell_minutes + back[0]!.dwell_minutes) * 60_000);
-          if (departureTime - now > RETURN_HORIZON_MS) continue; // too far ahead to be worth listing
+          const back = this.returnRun(trip, stops[trip.pos]!.dwell_minutes, arrivalTime);
+          if (!back) continue;
           departures.push({
             ...base,
-            to: back[back.length - 1]!.name,
-            next: back[1]!.name,
-            departureTime,
+            to: back.terminus.name,
+            next: back.next,
+            departureTime: back.departureTime,
             boarding: false,
             returning: true,
           });
