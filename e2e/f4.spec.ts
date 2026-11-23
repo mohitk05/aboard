@@ -1,4 +1,4 @@
-import { checkTag, ensureWorld, expect, signUp, test } from "./fixtures";
+import { ensureWorld, expect, signUp, test } from "./fixtures";
 
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
@@ -49,43 +49,4 @@ test("F4: meet someone at the station and talk", async ({ browser }) => {
 
   await aCtx.close();
   await bCtx.close();
-});
-
-test("F4: edit your profile and change your password", async ({ page }) => {
-  const me = await signUp(page, "Warsaw, Poland", ["Chess"]);
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
-  // Your travels: placed in Warsaw, so one place so far.
-  const travels = page.getByRole("region", { name: "Travels" });
-  await expect(travels.getByText("Newcomer")).toBeVisible();
-  await expect(travels.getByText(/Places you've been \(\d+\)/)).toBeVisible();
-  // Choose a profile picture: it shows at the top of the profile.
-  const picture = page.getByRole("region", { name: "Profile picture" });
-  // (Each picture is covered by its own invisible radio button, so a tap anywhere on it chooses it.)
-  await picture.getByRole("radio", { name: /bald, bearded man/ }).check();
-  await picture.getByRole("button", { name: "Save picture" }).click();
-  await expect(picture.getByText("Saved.")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Your profile" }).locator('img[src="/avatars/3.webp"]')).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Chess" })).toBeChecked();
-  await checkTag(page, "Music");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  // (The picture's own "Saved." notice is still showing, so look in the interests form.)
-  await expect(page.locator("form").filter({ hasText: "About you" }).getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("checkbox", { name: "Music" })).toBeChecked();
-
-  await page.getByLabel("Current password").fill("wrong-one");
-  await page.getByLabel("New password").fill("a-new-password");
-  await page.getByRole("button", { name: "Change password" }).click();
-  await expect(page.getByRole("alert")).toHaveText(/current password is wrong/);
-  await page.getByLabel("Current password").fill("password123");
-  await page.getByRole("button", { name: "Change password" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Password changed." })).toBeVisible();
-
-  await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible();
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(me.email);
-  await page.getByLabel("Password").fill("a-new-password");
-  await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 });

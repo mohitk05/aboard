@@ -20,9 +20,7 @@ test("F0: sign up, stay signed in, log out, log back in", async ({ page, context
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("wrong-password");
-  await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("alert")).toHaveText(/Wrong email or password/);
+  // (A wrong password being refused is a component test: web/src/screens/Login.test.tsx.)
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page.getByText(username).first()).toBeVisible();

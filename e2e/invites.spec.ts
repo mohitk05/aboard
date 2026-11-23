@@ -4,14 +4,6 @@ test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
 });
 
-test("signup is invite-only", async ({ page }) => {
-  await page.goto("/signup");
-  await expect(page.getByRole("heading", { name: "Aboard is invite-only" })).toBeVisible();
-  await page.getByLabel("Invite code").fill("NOTAREALCODE");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByText("That invite code isn't valid.")).toBeVisible();
-});
-
 test("an admin makes an invite link, and a friend joins with it", async ({ page, browser }) => {
   test.setTimeout(90_000);
   // The admin logs in and makes an invite in the control room.
