@@ -234,7 +234,7 @@ function StationDetails({ id, headingRef }: { id: string; headingRef: React.RefO
                       To {d.to}
                     </button>
                     <span className="muted small">
-                      {trainLabel(d.train, d.line)} · next {d.next}
+                      {trainLabel(d.train, d.line)} · {d.returning ? "return run" : `next ${d.next}`}
                     </span>
                   </span>
                   <span className={`sb-status${d.boarding ? " is-boarding" : ""}`}>

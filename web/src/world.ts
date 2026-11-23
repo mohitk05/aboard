@@ -127,6 +127,8 @@ export interface StationDeparture {
   next: string;
   departureTime: number;
   boarding: boolean;
+  /** A train that ends its line here and sets off back the other way (projected). */
+  returning: boolean;
 }
 export interface StationBoard {
   stop: Stop;

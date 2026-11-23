@@ -19,6 +19,9 @@ import { migrate } from "./schema";
 import { factory, factoryState } from "../machines/factory";
 import { invite as inviteMachine, inviteState } from "../machines/invite";
 import { dueAt, kmIntoSegment, minutesWaited, positionStatus, stationStatus, train } from "../machines/train";
+
+/** How far ahead the station board lists a terminating train's return departure (keeps the list finite). */
+const RETURN_HORIZON_MS = 3 * 60 * 60_000;
 import { canTrade, traveller } from "../machines/traveller";
 import {
   CARGO_CAPACITY,
@@ -825,6 +828,25 @@ export class World extends DurableObject<Env> {
             next: stops[trip.pos + 1]!.name,
             departureTime: Math.max(now, arrivalTime + stops[trip.pos]!.dwell_minutes * 60_000),
             boarding: atPlatform,
+            returning: false,
+          });
+        } else {
+          // The train ends its line here, but it turns round and heads back: show that departure
+          // too (projected: arrival, the dwell here, then the wait on the return platform).
+          const route = this.routeRow(trip.route_id);
+          const twinId = route.return_of ?? `${route.id}~r`;
+          if (!this.sql.exec("SELECT 1 FROM routes WHERE id = ?", twinId).toArray().length) continue;
+          const back = this.routeStops(twinId);
+          if (back.length < 2) continue;
+          const departureTime = Math.max(now, arrivalTime + (stops[trip.pos]!.dwell_minutes + back[0]!.dwell_minutes) * 60_000);
+          if (departureTime - now > RETURN_HORIZON_MS) continue; // too far ahead to be worth listing
+          departures.push({
+            ...base,
+            to: back[back.length - 1]!.name,
+            next: back[1]!.name,
+            departureTime,
+            boarding: false,
+            returning: true,
           });
         }
       }

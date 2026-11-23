@@ -32,7 +32,17 @@ describe("station board", () => {
 
     const end = (await api("GET", `/stop/${stops.at(-1)!.id}/board`)).data;
     expect(end.arrivals[0].terminates).toBe(true);
-    expect(end.departures).toEqual([]);
+    expect(end.departures).toEqual([]); // (it's days away: beyond the board's horizon)
+  });
+
+  it("lists a train standing at the terminus as departing back the other way", async () => {
+    const trip = (await api("POST", "/trip", { token: admin, body: { trip: { route: route.id, active: true } } })).data;
+    await api("POST", `/trip/${trip.id}/position`, { token: admin, body: { stopIndex: stops.length - 1, km: 0 } });
+    const end = (await api("GET", `/stop/${stops.at(-1)!.id}/board`)).data;
+    expect(end.arrivals[0]).toMatchObject({ arrived: true, terminates: true });
+    expect(end.departures).toHaveLength(1);
+    expect(end.departures[0]).toMatchObject({ returning: true, boarding: false, to: stops[0]!.name, next: stops.at(-2)!.name });
+    expect(end.departures[0].departureTime).toBeGreaterThan(Date.now());
   });
 
   it("404s for an unknown station", async () => {
