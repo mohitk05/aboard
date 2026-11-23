@@ -1,15 +1,17 @@
-import { ensureWorld, expect, signUp, test } from "./fixtures";
+import { blockGlobe, ensureWorld, expect, signUp, test } from "./fixtures";
 
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
 });
 
 test("F4: meet someone at the station and talk", async ({ browser }) => {
-  test.setTimeout(240_000); // two signed-in browsers rendering the world in software are slow
   const opts = test.info().project.use;
   const aCtx = await browser.newContext(opts);
   const bCtx = await browser.newContext(opts);
-  for (const ctx of [aCtx, bCtx]) await ctx.route(/tiles\.openfreemap\.org|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  for (const ctx of [aCtx, bCtx]) {
+    await blockGlobe(ctx);
+    await ctx.route(/tiles\.openfreemap\.org|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  }
   const a = await aCtx.newPage();
   const b = await bCtx.newPage();
 

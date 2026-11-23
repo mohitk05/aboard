@@ -13,6 +13,9 @@ async function settled(label: Locator) {
   throw new Error("The camera never settled");
 }
 
+// Every test here is about the 3D world, so it loads (see blockGlobe in fixtures.ts).
+test.use({ globe: true });
+
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
 });

@@ -26,10 +26,13 @@ test("F0: sign up, stay signed in, log out, log back in", async ({ page, context
   await expect(page.getByText(username).first()).toBeVisible();
 });
 
-test("F1: the landing page shows the live network on a map", async ({ page }) => {
+test.describe("with the globe", () => {
+  test.use({ globe: true });
+  test("F1: the landing page shows the live network on a map", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText(/1 train running now/i)).toBeVisible();
   await expect(page.getByRole("img", { name: "Trains running right now" }).locator("canvas")).toBeVisible();
+  });
 });
 
 test("F1: admins build the world from the control room", async ({ page }) => {

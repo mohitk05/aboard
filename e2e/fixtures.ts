@@ -1,4 +1,4 @@
-import { test as base, expect, request, type APIRequestContext, type Page } from "@playwright/test";
+import { test as base, expect, request, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 /** ADMIN_SECRET from .dev.vars, which `wrangler dev` also reads. */
@@ -104,8 +104,21 @@ export async function logOut(page: Page) {
   await expect(page.getByRole("heading", { name: /Build an industry/i })).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * The 3D world is lazy-loaded, and the app carries on without it when it can't load (see
+ * WorldLayer). In headless Chromium it renders in software and ties up the page for seconds at a
+ * time: signing up takes ~17 s with it and under 1 s without. So tests that aren't about the
+ * globe never load it. A test that is (canvas, labels, camera) opts in with `test.use({ globe: true })`.
+ */
+export const blockGlobe = (target: Page | BrowserContext) => target.route(/World3D-.*\.js/, (r) => r.abort());
+
 /** Map tiles come from the internet; the tests don't need them (and CI may be offline). */
-export const test = base.extend({
+export const test = base.extend<{ globe: boolean }>({
+  globe: [false, { option: true }],
+  context: async ({ context, globe }, use) => {
+    if (!globe) await blockGlobe(context);
+    await use(context);
+  },
   page: async ({ page }, use) => {
     await page.route(/tiles\.openfreemap\.org|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     await use(page);

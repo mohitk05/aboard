@@ -1,15 +1,17 @@
-import { ensureWorld, expect, signUp, test } from "./fixtures";
+import { blockGlobe, ensureWorld, expect, signUp, test } from "./fixtures";
 
 // Polling picks these changes up after 10–60 s; live updates arrive almost at once. The budget
 // is generous because headless tests render the 3D world in software, which is slow.
 const FAST = { timeout: 10_000 };
 
 test("F6: messages arrive live", async ({ browser, request }) => {
-  test.setTimeout(240_000);
   await ensureWorld(request);
   const opts = test.info().project.use;
   const [aCtx, bCtx] = [await browser.newContext(opts), await browser.newContext(opts)];
-  for (const ctx of [aCtx, bCtx]) await ctx.route(/tiles\.openfreemap\.org|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  for (const ctx of [aCtx, bCtx]) {
+    await blockGlobe(ctx);
+    await ctx.route(/tiles\.openfreemap\.org|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  }
   const a = await aCtx.newPage();
   const b = await bCtx.newPage();
   await signUp(a, "Yekaterinburg, Russia", ["Languages"]);

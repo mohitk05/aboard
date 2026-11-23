@@ -1,5 +1,7 @@
 import { ensureWorld, expect, signUp, test, tick } from "./fixtures";
 
+test.use({ globe: true }); // (checks the map that follows your train)
+
 test("F3: board at Lisbon, ride to Madrid, and get welcomed on arrival", async ({ page, request }) => {
   test.setTimeout(120_000);
   const { adminToken, seed } = await ensureWorld(request);

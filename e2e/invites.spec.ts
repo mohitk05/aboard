@@ -1,4 +1,4 @@
-import { ADMIN, ensureWorld, expect, test, unique } from "./fixtures";
+import { ADMIN, blockGlobe, ensureWorld, expect, test, unique } from "./fixtures";
 
 test.beforeAll(async ({ request }) => {
   await ensureWorld(request);
@@ -22,9 +22,9 @@ test("an admin makes an invite link, and a friend joins with it", async ({ page,
 
   // The friend opens the link in their own browser and signs up.
   const friendCtx = await browser.newContext(test.info().project.use);
+  await blockGlobe(friendCtx);
   const friend = await friendCtx.newPage();
   await friend.goto(link);
-  // (A fresh browser renders the 3D world in software first, which is slow in tests.)
   await expect(friend.getByText(`You're invited: ${note}.`)).toBeVisible({ timeout: 20_000 });
   const username = unique("ada");
   await friend.getByLabel("Username", { exact: true }).fill(username);
