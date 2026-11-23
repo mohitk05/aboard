@@ -14,13 +14,13 @@ export const factory = machine<FactoryState, FactoryEvent>({
   stored: "derived from factories (no row = UNBUILT; batch_ready_at null = IDLE; in the future = PRODUCING; past = READY)",
   initial: "UNBUILT",
   states: {
-    UNBUILT: { about: "No factory yet.", on: { build: "IDLE" } },
+    UNBUILT: { about: "No factory yet.", on: { build: "PRODUCING" } },
     IDLE: { about: "Built, nothing in production.", on: { start_batch: "PRODUCING" } },
     PRODUCING: { about: "A batch is running until batch_ready_at.", on: { finish_batch: "READY" } },
     READY: { about: "The batch is done; its output is delivered to the warehouse on collection.", on: { collect: "IDLE" } },
   },
   events: {
-    build: "Build the factory (credits and materials from the warehouse)",
+    build: "Build the factory (credits and materials from the warehouse); its first batch starts at once, free",
     start_batch: "Start a production batch (inputs leave the warehouse)",
     finish_batch: "The batch's time is up",
     collect: "Deliver the output to the warehouse",

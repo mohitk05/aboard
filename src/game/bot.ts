@@ -223,7 +223,7 @@ export function plan(view: BotView): Plan {
       steps.push({ do: "build", industry: goal });
       for (const [g, n] of Object.entries(INDUSTRIES[goal].build.materials)) add(warehouse, g as GoodId, -n!);
       balance -= INDUSTRIES[goal].build.credits;
-      factories.push({ industry: goal, readyAt: null });
+      factories.push({ industry: goal, readyAt: view.now + INDUSTRIES[goal].recipe.hours * 3_600_000 }); // the first batch starts free
       notes.push(`built a ${INDUSTRIES[goal].name.toLowerCase()}`);
     }
     for (const f of factories) {
