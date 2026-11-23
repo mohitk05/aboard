@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import {
   amount,
   credits,
@@ -150,10 +151,19 @@ function IndustryCard({ industry, game, catalog, prices }: { industry: Industry;
   const hasWithCargo = (need: Record<string, number>) =>
     Object.entries(need).every(([g, n]) => (game.warehouse[g] ?? 0) + (game.cargo[g] ?? 0) >= n);
   const titleId = `industry-${industry.id}`;
+  const anchor = `factory-${industry.id}`;
   const { recipe } = industry;
 
+  // A link to /business#factory-chocolate (e.g. from a notification) scrolls to this box. The box
+  // only exists once the page's data has loaded, and the app navigates without a page load, so
+  // this runs when the box appears and whenever the link's hash changes.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === `#${anchor}`) document.getElementById(anchor)?.scrollIntoView({ block: "start" });
+  }, [hash, anchor]);
+
   return (
-    <Card aria-labelledby={titleId} role="region">
+    <Card id={anchor} aria-labelledby={titleId} role="region">
       <h2 id={titleId}>{industry.name}</h2>
       <p className="muted small">{industry.blurb}</p>
       {!factory ? (
