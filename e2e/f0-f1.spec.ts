@@ -5,7 +5,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 test("F0: sign up, stay signed in, log out, log back in", async ({ page, context }) => {
-  test.setTimeout(60_000);
+  // (No shorter limit here: this is the first test of a run, which pays for the cold start.)
   const { username, email } = await signUp(page, "Paris, France", ["Trains", "Tea"]);
   await expect(page.getByText("Paris, France")).toBeVisible();
 
