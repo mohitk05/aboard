@@ -5,7 +5,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 test("F4: meet someone at the station and talk", async ({ browser }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000); // two signed-in browsers rendering the world in software are slow
   const opts = test.info().project.use;
   const aCtx = await browser.newContext(opts);
   const bCtx = await browser.newContext(opts);

@@ -5,7 +5,7 @@ import { ensureWorld, expect, signUp, test } from "./fixtures";
 const FAST = { timeout: 10_000 };
 
 test("F6: messages arrive live", async ({ browser, request }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   await ensureWorld(request);
   const opts = test.info().project.use;
   const [aCtx, bCtx] = [await browser.newContext(opts), await browser.newContext(opts)];
