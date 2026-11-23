@@ -68,7 +68,8 @@ test("F4: edit your profile and change your password", async ({ page }) => {
   await expect(page.getByRole("checkbox", { name: "Chess" })).toBeChecked();
   await checkTag(page, "Music");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
+  // (The picture's own "Saved." notice is still showing, so look in the interests form.)
+  await expect(page.locator("form").filter({ hasText: "About you" }).getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "Music" })).toBeChecked();
 
