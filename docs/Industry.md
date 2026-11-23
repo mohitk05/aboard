@@ -13,7 +13,7 @@ To build an industry you need raw materials from different parts of the world. A
 1. **Ride out.** Buy a ticket (fares cost credits, 0.01 per km) and travel to a station that sells what you need.
 2. **Buy.** At a station with a market, buy materials into your cargo. You can carry 60 units at a time.
 3. **Ride home.** Back in Berlin, unload your cargo into the warehouse. It has no size limit.
-4. **Build.** With the credits and the materials in your warehouse, build the factory.
+4. **Build.** With the credits and the materials in your warehouse, build the factory. It starts its first batch straight away, free, so your first trip isn't wasted.
 5. **Produce.** Each batch takes materials from the warehouse and, after some real hours, puts products into it. You get a notification when a batch is ready.
 6. **Sell.** Berlin buys products, but for about half what other cities pay. To get the best price, take products to the cities that want them.
 

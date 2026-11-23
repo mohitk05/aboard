@@ -98,6 +98,26 @@ describe("the industry game", () => {
     expect((await api("POST", "/game/build", { token, body: { industry: "chocolate" } })).error).toMatch(/at Berlin/);
   });
 
+  it("the free-batch migration starts a free batch in idle factories that never produced, and leaves the rest alone", async () => {
+    const { MIGRATIONS } = await import("../src/world/schema");
+    const { token, user } = await signup();
+    const { token: t2, user: u2 } = await signup();
+    await runInDurableObject(worldStub(), (_w: World, state) => {
+      const sql = state.storage.sql;
+      const row = (u: string, industry: string, batches: number, ready: number | null) =>
+        sql.exec("INSERT INTO factories (user_id, industry, built_at, batch_started_at, batch_ready_at, batches) VALUES (?, ?, 1, ?, ?, ?)", u, industry, ready && 1, ready, batches);
+      row(user.id, "chocolate", 0, null); // idle, never ran: gets a batch
+      row(user.id, "batteries", 2, null); // idle, has produced before: left alone
+      row(u2.id, "chocolate", 0, 5_000_000_000_000); // already running: left alone
+      sql.exec(MIGRATIONS[14]!);
+    });
+    const f1 = Object.fromEntries((await game(token)).factories.map((f: any) => [f.industry, f]));
+    expect(f1.chocolate.state).toBe("PRODUCING");
+    expect(f1.chocolate.batch.readyAt - f1.chocolate.batch.startedAt).toBe(INDUSTRIES.chocolate.recipe.hours * 3_600_000);
+    expect(f1.batteries).toMatchObject({ state: "IDLE", batch: null });
+    expect((await game(t2)).factories[0].batch.readyAt).toBe(5_000_000_000_000);
+  });
+
   it("builds a chocolate factory from materials brought home, makes chocolate in real time, and sells it", async () => {
     const { token, user } = await signup();
     const { build, recipe } = INDUSTRIES.chocolate;
@@ -107,7 +127,7 @@ describe("the industry game", () => {
     expect(early.status).toBe(409);
     expect(early.error).toMatch(/short of 8 × Cocoa beans/);
 
-    // Materials for the factory and one batch.
+    // Materials for the factory (its first batch comes free) and one more batch.
     const need = (g: keyof typeof build.materials) => build.materials[g]! + recipe.inputs[g]!;
     await stock(token, user.id, { cocoa: need("cocoa"), sugar: need("sugar"), milk: need("milk"), vanilla: need("vanilla") });
     let g = await game(token);
@@ -119,27 +139,25 @@ describe("the industry game", () => {
     expect(built.status).toBe(200);
     expect(built.data.balance).toBe(before - build.credits);
     expect(built.data.warehouse).toEqual({ cocoa: 4, milk: 2, sugar: 2, vanilla: 1 });
-    expect(built.data.factories).toEqual([expect.objectContaining({ industry: "chocolate", batches: 0, batch: null })]);
+    // Building starts the first batch, free: nothing more leaves the warehouse.
+    expect(built.data.factories).toEqual([expect.objectContaining({ industry: "chocolate", batches: 0, state: "PRODUCING" })]);
+    const batch = built.data.factories[0].batch;
+    expect(batch.readyAt - batch.startedAt).toBe(recipe.hours * 3_600_000);
     expect((await api("POST", "/game/build", { token, body: { industry: "chocolate" } })).status).toBe(409);
 
-    // One batch at a time; the inputs leave the warehouse when it starts.
-    const started = await api("POST", "/game/produce", { token, body: { industry: "chocolate" } });
-    expect(started.status).toBe(200);
-    expect(started.data.warehouse).toEqual({});
-    const batch = started.data.factories[0].batch;
-    expect(batch.readyAt - batch.startedAt).toBe(recipe.hours * 3_600_000);
+    // One batch at a time.
     expect((await api("POST", "/game/produce", { token, body: { industry: "chocolate" } })).status).toBe(409);
 
     // The world ticks on; once the batch is done, it's in the warehouse.
     await runInDurableObject(worldStub(), (w: World) => {
       w.tick(batch.readyAt - 60_000);
     });
-    expect((await game(token)).warehouse).toEqual({});
+    expect((await game(token)).warehouse).toEqual({ cocoa: 4, milk: 2, sugar: 2, vanilla: 1 });
     await runInDurableObject(worldStub(), (w: World) => {
       w.tick(batch.readyAt + 60_000);
     });
     g = await game(token);
-    expect(g.warehouse).toEqual({ chocolate: recipe.quantity });
+    expect(g.warehouse).toEqual({ cocoa: 4, milk: 2, sugar: 2, vanilla: 1, chocolate: recipe.quantity });
     expect(g.factories[0]).toMatchObject({ batches: 1, batch: null });
 
     // Sell some at home, straight from the warehouse…

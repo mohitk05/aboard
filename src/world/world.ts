@@ -1755,7 +1755,7 @@ export class World extends DurableObject<Env> {
     });
   }
 
-  /** Build a factory at home, from credits and materials in your warehouse. */
+  /** Build a factory at home, from credits and materials in your warehouse. It starts its first batch at once, on the house. */
   build(userId: string, industryId: string) {
     return guard(() => {
       const user = this.atHome(userId);
@@ -1769,7 +1769,15 @@ export class World extends DurableObject<Env> {
       this.ctx.storage.transactionSync(() => {
         this.useMaterials(userId, industry.build.materials);
         this.charge(userId, industry.build.credits, "build", `Built a ${industry.name.toLowerCase()}`);
-        this.sql.exec("INSERT INTO factories (user_id, industry, built_at) VALUES (?, ?, ?)", userId, industry.id, Date.now());
+        const now = Date.now();
+        this.sql.exec(
+          "INSERT INTO factories (user_id, industry, built_at, batch_started_at, batch_ready_at) VALUES (?, ?, ?, ?, ?)",
+          userId,
+          industry.id,
+          now,
+          now,
+          now + industry.recipe.hours * 3_600_000,
+        );
       });
       return this.gameState(userId);
     });

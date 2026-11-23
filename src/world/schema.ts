@@ -361,6 +361,16 @@ export const MIGRATIONS: string[] = [
   UPDATE users SET image = '/avatars/' || (ABS(RANDOM()) % 8 + 1) || '.webp' WHERE bot = 1 AND image IS NULL;
   UPDATE users SET image = '/avatars/1.webp' WHERE bot = 0 AND image IS NULL;
   `,
+  /* 15: factories that never ran a batch get the free first one (see World.build) */ `
+  -- New factories now start a batch when built. Give the same to existing ones that are idle and
+  -- have never produced anything, starting now. (Hours are each recipe's, as they were then.)
+  UPDATE factories SET
+    batch_started_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000,
+    batch_ready_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000
+      + (CASE industry WHEN 'chocolate' THEN 4 WHEN 'batteries' THEN 8 WHEN 'chips' THEN 12 END) * 3600000
+  WHERE batch_ready_at IS NULL AND batches = 0
+    AND industry IN ('chocolate', 'batteries', 'chips');
+  `,
 ];
 
 export function migrate(storage: DurableObjectStorage): void {

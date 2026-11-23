@@ -77,11 +77,12 @@ describe("a bot's brain", () => {
     expect(p.note).toMatch(/bringing materials home/);
   });
 
-  it("at home: unloads, builds the factory and starts a batch", () => {
+  it("at home: unloads and builds the factory (which starts its first batch)", () => {
     const { build, recipe } = INDUSTRIES.chocolate;
     const cargo = Object.fromEntries(Object.entries(build.materials).map(([g, n]) => [g, n! + recipe.inputs[g as "cocoa"]!]));
     const p = plan(view({ cargo }));
-    expect(p.steps.slice(0, 3)).toEqual([{ do: "unload" }, { do: "build", industry: "chocolate" }, { do: "produce", industry: "chocolate" }]);
+    expect(p.steps.slice(0, 2)).toEqual([{ do: "unload" }, { do: "build", industry: "chocolate" }]);
+    expect(p.steps).not.toContainEqual({ do: "produce", industry: "chocolate" }); // building starts the first batch
   });
 
   it("takes products to the market that pays best for the trip, and sells there", () => {

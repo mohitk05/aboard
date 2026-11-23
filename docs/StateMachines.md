@@ -113,7 +113,7 @@ One of a player's factories in Berlin. A batch takes inputs from the warehouse w
 ```mermaid
 stateDiagram-v2
   [*] --> UNBUILT
-  UNBUILT --> IDLE: build
+  UNBUILT --> PRODUCING: build
   IDLE --> PRODUCING: start_batch
   PRODUCING --> READY: finish_batch
   READY --> IDLE: collect
@@ -121,14 +121,14 @@ stateDiagram-v2
 
 | State | Meaning | Accepts |
 | --- | --- | --- |
-| `UNBUILT` | No factory yet. | `build` → `IDLE` |
+| `UNBUILT` | No factory yet. | `build` → `PRODUCING` |
 | `IDLE` | Built, nothing in production. | `start_batch` → `PRODUCING` |
 | `PRODUCING` | A batch is running until batch_ready_at. | `finish_batch` → `READY` |
 | `READY` | The batch is done; its output is delivered to the warehouse on collection. | `collect` → `IDLE` |
 
 | Event | When |
 | --- | --- |
-| `build` | Build the factory (credits and materials from the warehouse) |
+| `build` | Build the factory (credits and materials from the warehouse); its first batch starts at once, free |
 | `start_batch` | Start a production batch (inputs leave the warehouse) |
 | `finish_batch` | The batch's time is up |
 | `collect` | Deliver the output to the warehouse |
