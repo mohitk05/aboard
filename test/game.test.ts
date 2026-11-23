@@ -98,6 +98,26 @@ describe("the industry game", () => {
     expect((await api("POST", "/game/build", { token, body: { industry: "chocolate" } })).error).toMatch(/at Berlin/);
   });
 
+  it("the free-batch migration starts a free batch in idle factories that never produced, and leaves the rest alone", async () => {
+    const { MIGRATIONS } = await import("../src/world/schema");
+    const { token, user } = await signup();
+    const { token: t2, user: u2 } = await signup();
+    await runInDurableObject(worldStub(), (_w: World, state) => {
+      const sql = state.storage.sql;
+      const row = (u: string, industry: string, batches: number, ready: number | null) =>
+        sql.exec("INSERT INTO factories (user_id, industry, built_at, batch_started_at, batch_ready_at, batches) VALUES (?, ?, 1, ?, ?, ?)", u, industry, ready && 1, ready, batches);
+      row(user.id, "chocolate", 0, null); // idle, never ran: gets a batch
+      row(user.id, "batteries", 2, null); // idle, has produced before: left alone
+      row(u2.id, "chocolate", 0, 5_000_000_000_000); // already running: left alone
+      sql.exec(MIGRATIONS[14]!);
+    });
+    const f1 = Object.fromEntries((await game(token)).factories.map((f: any) => [f.industry, f]));
+    expect(f1.chocolate.state).toBe("PRODUCING");
+    expect(f1.chocolate.batch.readyAt - f1.chocolate.batch.startedAt).toBe(INDUSTRIES.chocolate.recipe.hours * 3_600_000);
+    expect(f1.batteries).toMatchObject({ state: "IDLE", batch: null });
+    expect((await game(t2)).factories[0].batch.readyAt).toBe(5_000_000_000_000);
+  });
+
   it("builds a chocolate factory from materials brought home, makes chocolate in real time, and sells it", async () => {
     const { token, user } = await signup();
     const { build, recipe } = INDUSTRIES.chocolate;
